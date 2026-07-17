@@ -73,6 +73,14 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   const charReady =
     !!walkDef && !!idleDef && (await sheetExists(walkDef)) && (await sheetExists(idleDef));
   const layerNames = charReady ? ['char-body'] : [];
+  // 紙娃娃層:sheet 已落地的 overlay 自動疊上(body 之上,依序畫)
+  if (charReady) {
+    for (const overlay of ['char-hair']) {
+      const w = manifest.assets[`${overlay}-walk`];
+      const i = manifest.assets[`${overlay}-idle`];
+      if (w && i && (await sheetExists(w)) && (await sheetExists(i))) layerNames.push(overlay);
+    }
+  }
   if (layerNames.length > 0) {
     player = await Player.create(manifest, layerNames, 0.55);
     player.x = data.spawn.x;

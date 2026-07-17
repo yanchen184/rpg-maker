@@ -143,6 +143,18 @@
       "grid": [4, 4],
       "fps": 4,
       "kind": "character-layer"
+    },
+    "char-hair-walk": {
+      "sheet": "raw/char-hair-walk_sheet.png",
+      "grid": [4, 4],
+      "fps": 8,
+      "kind": "character-layer"
+    },
+    "char-hair-idle": {
+      "sheet": "raw/char-hair-idle_sheet.png",
+      "grid": [4, 4],
+      "fps": 4,
+      "kind": "character-layer"
     }
   }
 }

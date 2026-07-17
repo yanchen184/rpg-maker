@@ -20,7 +20,14 @@ for NAME in "$@"; do
     continue
   fi
   echo "$(date +%T) START $NAME" >>"$STATUS"
-  codex exec "$(cat "$PROMPT_FILE")" </dev/null >"$LOG" 2>&1
+  # 選配參考圖:assets/prompts/<name>.ref 內放一行絕對路徑,會用 codex -i 附上(紙娃娃對齊用)
+  REF_FILE="$ROOT/assets/prompts/$NAME.ref"
+  if [ -f "$REF_FILE" ]; then
+    # 注意:-i 是變長參數,會把緊接的 prompt 吃掉當檔名,必須用 --image=<file> 寫死一對一
+    codex exec "--image=$(cat "$REF_FILE")" "$(cat "$PROMPT_FILE")" </dev/null >"$LOG" 2>&1
+  else
+    codex exec "$(cat "$PROMPT_FILE")" </dev/null >"$LOG" 2>&1
+  fi
   SID=$(grep -oE 'session id: [0-9a-f-]+' "$LOG" | head -1 | awk '{print $3}')
   SRC=""
   if [ -n "${SID:-}" ]; then
