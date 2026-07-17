@@ -1,0 +1,8 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a sprite sheet: a 2x2 grid of 4 animation frames. Frame order: top-left, top-right, bottom-left, bottom-right. Each frame occupies exactly one 512x512 quadrant.
+- Subject: a light wooden office desk seen in top-down 2D RPG perspective (like Stardew Valley furniture), with a dark computer monitor on top facing the viewer, a keyboard and a mouse. 16-bit pixel art, warm cozy palette.
+- Animation across the 4 frames: desk, keyboard and mouse stay pixel-identical in position and size in all 4 frames; only the monitor screen animates - a soft glow with scrolling code lines flickering, plus a tiny blinking standby LED. Smooth loop.
+- Background: fully transparent. NO floor, NO wall, NO baked shadow - the desk floats on transparency.
+- No grid lines, no labels, no text.

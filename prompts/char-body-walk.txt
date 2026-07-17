@@ -1,0 +1,11 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a CHARACTER WALK-CYCLE sprite sheet: a 4x4 grid of 16 frames. Each frame occupies exactly one 256x256 cell.
+- Character: a cute chibi office worker, top-down 2D RPG style like Stardew Valley characters (about 2.5 heads tall), short dark brown hair, plain white t-shirt, dark navy pants, brown shoes. 16-bit pixel art, warm palette. The SAME character in every frame, same size, feet planted at the same baseline in every cell.
+- Row 1 (top): walking FACING THE VIEWER (down direction), 4 frames: step-left, neutral, step-right, neutral.
+- Row 2: walking facing LEFT (side profile), 4 frames of a walk cycle.
+- Row 3: walking facing RIGHT (side profile), 4 frames of a walk cycle.
+- Row 4 (bottom): walking AWAY from viewer (up direction, back of head visible), 4 frames.
+- Background: fully transparent. NO floor, NO shadow.
+- No grid lines, no labels, no text.

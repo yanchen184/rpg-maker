@@ -1,0 +1,8 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a sprite sheet: a 2x2 grid of 4 animation frames. Frame order: top-left, top-right, bottom-left, bottom-right. Each frame occupies exactly one 512x512 quadrant.
+- Subject: a rectangular window with a dark wooden frame and warm glowing venetian blinds (horizontal slats letting warm sunlight through), for a top-down 2D RPG interior wall, 16-bit Stardew Valley pixel art style.
+- Animation across the 4 frames: window frame and slats stay pixel-identical in position; only the warm light between the slats shimmers/pulses subtly across frames, smooth loop.
+- Background: fully transparent - only the window unit itself, no wall around it.
+- No grid lines, no labels, no text.

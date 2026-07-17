@@ -1,0 +1,12 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a CHARACTER IDLE (breathing) sprite sheet: a 4x4 grid of 16 frames. Each frame occupies exactly one 256x256 cell.
+- Character: a cute chibi office worker, top-down 2D RPG style like Stardew Valley characters (about 2.5 heads tall), short dark brown hair, plain white t-shirt, dark navy pants, brown shoes. 16-bit pixel art, warm palette. The SAME character in every frame, same size, feet planted at the same baseline in every cell. This is the SAME character design as a matching walk sheet.
+- Row 1 (top): standing FACING THE VIEWER (down), 4 frames of a subtle breathing loop: chest/shoulders rise 1-2 pixels and settle, arms relaxed.
+- Row 2: standing facing LEFT, 4 breathing frames.
+- Row 3: standing facing RIGHT, 4 breathing frames.
+- Row 4 (bottom): standing facing AWAY (up, back visible), 4 breathing frames.
+- The breathing motion is SUBTLE: body position identical except a gentle 1-2 pixel vertical rise/fall of torso and head.
+- Background: fully transparent. NO floor, NO shadow.
+- No grid lines, no labels, no text.

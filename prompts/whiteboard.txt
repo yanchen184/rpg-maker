@@ -1,0 +1,8 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a sprite sheet: a 2x2 grid of 4 animation frames. Frame order: top-left, top-right, bottom-left, bottom-right. Each frame occupies exactly one 512x512 quadrant.
+- Subject: a wide whiteboard with a dark wooden frame, mounted flat (front view) for a top-down 2D RPG interior wall (like Stardew Valley), a marker tray at the bottom with two small markers. Mostly blank white surface with a few faint colorful diagram scribbles. 16-bit pixel art, warm palette.
+- Animation across the 4 frames: board and frame stay pixel-identical; only a subtle warm light reflection sweeps slowly across the white surface, smooth loop.
+- Background: fully transparent - only the whiteboard unit. No wall.
+- No grid lines, no labels, no readable text.

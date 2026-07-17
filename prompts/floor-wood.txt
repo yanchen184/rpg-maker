@@ -1,0 +1,7 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024. Do nothing else (no file operations, no code).
+
+Spec:
+- It is a sprite sheet: a 2x2 grid of 4 animation frames. Frame order: top-left, top-right, bottom-left, bottom-right. Each frame occupies exactly one 512x512 quadrant, filled edge-to-edge.
+- Subject: a seamless tileable warm wooden plank floor texture, viewed straight top-down, 16-bit Stardew Valley pixel art style, warm cozy brown palette. The texture must tile seamlessly (left edge matches right edge, top matches bottom).
+- Animation across the 4 frames: plank layout stays pixel-identical in all frames; only a very subtle warm light sheen drifts slowly across the wood between frames, forming a smooth loop.
+- Opaque image, no transparency, no objects, no grid lines, no labels, no text.
