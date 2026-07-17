@@ -2,6 +2,8 @@ import { Application, Container, Text } from 'pixi.js';
 import { loadManifest, loadFrames, sheetExists } from './assets';
 import { buildScene, loadScene } from './scene';
 import { Player } from './player';
+import { SceneEditor } from './editor';
+import { buildUi } from './ui';
 import { AnimatedSprite } from 'pixi.js';
 
 async function boot() {
@@ -72,23 +74,41 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   const idleDef = manifest.assets['char-body-idle'];
   const charReady =
     !!walkDef && !!idleDef && (await sheetExists(walkDef)) && (await sheetExists(idleDef));
-  const layerNames = charReady ? ['char-body'] : [];
-  // 紙娃娃層:sheet 已落地的 overlay 自動疊上(body 之上,依序畫)
+  // 髮色變體:sheet 已落地的才進選單
+  const hairs: { label: string; name: string | null }[] = [{ label: '原色', name: null }];
   if (charReady) {
-    for (const overlay of ['char-hair']) {
-      const w = manifest.assets[`${overlay}-walk`];
-      const i = manifest.assets[`${overlay}-idle`];
-      if (w && i && (await sheetExists(w)) && (await sheetExists(i))) layerNames.push(overlay);
+    const variants: [string, string][] = [
+      ['金', 'char-hair-blonde'],
+      ['粉', 'char-hair-pink'],
+      ['銀', 'char-hair-silver'],
+    ];
+    for (const [label, name] of variants) {
+      const w = manifest.assets[`${name}-walk`];
+      const i = manifest.assets[`${name}-idle`];
+      if (w && i && (await sheetExists(w)) && (await sheetExists(i))) hairs.push({ label, name });
     }
-  }
-  if (layerNames.length > 0) {
-    player = await Player.create(manifest, layerNames, 0.55);
+    player = await Player.create(manifest, ['char-body'], 0.55);
+    const defaultHair = hairs.find((h) => h.name === 'char-hair-blonde')?.name ?? null;
+    if (defaultHair) await player.setOverlay(manifest, 'hair', defaultHair);
     player.x = data.spawn.x;
     player.y = data.spawn.y;
     built.objectLayer.addChild(player.view);
   }
-  // 驗收/除錯用:曝露角色座標
-  (window as unknown as Record<string, unknown>).__player = player;
+  // 控制面板:髮色切換 + 場景編輯
+  const editor = new SceneEditor(app, built);
+
+  // 驗收/除錯用:曝露角色與編輯器
+  const dbg = window as unknown as Record<string, unknown>;
+  dbg.__player = player;
+  dbg.__built = built;
+  dbg.__editor = editor;
+  buildUi({
+    hairs,
+    defaultHair: player ? 'char-hair-blonde' : null,
+    onHair: (name) => void player?.setOverlay(manifest, 'hair', name),
+    onEditToggle: (on) => editor.setEnabled(on),
+    exportJson: () => editor.exportJson(),
+  });
 
   // 鏡頭:整個房間置中、縮放至可視範圍
   const fit = () => {

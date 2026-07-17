@@ -1,6 +1,6 @@
 import { AnimatedSprite, Container, Texture } from 'pixi.js';
 import { loadFrames, sheetExists } from './assets';
-import type { Aabb, Manifest, SceneData, SceneObject } from './types';
+import type { Aabb, AssetDef, Manifest, SceneData, SceneObject } from './types';
 
 export interface BuiltScene {
   root: Container;
@@ -8,6 +8,16 @@ export interface BuiltScene {
   objectLayer: Container;
   colliders: Aabb[];
   data: SceneData;
+  /** 編輯模式用:場景物件與其 sprite / collider 的對應 */
+  placed: PlacedObject[];
+}
+
+export interface PlacedObject {
+  obj: SceneObject;
+  def: AssetDef;
+  sprite: AnimatedSprite;
+  /** 指向 colliders 陣列內同一個物件,拖曳時原地改 */
+  collider: Aabb | null;
 }
 
 function makeAnim(frames: Texture[], fps: number): AnimatedSprite {
@@ -77,11 +87,13 @@ export async function buildScene(data: SceneData, manifest: Manifest): Promise<B
     { x: data.size.w + B / 2, y: data.size.h / 2, w: B, h: data.size.h + 400 },
   );
 
+  const placed: PlacedObject[] = [];
   for (const obj of data.objects) {
-    await addObject(obj, manifest, objectLayer, colliders);
+    const rec = await addObject(obj, manifest, objectLayer, colliders);
+    if (rec) placed.push(rec);
   }
 
-  return { root, objectLayer, colliders, data };
+  return { root, objectLayer, colliders, data, placed };
 }
 
 export async function addObject(
@@ -89,7 +101,7 @@ export async function addObject(
   manifest: Manifest,
   objectLayer: Container,
   colliders: Aabb[],
-): Promise<AnimatedSprite | null> {
+): Promise<PlacedObject | null> {
   const def = manifest.assets[obj.asset];
   if (!def) {
     console.warn(`場景引用了 manifest 沒有的素材: ${obj.asset}`);
@@ -110,17 +122,24 @@ export async function addObject(
   sp.zIndex = obj.z ?? (def.flat ? -10000 + obj.y : obj.y);
   objectLayer.addChild(sp);
 
+  let colliderBox: Aabb | null = null;
   if (def.collider) {
-    const c = def.collider;
-    const k = obj.scale ?? 1;
-    colliders.push({
-      x: obj.x + (c.ox ?? 0) * k * (obj.flip ? -1 : 1),
-      y: obj.y - (c.h * k) / 2 + (c.oy ?? 0) * k,
-      w: c.w * k,
-      h: c.h * k,
-    });
+    colliderBox = objectCollider(obj, def);
+    colliders.push(colliderBox);
   }
-  return sp;
+  return { obj, def, sprite: sp, collider: colliderBox };
+}
+
+/** 依物件目前座標算 collider 框(拖曳後重算用) */
+export function objectCollider(obj: SceneObject, def: AssetDef): Aabb {
+  const c = def.collider!;
+  const k = obj.scale ?? 1;
+  return {
+    x: obj.x + (c.ox ?? 0) * k * (obj.flip ? -1 : 1),
+    y: obj.y - (c.h * k) / 2 + (c.oy ?? 0) * k,
+    w: c.w * k,
+    h: c.h * k,
+  };
 }
 
 export function aabbOverlap(a: Aabb, b: Aabb): boolean {

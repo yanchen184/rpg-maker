@@ -28,28 +28,58 @@ export class Player {
   collider = { w: 42, h: 22 };
   private layers: LayerAnim[] = [];
   private keys = new Set<string>();
+  private scale = 1;
+  /** 具名 overlay 插槽(hair / outfit ...),可 runtime 換 */
+  private overlays = new Map<string, LayerAnim>();
 
   static async create(manifest: Manifest, layerNames: string[], scale: number): Promise<Player> {
     const p = new Player();
+    p.scale = scale;
     for (const name of layerNames) {
-      const walkDef = manifest.assets[`${name}-walk`];
-      const idleDef = manifest.assets[`${name}-idle`];
-      if (!walkDef || !idleDef) {
-        console.warn(`紙娃娃層 ${name} 缺 walk/idle sheet,略過`);
-        continue;
-      }
-      const walk = await loadFrames(`${name}-walk`, walkDef);
-      const idle = await loadFrames(`${name}-idle`, idleDef);
-      const sp = new AnimatedSprite(idle.slice(0, 4));
-      sp.anchor.set(0.5, 1);
-      sp.scale.set(scale);
-      sp.animationSpeed = idleDef.fps / 60;
-      sp.play();
-      p.layers.push({ sprite: sp, walk, idle });
-      p.view.addChild(sp);
+      const layer = await p.buildLayer(manifest, name);
+      if (!layer) continue;
+      p.layers.push(layer);
+      p.view.addChild(layer.sprite);
     }
     p.bindKeys();
     return p;
+  }
+
+  private async buildLayer(manifest: Manifest, name: string): Promise<LayerAnim | null> {
+    const walkDef = manifest.assets[`${name}-walk`];
+    const idleDef = manifest.assets[`${name}-idle`];
+    if (!walkDef || !idleDef) {
+      console.warn(`紙娃娃層 ${name} 缺 walk/idle sheet,略過`);
+      return null;
+    }
+    const walk = await loadFrames(`${name}-walk`, walkDef);
+    const idle = await loadFrames(`${name}-idle`, idleDef);
+    const row = DIRS.indexOf(this.dir);
+    const src = this.moving ? walk : idle;
+    const sp = new AnimatedSprite(src.slice(row * 4, row * 4 + 4));
+    sp.anchor.set(0.5, 1);
+    sp.scale.set(this.scale);
+    sp.animationSpeed = (this.moving ? 8 : 4) / 60;
+    sp.play();
+    return { sprite: sp, walk, idle };
+  }
+
+  /** 換 overlay 插槽的素材(如 hair 換色);name 傳 null = 拿掉該層 */
+  async setOverlay(manifest: Manifest, slot: string, name: string | null): Promise<void> {
+    const old = this.overlays.get(slot);
+    if (old) {
+      this.view.removeChild(old.sprite);
+      const i = this.layers.indexOf(old);
+      if (i >= 0) this.layers.splice(i, 1);
+      old.sprite.destroy();
+      this.overlays.delete(slot);
+    }
+    if (!name) return;
+    const layer = await this.buildLayer(manifest, name);
+    if (!layer) return;
+    this.overlays.set(slot, layer);
+    this.layers.push(layer);
+    this.view.addChild(layer.sprite);
   }
 
   private bindKeys() {
