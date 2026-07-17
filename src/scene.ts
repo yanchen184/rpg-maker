@@ -18,7 +18,7 @@ function makeAnim(frames: Texture[], fps: number): AnimatedSprite {
 }
 
 export async function loadScene(name: string): Promise<SceneData> {
-  const res = await fetch(`/scenes/${name}.json?t=${Date.now()}`);
+  const res = await fetch(`${import.meta.env.BASE_URL}scenes/${name}.json?t=${Date.now()}`);
   if (!res.ok) throw new Error(`場景 ${name} 載入失敗: ${res.status}`);
   return res.json();
 }
