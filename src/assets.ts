@@ -31,11 +31,15 @@ export async function loadFrames(name: string, def: AssetDef): Promise<Texture[]
   return frames;
 }
 
-/** 檔案存在性檢查(預覽頁用來略過還沒生好的素材) */
+/** 檔案存在性檢查(預覽頁用來略過還沒生好的素材)。
+ * 注意:Vite dev server 對不存在的路徑會回 200 + index.html(SPA fallback),
+ * 所以不能只看 res.ok,要驗 content-type 真的是圖片。 */
 export async function sheetExists(def: AssetDef): Promise<boolean> {
   try {
     const res = await fetch(`/${def.sheet}`, { method: 'HEAD' });
-    return res.ok;
+    if (!res.ok) return false;
+    const type = res.headers.get('content-type') ?? '';
+    return type.startsWith('image/');
   } catch {
     return false;
   }

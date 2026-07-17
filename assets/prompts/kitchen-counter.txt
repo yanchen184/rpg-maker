@@ -1,0 +1,8 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a sprite sheet: a 2x2 grid of 4 animation frames. Frame order: top-left, top-right, bottom-left, bottom-right. Each frame occupies exactly one 512x512 quadrant.
+- Subject: a wide dark wooden kitchen counter cabinet (front view, top-down 2D RPG interior style like Stardew Valley) with a metal sink basin and faucet on top, cabinet doors and drawers below, two coffee mugs on the counter. 16-bit pixel art, warm palette.
+- Animation across the 4 frames: the counter stays pixel-identical; only a tiny water drip falls from the faucet (forming, falling, splashing) and a faint steam wisp rises from one mug, smooth loop.
+- Background: fully transparent. NO floor, NO wall, NO shadow.
+- No grid lines, no labels, no text.

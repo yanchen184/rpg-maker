@@ -13,6 +13,8 @@ export interface AssetDef {
   scale?: number;
   /** 碰撞框,以錨點為原點的 AABB(螢幕像素);ox/oy 為中心偏移 */
   collider?: { w: number; h: number; ox?: number; oy?: number };
+  /** 平貼地面(地毯類):不吃 y-sort,永遠墊在其他物件與角色底下 */
+  flat?: boolean;
 }
 
 export interface Manifest {

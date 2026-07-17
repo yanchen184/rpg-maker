@@ -1,0 +1,8 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a sprite sheet: a 2x2 grid of 4 animation frames. Frame order: top-left, top-right, bottom-left, bottom-right. Each frame occupies exactly one 512x512 quadrant.
+- Subject: a rectangular warm red/terracotta area rug with a simple diamond pattern and short fringe on left and right ends, viewed straight top-down for a 2D RPG interior (like Stardew Valley). 16-bit pixel art.
+- Animation across the 4 frames: the rug body stays pixel-identical; only the fringe threads and a subtle fabric sheen shift very slightly, smooth loop.
+- Background: fully transparent. NO floor around the rug.
+- No grid lines, no labels, no text.

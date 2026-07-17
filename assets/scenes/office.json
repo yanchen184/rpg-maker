@@ -2,13 +2,22 @@
   "name": "office",
   "size": { "w": 1500, "h": 900 },
   "wallHeight": 130,
-  "floorTile": 96,
+  "floorTile": 300,
   "floor": "floor-wood",
   "wall": "wall-top",
-  "spawn": { "x": 750, "y": 620 },
+  "spawn": { "x": 750, "y": 470 },
   "objects": [
+    { "asset": "rug-red", "x": 750, "y": 470 },
     { "asset": "window-blinds", "x": 750, "y": -65 },
     { "asset": "window-blinds", "x": 300, "y": -65 },
+    { "asset": "whiteboard", "x": 1050, "y": -60 },
+    { "asset": "wall-lamp", "x": 520, "y": -95 },
+    { "asset": "wall-lamp", "x": 980, "y": -95 },
+    { "asset": "bookshelf", "x": 150, "y": 90 },
+    { "asset": "bookshelf", "x": 280, "y": 90 },
+    { "asset": "kitchen-counter", "x": 1230, "y": 85 },
+    { "asset": "trash-bin", "x": 1090, "y": 90 },
+    { "asset": "plant-small", "x": 370, "y": 80 },
     { "asset": "desk-computer", "x": 330, "y": 300 },
     { "asset": "office-chair", "x": 330, "y": 350 },
     { "asset": "desk-computer", "x": 750, "y": 300 },
@@ -22,10 +31,9 @@
     { "asset": "desk-computer", "x": 1170, "y": 620 },
     { "asset": "office-chair", "x": 1170, "y": 670 },
     { "asset": "plant-large", "x": 60, "y": 120 },
-    { "asset": "plant-large", "x": 1440, "y": 120 },
     { "asset": "plant-large", "x": 60, "y": 860 },
     { "asset": "plant-large", "x": 1440, "y": 860 },
-    { "asset": "fridge", "x": 1420, "y": 80 },
-    { "asset": "coffee-machine", "x": 1300, "y": 60 }
+    { "asset": "fridge", "x": 1420, "y": 85 },
+    { "asset": "coffee-machine", "x": 1265, "y": 62 }
   ]
 }

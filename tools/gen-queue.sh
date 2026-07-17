@@ -28,6 +28,10 @@ for NAME in "$@"; do
   fi
   if [ -n "${SRC:-}" ]; then
     cp "$SRC" "$OUT"
+    # 物件/角色類素材去背(floor/wall 不透明,STRIP=0 跳過)
+    if [ "${STRIP:-1}" = "1" ]; then
+      python3 "$ROOT/tools/strip-bg.py" "$OUT" >>"$STATUS" 2>&1
+    fi
     echo "$(date +%T) DONE $NAME <- $SRC" >>"$STATUS"
   else
     echo "$(date +%T) FAIL $NAME (sid=${SID:-none}, no image produced)" >>"$STATUS"

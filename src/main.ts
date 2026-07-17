@@ -68,9 +68,11 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
 
   // 角色(紙娃娃層,素材未生成時場景仍可看)
   let player: Player | null = null;
-  const layerNames = Object.keys(manifest.assets).some((k) => k === 'char-body-walk')
-    ? ['char-body']
-    : [];
+  const walkDef = manifest.assets['char-body-walk'];
+  const idleDef = manifest.assets['char-body-idle'];
+  const charReady =
+    !!walkDef && !!idleDef && (await sheetExists(walkDef)) && (await sheetExists(idleDef));
+  const layerNames = charReady ? ['char-body'] : [];
   if (layerNames.length > 0) {
     player = await Player.create(manifest, layerNames, 0.55);
     player.x = data.spawn.x;

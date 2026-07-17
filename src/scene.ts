@@ -1,5 +1,5 @@
 import { AnimatedSprite, Container, Texture } from 'pixi.js';
-import { loadFrames } from './assets';
+import { loadFrames, sheetExists } from './assets';
 import type { Aabb, Manifest, SceneData, SceneObject } from './types';
 
 export interface BuiltScene {
@@ -35,7 +35,7 @@ export async function buildScene(data: SceneData, manifest: Manifest): Promise<B
 
   // 地板:animated tile 鋪滿房間(房間原點 = 地板左上角,牆畫在 y<0 區)
   const floorDef = manifest.assets[data.floor];
-  if (floorDef) {
+  if (floorDef && (await sheetExists(floorDef))) {
     const frames = await loadFrames(data.floor, floorDef);
     const t = data.floorTile;
     for (let ty = 0; ty < Math.ceil(data.size.h / t); ty++) {
@@ -52,7 +52,7 @@ export async function buildScene(data: SceneData, manifest: Manifest): Promise<B
 
   // 上牆:沿房間頂部橫向鋪
   const wallDef = manifest.assets[data.wall];
-  if (wallDef) {
+  if (wallDef && (await sheetExists(wallDef))) {
     const frames = await loadFrames(data.wall, wallDef);
     const h = data.wallHeight;
     const ratio = frames[0].width / frames[0].height;
@@ -95,6 +95,10 @@ export async function addObject(
     console.warn(`場景引用了 manifest 沒有的素材: ${obj.asset}`);
     return null;
   }
+  if (!(await sheetExists(def))) {
+    console.warn(`素材 ${obj.asset} 的 sheet 還沒生成,先略過`);
+    return null;
+  }
   const frames = await loadFrames(obj.asset, def);
   const sp = makeAnim(frames, def.fps);
   const [ax, ay] = def.anchor ?? [0.5, 1];
@@ -103,7 +107,7 @@ export async function addObject(
   sp.scale.set(obj.flip ? -scale : scale, scale);
   sp.x = obj.x;
   sp.y = obj.y;
-  sp.zIndex = obj.y;
+  sp.zIndex = def.flat ? -10000 + obj.y : obj.y;
   objectLayer.addChild(sp);
 
   if (def.collider) {
