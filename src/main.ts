@@ -79,6 +79,8 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     player.y = data.spawn.y;
     built.objectLayer.addChild(player.view);
   }
+  // 驗收/除錯用:曝露角色座標
+  (window as unknown as Record<string, unknown>).__player = player;
 
   // 鏡頭:整個房間置中、縮放至可視範圍
   const fit = () => {
