@@ -1,0 +1,11 @@
+Generate ONE single PNG image, exactly 1024x1024, using your image_gen tool.
+
+It is a sprite sheet: a 2x2 grid of 4 animation frames. Frame order: top-left → top-right → bottom-left → bottom-right. Each frame occupies exactly one 512x512 quadrant.
+
+Subject: a black office swivel chair with five caster wheels, seen top-down from behind (backrest facing viewer), 16-bit Stardew Valley pixel art style, warm palette.
+
+Animation across the 4 frames: the chair base stays at the IDENTICAL position; the seat/backrest gently swivels a few degrees left and right across frames (e.g. center → slightly left → center → slightly right), smooth loop.
+
+Background: fully transparent (alpha channel). NO floor, NO shadow. No grid lines, no labels.
+
+After generating, just confirm you called image_gen and report back the image was created. Do not attempt to write/copy the file yourself with shell commands — the image_gen tool call is what matters.

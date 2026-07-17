@@ -1,0 +1,3 @@
+2026-07-17T09:36:36.307309Z ERROR codex_core::session::session: failed to load skill /Users/yanchen/.claude/skills/title-write/SKILL.md: missing YAML frontmatter delimited by ---
+{"type":"thread.started","thread_id":"019f6f6f-485e-7f33-bece-b44fd6438489"}
+{"type":"turn.started"}

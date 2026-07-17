@@ -1,0 +1,8 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a sprite sheet: a 2x2 grid of 4 animation frames. Frame order: top-left, top-right, bottom-left, bottom-right. Each frame occupies exactly one 512x512 quadrant.
+- Subject: a black office swivel chair with five caster wheels, seen top-down from behind (backrest facing the viewer), 16-bit Stardew Valley pixel art style, warm palette.
+- Animation across the 4 frames: the chair base stays at the identical position; the seat/backrest gently swivels a few degrees (center, slightly left, center, slightly right), smooth loop.
+- Background: fully transparent. NO floor, NO shadow.
+- No grid lines, no labels, no text.

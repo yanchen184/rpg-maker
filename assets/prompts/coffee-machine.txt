@@ -1,0 +1,8 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a sprite sheet: a 2x2 grid of 4 animation frames. Frame order: top-left, top-right, bottom-left, bottom-right. Each frame occupies exactly one 512x512 quadrant.
+- Subject: a black countertop coffee machine brewing coffee into a glass carafe, front view for a top-down 2D RPG interior (like Stardew Valley), 16-bit pixel art, warm cozy palette.
+- Animation across the 4 frames: the machine body stays pixel-identical in position; animated parts only - wisps of steam rising and curling from the carafe, a warm brew light glowing, a thin coffee stream. Smooth loop.
+- Background: fully transparent. NO counter, NO wall, NO shadow.
+- No grid lines, no labels, no text.

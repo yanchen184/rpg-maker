@@ -1,0 +1,4 @@
+Shared style spec (referenced by all asset prompts, keep in sync):
+- 16-bit Stardew Valley interior pixel art, warm cozy palette (warm browns, soft ambient light), crisp pixel clusters.
+- Sprite sheet layout: ONE PNG 1024x1024, 2x2 grid of 4 animation frames, order TL -> TR -> BL -> BR, each frame exactly one 512x512 quadrant.
+- Object position must be pixel-identical across frames; only the animated part moves; frames form a smooth loop.

@@ -1,0 +1,68 @@
+{
+  "assets": {
+    "floor-wood": {
+      "sheet": "raw/floor-wood_sheet.png",
+      "grid": [2, 2],
+      "fps": 3,
+      "kind": "floor"
+    },
+    "wall-top": {
+      "sheet": "raw/wall-top_sheet.png",
+      "grid": [2, 2],
+      "fps": 3,
+      "kind": "wall"
+    },
+    "desk-computer": {
+      "sheet": "raw/desk-computer_sheet.png",
+      "grid": [2, 2],
+      "fps": 5,
+      "kind": "object",
+      "anchor": [0.5, 1],
+      "scale": 0.3,
+      "collider": { "w": 130, "h": 46 }
+    },
+    "office-chair": {
+      "sheet": "raw/office-chair_sheet.png",
+      "grid": [2, 2],
+      "fps": 4,
+      "kind": "object",
+      "anchor": [0.5, 1],
+      "scale": 0.16,
+      "collider": { "w": 52, "h": 26 }
+    },
+    "window-blinds": {
+      "sheet": "raw/window-blinds_sheet.png",
+      "grid": [2, 2],
+      "fps": 4,
+      "kind": "object",
+      "anchor": [0.5, 0.5],
+      "scale": 0.22
+    },
+    "plant-large": {
+      "sheet": "raw/plant-large_sheet.png",
+      "grid": [2, 2],
+      "fps": 4,
+      "kind": "object",
+      "anchor": [0.5, 1],
+      "scale": 0.2,
+      "collider": { "w": 46, "h": 24 }
+    },
+    "fridge": {
+      "sheet": "raw/fridge_sheet.png",
+      "grid": [2, 2],
+      "fps": 3,
+      "kind": "object",
+      "anchor": [0.5, 1],
+      "scale": 0.24,
+      "collider": { "w": 70, "h": 30 }
+    },
+    "coffee-machine": {
+      "sheet": "raw/coffee-machine_sheet.png",
+      "grid": [2, 2],
+      "fps": 5,
+      "kind": "object",
+      "anchor": [0.5, 1],
+      "scale": 0.12
+    }
+  }
+}
