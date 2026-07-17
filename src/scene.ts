@@ -107,7 +107,7 @@ export async function addObject(
   sp.scale.set(obj.flip ? -scale : scale, scale);
   sp.x = obj.x;
   sp.y = obj.y;
-  sp.zIndex = def.flat ? -10000 + obj.y : obj.y;
+  sp.zIndex = obj.z ?? (def.flat ? -10000 + obj.y : obj.y);
   objectLayer.addChild(sp);
 
   if (def.collider) {

@@ -34,6 +34,6 @@
     { "asset": "plant-large", "x": 60, "y": 860 },
     { "asset": "plant-large", "x": 1440, "y": 860 },
     { "asset": "fridge", "x": 1420, "y": 85 },
-    { "asset": "coffee-machine", "x": 1265, "y": 62 }
+    { "asset": "coffee-machine", "x": 1180, "y": -18, "z": 95 }
   ]
 }

@@ -87,7 +87,7 @@
       "fps": 4,
       "kind": "object",
       "anchor": [0.5, 0.5],
-      "scale": 0.1
+      "scale": 0.14
     },
     "rug-red": {
       "sheet": "raw/rug-red_sheet.png",
@@ -95,7 +95,7 @@
       "fps": 3,
       "kind": "object",
       "anchor": [0.5, 0.5],
-      "scale": 0.4,
+      "scale": 0.55,
       "flat": true
     },
     "kitchen-counter": {

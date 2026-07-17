@@ -27,6 +27,8 @@ export interface SceneObject {
   y: number;
   flip?: boolean;
   scale?: number;
+  /** z-sort 覆寫:放在檯面上的小物需要比檯子後畫,但 y 又比檯子小時用 */
+  z?: number;
 }
 
 export interface SceneData {
