@@ -35,5 +35,12 @@
     { "asset": "plant-large", "x": 1440, "y": 860 },
     { "asset": "fridge", "x": 1420, "y": 85 },
     { "asset": "coffee-machine", "x": 1180, "y": -18, "z": 95 }
+  ],
+  "exits": [
+    {
+      "zone": { "x": 750, "y": 890, "w": 170, "h": 30 },
+      "to": "outdoor",
+      "spawn": { "x": 900, "y": 620 }
+    }
   ]
 }

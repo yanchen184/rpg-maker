@@ -31,18 +31,28 @@ export interface SceneObject {
   z?: number;
 }
 
+/** 場景出入口:角色踩進 zone 就切到 to 場景、落在 spawn */
+export interface SceneExit {
+  /** 觸發區(場景座標,中心式 AABB) */
+  zone: Aabb;
+  to: string;
+  spawn: { x: number; y: number };
+}
+
 export interface SceneData {
   name: string;
   /** 房間內部(地板區)像素尺寸 */
   size: { w: number; h: number };
-  /** 上牆顯示高度 */
+  /** 上牆顯示高度(室外場景可為 0,只當頂部留白) */
   wallHeight: number;
   /** 地板單格顯示尺寸 */
   floorTile: number;
   floor: string;
-  wall: string;
+  /** 上牆素材;室外場景不填 */
+  wall?: string;
   objects: SceneObject[];
   spawn: { x: number; y: number };
+  exits?: SceneExit[];
 }
 
 export interface Aabb {

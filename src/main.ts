@@ -1,6 +1,6 @@
 import { Application, Container, Text } from 'pixi.js';
 import { loadManifest, loadFrames, sheetExists } from './assets';
-import { buildScene, loadScene } from './scene';
+import { aabbOverlap, buildScene, loadScene } from './scene';
 import { Player } from './player';
 import { SceneEditor } from './editor';
 import { buildUi, type SlotGroup } from './ui';
@@ -28,8 +28,14 @@ async function boot() {
 async function previewMode(app: Application, manifest: Awaited<ReturnType<typeof loadManifest>>) {
   const grid = new Container();
   app.stage.addChild(grid);
-  const cell = 200;
-  const cols = Math.max(1, Math.floor(app.screen.width / cell));
+  // 依素材數自動縮格子,全部塞進一屏(canvas 不捲動)
+  const count = Object.keys(manifest.assets).length;
+  const cols = Math.max(1, Math.ceil(Math.sqrt((count * app.screen.width) / app.screen.height)));
+  const rows = Math.ceil(count / cols);
+  const cell = Math.min(
+    Math.floor(app.screen.width / cols),
+    Math.floor(app.screen.height / rows),
+  );
   let i = 0;
   for (const [name, def] of Object.entries(manifest.assets)) {
     const col = i % cols;
@@ -62,10 +68,9 @@ async function previewMode(app: Application, manifest: Awaited<ReturnType<typeof
   }
 }
 
-/** 場景模式:office 房間 + 可操作角色 */
+/** 場景模式:office 房間 + 可操作角色,踩到出入口切場景 */
 async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof loadManifest>>) {
-  const data = await loadScene('office');
-  const built = await buildScene(data, manifest);
+  let built = await buildScene(await loadScene('office'), manifest);
   app.stage.addChild(built.root);
 
   // 角色(紙娃娃層,素材未生成時場景仍可看)
@@ -130,12 +135,12 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       await player.setOverlay(manifest, 'hair', defaultHair);
       hairGrp!.active = defaultHair;
     }
-    player.x = data.spawn.x;
-    player.y = data.spawn.y;
+    player.x = built.data.spawn.x;
+    player.y = built.data.spawn.y;
     built.objectLayer.addChild(player.view);
   }
   // 控制面板:髮色切換 + 場景編輯
-  const editor = new SceneEditor(app, built);
+  let editor = new SceneEditor(app, built);
 
   // 驗收/除錯用:曝露角色與編輯器
   const dbg = window as unknown as Record<string, unknown>;
@@ -151,17 +156,52 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
 
   // 鏡頭:整個房間置中、縮放至可視範圍
   const fit = () => {
-    const totalH = data.size.h + data.wallHeight;
-    const s = Math.min(app.screen.width / data.size.w, app.screen.height / totalH) * 0.92;
+    const d = built.data;
+    const totalH = d.size.h + d.wallHeight;
+    const s = Math.min(app.screen.width / d.size.w, app.screen.height / totalH) * 0.92;
     built.root.scale.set(s);
-    built.root.x = (app.screen.width - data.size.w * s) / 2;
-    built.root.y = (app.screen.height - totalH * s) / 2 + data.wallHeight * s;
+    built.root.x = (app.screen.width - d.size.w * s) / 2;
+    built.root.y = (app.screen.height - totalH * s) / 2 + d.wallHeight * s;
   };
   fit();
   window.addEventListener('resize', fit);
 
+  // 場景切換:換裝狀態跟著 Player 實例保留
+  let switching = false;
+  const switchScene = async (to: string, spawn: { x: number; y: number }) => {
+    switching = true;
+    try {
+      const next = await buildScene(await loadScene(to), manifest);
+      if (player) built.objectLayer.removeChild(player.view);
+      editor.destroy();
+      app.stage.removeChild(built.root);
+      built.root.destroy({ children: true });
+      built = next;
+      app.stage.addChild(built.root);
+      if (player) {
+        player.x = spawn.x;
+        player.y = spawn.y;
+        built.objectLayer.addChild(player.view);
+      }
+      editor = new SceneEditor(app, built);
+      dbg.__built = built;
+      dbg.__editor = editor;
+      fit();
+    } finally {
+      switching = false;
+    }
+  };
+
   app.ticker.add((t) => {
     player?.update(t.deltaMS / 1000, built.colliders);
+    if (player && !switching) {
+      for (const ex of built.data.exits ?? []) {
+        if (aabbOverlap(player.aabb, ex.zone)) {
+          void switchScene(ex.to, ex.spawn);
+          break;
+        }
+      }
+    }
   });
 }
 

@@ -422,6 +422,84 @@
       ],
       "fps": 4,
       "kind": "character-layer"
+    },
+    "grass-tile": {
+      "sheet": "raw/grass-tile_sheet.png",
+      "grid": [
+        2,
+        2
+      ],
+      "fps": 3,
+      "kind": "floor"
+    },
+    "stone-path": {
+      "sheet": "raw/stone-path_sheet.png",
+      "grid": [
+        2,
+        2
+      ],
+      "fps": 3,
+      "kind": "floor",
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "scale": 0.5,
+      "flat": true
+    },
+    "tree-large": {
+      "sheet": "raw/tree-large_sheet.png",
+      "grid": [
+        2,
+        2
+      ],
+      "fps": 3,
+      "kind": "object",
+      "anchor": [
+        0.5,
+        1
+      ],
+      "scale": 0.55,
+      "collider": {
+        "w": 70,
+        "h": 30
+      }
+    },
+    "bush-flower": {
+      "sheet": "raw/bush-flower_sheet.png",
+      "grid": [
+        2,
+        2
+      ],
+      "fps": 4,
+      "kind": "object",
+      "anchor": [
+        0.5,
+        1
+      ],
+      "scale": 0.22,
+      "collider": {
+        "w": 70,
+        "h": 24
+      }
+    },
+    "house-exterior": {
+      "sheet": "raw/house-exterior_sheet.png",
+      "grid": [
+        2,
+        2
+      ],
+      "fps": 3,
+      "kind": "object",
+      "anchor": [
+        0.5,
+        1
+      ],
+      "scale": 0.85,
+      "collider": {
+        "w": 330,
+        "h": 60
+      }
     }
   }
 }

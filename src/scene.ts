@@ -60,9 +60,9 @@ export async function buildScene(data: SceneData, manifest: Manifest): Promise<B
     }
   }
 
-  // 上牆:沿房間頂部橫向鋪
-  const wallDef = manifest.assets[data.wall];
-  if (wallDef && (await sheetExists(wallDef))) {
+  // 上牆:沿房間頂部橫向鋪(室外場景沒牆 → 只放頂部邊界)
+  const wallDef = data.wall ? manifest.assets[data.wall] : undefined;
+  if (data.wall && wallDef && (await sheetExists(wallDef))) {
     const frames = await loadFrames(data.wall, wallDef);
     const h = data.wallHeight;
     const ratio = frames[0].width / frames[0].height;
@@ -77,6 +77,9 @@ export async function buildScene(data: SceneData, manifest: Manifest): Promise<B
     }
     // 牆是實心的:整條上牆一個 collider
     colliders.push({ x: data.size.w / 2, y: -h / 2, w: data.size.w, h });
+  } else {
+    // 沒牆也要擋住頂部,角色不能走出地圖
+    colliders.push({ x: data.size.w / 2, y: -20, w: data.size.w, h: 40 });
   }
 
   // 房間四周邊界(角色不能走出地板)

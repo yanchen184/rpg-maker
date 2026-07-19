@@ -13,13 +13,27 @@ export class SceneEditor {
   private offX = 0;
   private offY = 0;
 
+  private detach: () => void;
+
   constructor(app: Application, private built: BuiltScene) {
     for (const rec of built.placed) this.bindSprite(rec);
     app.stage.eventMode = 'static';
     app.stage.hitArea = app.screen;
-    app.stage.on('pointermove', (e) => this.onMove(e));
-    app.stage.on('pointerup', () => (this.dragging = false));
-    app.stage.on('pointerupoutside', () => (this.dragging = false));
+    const onMove = (e: FederatedPointerEvent) => this.onMove(e);
+    const onUp = () => (this.dragging = false);
+    app.stage.on('pointermove', onMove);
+    app.stage.on('pointerup', onUp);
+    app.stage.on('pointerupoutside', onUp);
+    this.detach = () => {
+      app.stage.off('pointermove', onMove);
+      app.stage.off('pointerup', onUp);
+      app.stage.off('pointerupoutside', onUp);
+    };
+  }
+
+  /** 切場景時呼叫:解除 stage 監聽,避免舊 editor 殘留 */
+  destroy() {
+    this.detach();
   }
 
   setEnabled(on: boolean) {
