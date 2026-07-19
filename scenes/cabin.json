@@ -1,0 +1,31 @@
+{
+  "name": "cabin",
+  "size": { "w": 900, "h": 600 },
+  "wallHeight": 130,
+  "floorTile": 300,
+  "floor": "floor-wood",
+  "wall": "wall-top",
+  "spawn": { "x": 450, "y": 400 },
+  "objects": [
+    { "asset": "rug-red", "x": 450, "y": 320 },
+    { "asset": "window-blinds", "x": 450, "y": -65 },
+    { "asset": "wall-lamp", "x": 200, "y": -95 },
+    { "asset": "wall-lamp", "x": 700, "y": -95 },
+    { "asset": "bookshelf", "x": 120, "y": 90 },
+    { "asset": "plant-small", "x": 230, "y": 80 },
+    { "asset": "kitchen-counter", "x": 700, "y": 85 },
+    { "asset": "coffee-machine", "x": 660, "y": -18, "z": 95 },
+    { "asset": "fridge", "x": 830, "y": 85 },
+    { "asset": "desk-computer", "x": 300, "y": 320 },
+    { "asset": "office-chair", "x": 300, "y": 370 },
+    { "asset": "plant-large", "x": 60, "y": 560 },
+    { "asset": "plant-large", "x": 840, "y": 560 }
+  ],
+  "exits": [
+    {
+      "zone": { "x": 450, "y": 590, "w": 170, "h": 30 },
+      "to": "outdoor",
+      "spawn": { "x": 350, "y": 620 }
+    }
+  ]
+}

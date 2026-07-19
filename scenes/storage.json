@@ -1,0 +1,27 @@
+{
+  "name": "storage",
+  "size": { "w": 800, "h": 550 },
+  "wallHeight": 130,
+  "floorTile": 300,
+  "floor": "floor-wood",
+  "wall": "wall-top",
+  "spawn": { "x": 400, "y": 430 },
+  "objects": [
+    { "asset": "window-side", "x": 400, "y": -65 },
+    { "asset": "bookshelf", "x": 150, "y": 90 },
+    { "asset": "bookshelf", "x": 280, "y": 90 },
+    { "asset": "bookshelf", "x": 410, "y": 90 },
+    { "asset": "fridge", "x": 650, "y": 85 },
+    { "asset": "trash-bin", "x": 750, "y": 90 },
+    { "asset": "plant-small", "x": 60, "y": 80 },
+    { "asset": "plant-large", "x": 740, "y": 510 },
+    { "asset": "trash-bin", "x": 60, "y": 510 }
+  ],
+  "exits": [
+    {
+      "zone": { "x": 400, "y": 540, "w": 170, "h": 30 },
+      "to": "outdoor",
+      "spawn": { "x": 1450, "y": 620 }
+    }
+  ]
+}
