@@ -2,181 +2,424 @@
   "assets": {
     "floor-wood": {
       "sheet": "raw/floor-wood_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 3,
       "kind": "floor"
     },
     "wall-top": {
       "sheet": "raw/wall-top_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 3,
       "kind": "wall"
     },
     "desk-computer": {
       "sheet": "raw/desk-computer_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 5,
       "kind": "object",
-      "anchor": [0.5, 1],
+      "anchor": [
+        0.5,
+        1
+      ],
       "scale": 0.3,
-      "collider": { "w": 130, "h": 46 }
+      "collider": {
+        "w": 130,
+        "h": 46
+      }
     },
     "office-chair": {
       "sheet": "raw/office-chair_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 4,
       "kind": "object",
-      "anchor": [0.5, 1],
+      "anchor": [
+        0.5,
+        1
+      ],
       "scale": 0.16,
-      "collider": { "w": 52, "h": 26 }
+      "collider": {
+        "w": 52,
+        "h": 26
+      }
     },
     "window-blinds": {
       "sheet": "raw/window-blinds_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 4,
       "kind": "object",
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "scale": 0.22
     },
     "plant-large": {
       "sheet": "raw/plant-large_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 4,
       "kind": "object",
-      "anchor": [0.5, 1],
+      "anchor": [
+        0.5,
+        1
+      ],
       "scale": 0.2,
-      "collider": { "w": 46, "h": 24 }
+      "collider": {
+        "w": 46,
+        "h": 24
+      }
     },
     "fridge": {
       "sheet": "raw/fridge_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 3,
       "kind": "object",
-      "anchor": [0.5, 1],
+      "anchor": [
+        0.5,
+        1
+      ],
       "scale": 0.24,
-      "collider": { "w": 70, "h": 30 }
+      "collider": {
+        "w": 70,
+        "h": 30
+      }
     },
     "coffee-machine": {
       "sheet": "raw/coffee-machine_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 5,
       "kind": "object",
-      "anchor": [0.5, 1],
+      "anchor": [
+        0.5,
+        1
+      ],
       "scale": 0.12
     },
     "whiteboard": {
       "sheet": "raw/whiteboard_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 3,
       "kind": "object",
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "scale": 0.26
     },
     "bookshelf": {
       "sheet": "raw/bookshelf_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 4,
       "kind": "object",
-      "anchor": [0.5, 1],
+      "anchor": [
+        0.5,
+        1
+      ],
       "scale": 0.22,
-      "collider": { "w": 90, "h": 28 }
+      "collider": {
+        "w": 90,
+        "h": 28
+      }
     },
     "wall-lamp": {
       "sheet": "raw/wall-lamp_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 4,
       "kind": "object",
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "scale": 0.14
     },
     "rug-red": {
       "sheet": "raw/rug-red_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 3,
       "kind": "object",
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "scale": 0.55,
       "flat": true
     },
     "kitchen-counter": {
       "sheet": "raw/kitchen-counter_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 5,
       "kind": "object",
-      "anchor": [0.5, 1],
+      "anchor": [
+        0.5,
+        1
+      ],
       "scale": 0.3,
-      "collider": { "w": 140, "h": 40 }
+      "collider": {
+        "w": 140,
+        "h": 40
+      }
     },
     "trash-bin": {
       "sheet": "raw/trash-bin_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 4,
       "kind": "object",
-      "anchor": [0.5, 1],
+      "anchor": [
+        0.5,
+        1
+      ],
       "scale": 0.1,
-      "collider": { "w": 34, "h": 18 }
+      "collider": {
+        "w": 34,
+        "h": 18
+      }
     },
     "plant-small": {
       "sheet": "raw/plant-small_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 4,
       "kind": "object",
-      "anchor": [0.5, 1],
+      "anchor": [
+        0.5,
+        1
+      ],
       "scale": 0.1
     },
     "window-side": {
       "sheet": "raw/window-side_sheet.png",
-      "grid": [2, 2],
+      "grid": [
+        2,
+        2
+      ],
       "fps": 4,
       "kind": "object",
-      "anchor": [0.5, 0.5],
+      "anchor": [
+        0.5,
+        0.5
+      ],
       "scale": 0.2
     },
     "char-body-walk": {
       "sheet": "raw/char-body-walk_sheet.png",
-      "grid": [4, 4],
+      "grid": [
+        4,
+        4
+      ],
       "fps": 8,
       "kind": "character-layer"
     },
     "char-body-idle": {
       "sheet": "raw/char-body-idle_sheet.png",
-      "grid": [4, 4],
+      "grid": [
+        4,
+        4
+      ],
       "fps": 4,
       "kind": "character-layer"
     },
     "char-hair-blonde-walk": {
       "sheet": "raw/char-hair-blonde-walk_sheet.png",
-      "grid": [4, 4],
+      "grid": [
+        4,
+        4
+      ],
       "fps": 8,
       "kind": "character-layer"
     },
     "char-hair-blonde-idle": {
       "sheet": "raw/char-hair-blonde-idle_sheet.png",
-      "grid": [4, 4],
+      "grid": [
+        4,
+        4
+      ],
       "fps": 4,
       "kind": "character-layer"
     },
     "char-hair-pink-walk": {
       "sheet": "raw/char-hair-pink-walk_sheet.png",
-      "grid": [4, 4],
+      "grid": [
+        4,
+        4
+      ],
       "fps": 8,
       "kind": "character-layer"
     },
     "char-hair-pink-idle": {
       "sheet": "raw/char-hair-pink-idle_sheet.png",
-      "grid": [4, 4],
+      "grid": [
+        4,
+        4
+      ],
       "fps": 4,
       "kind": "character-layer"
     },
     "char-hair-silver-walk": {
       "sheet": "raw/char-hair-silver-walk_sheet.png",
-      "grid": [4, 4],
+      "grid": [
+        4,
+        4
+      ],
       "fps": 8,
       "kind": "character-layer"
     },
     "char-hair-silver-idle": {
       "sheet": "raw/char-hair-silver-idle_sheet.png",
-      "grid": [4, 4],
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 4,
+      "kind": "character-layer"
+    },
+    "char-shirt-red-walk": {
+      "sheet": "raw/char-shirt-red-walk_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 8,
+      "kind": "character-layer"
+    },
+    "char-shirt-red-idle": {
+      "sheet": "raw/char-shirt-red-idle_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 4,
+      "kind": "character-layer"
+    },
+    "char-shirt-blue-walk": {
+      "sheet": "raw/char-shirt-blue-walk_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 8,
+      "kind": "character-layer"
+    },
+    "char-shirt-blue-idle": {
+      "sheet": "raw/char-shirt-blue-idle_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 4,
+      "kind": "character-layer"
+    },
+    "char-shirt-green-walk": {
+      "sheet": "raw/char-shirt-green-walk_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 8,
+      "kind": "character-layer"
+    },
+    "char-shirt-green-idle": {
+      "sheet": "raw/char-shirt-green-idle_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 4,
+      "kind": "character-layer"
+    },
+    "char-pants-brown-walk": {
+      "sheet": "raw/char-pants-brown-walk_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 8,
+      "kind": "character-layer"
+    },
+    "char-pants-brown-idle": {
+      "sheet": "raw/char-pants-brown-idle_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 4,
+      "kind": "character-layer"
+    },
+    "char-pants-green-walk": {
+      "sheet": "raw/char-pants-green-walk_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 8,
+      "kind": "character-layer"
+    },
+    "char-pants-green-idle": {
+      "sheet": "raw/char-pants-green-idle_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 4,
+      "kind": "character-layer"
+    },
+    "char-hat-cap-walk": {
+      "sheet": "raw/char-hat-cap-walk_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 8,
+      "kind": "character-layer"
+    },
+    "char-hat-cap-idle": {
+      "sheet": "raw/char-hat-cap-idle_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
       "fps": 4,
       "kind": "character-layer"
     }

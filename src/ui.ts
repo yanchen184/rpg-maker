@@ -1,13 +1,24 @@
-/** 遊戲頁右上角控制面板(純 DOM,疊在 canvas 上):髮色切換 + 場景編輯模式 + 匯出 JSON */
+/** 遊戲頁右上角控制面板(純 DOM,疊在 canvas 上):紙娃娃換裝 + 場景編輯模式 + 匯出 JSON */
+
+export interface SlotGroup {
+  /** player overlay 插槽名(hair / shirt / pants / hat …) */
+  slot: string;
+  title: string;
+  /** name = manifest 層名(null = 原色/拿掉該層) */
+  options: { label: string; name: string | null }[];
+  /** 預設高亮的 name */
+  active: string | null;
+}
 
 export interface UiOptions {
-  /** 可用髮色:label 顯示文字,name 為 manifest 層名(null = 原色,拿掉 overlay) */
-  hairs: { label: string; name: string | null }[];
-  defaultHair: string | null;
-  onHair: (name: string | null) => void;
+  groups: SlotGroup[];
+  onSlot: (slot: string, name: string | null) => void;
   onEditToggle: (on: boolean) => void;
   exportJson: () => string;
 }
+
+const BTN_CSS =
+  'border:1px solid #4a3a26;border-radius:6px;padding:3px 8px;cursor:pointer;font:12px monospace;background:#2e2418;color:#e8dcc8';
 
 export function buildUi(opts: UiOptions): void {
   const panel = document.createElement('div');
@@ -15,7 +26,7 @@ export function buildUi(opts: UiOptions): void {
     'position:fixed', 'top:12px', 'right:12px', 'z-index:10',
     'background:rgba(20,14,8,.88)', 'border:1px solid #4a3a26', 'border-radius:10px',
     'padding:12px 14px', 'color:#e8dcc8', 'font:13px/1.6 monospace', 'user-select:none',
-    'min-width:190px',
+    'min-width:190px', 'max-height:calc(100vh - 24px)', 'overflow-y:auto',
   ].join(';');
 
   const title = (t: string, first = false) => {
@@ -26,37 +37,37 @@ export function buildUi(opts: UiOptions): void {
     return el;
   };
 
-  // 髮色
-  title('髮色(紙娃娃)', true);
-  const hairRow = document.createElement('div');
-  hairRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
-  panel.appendChild(hairRow);
-  const hairBtns = new Map<string | null, HTMLButtonElement>();
-  const markHair = (active: string | null) => {
-    for (const [name, b] of hairBtns) {
-      b.style.background = name === active ? '#e0a458' : '#2e2418';
-      b.style.color = name === active ? '#1a1410' : '#e8dcc8';
-    }
-  };
-  for (const h of opts.hairs) {
-    const b = document.createElement('button');
-    b.textContent = h.label;
-    b.style.cssText =
-      'border:1px solid #4a3a26;border-radius:6px;padding:3px 8px;cursor:pointer;font:12px monospace;background:#2e2418;color:#e8dcc8';
-    b.onclick = () => {
-      opts.onHair(h.name);
-      markHair(h.name);
+  // 換裝插槽群組
+  opts.groups.forEach((grp, gi) => {
+    title(grp.title, gi === 0);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+    panel.appendChild(row);
+    const btns = new Map<string | null, HTMLButtonElement>();
+    const mark = (active: string | null) => {
+      for (const [name, b] of btns) {
+        b.style.background = name === active ? '#e0a458' : '#2e2418';
+        b.style.color = name === active ? '#1a1410' : '#e8dcc8';
+      }
     };
-    hairBtns.set(h.name, b);
-    hairRow.appendChild(b);
-  }
-  markHair(opts.defaultHair);
+    for (const o of grp.options) {
+      const b = document.createElement('button');
+      b.textContent = o.label;
+      b.style.cssText = BTN_CSS;
+      b.onclick = () => {
+        opts.onSlot(grp.slot, o.name);
+        mark(o.name);
+      };
+      btns.set(o.name, b);
+      row.appendChild(b);
+    }
+    mark(grp.active);
+  });
 
   // 編輯模式
   title('場景');
   const editBtn = document.createElement('button');
-  editBtn.style.cssText =
-    'width:100%;border:1px solid #4a3a26;border-radius:6px;padding:5px 8px;cursor:pointer;font:12px monospace;background:#2e2418;color:#e8dcc8';
+  editBtn.style.cssText = `width:100%;${BTN_CSS};padding:5px 8px`;
   let editing = false;
   const renderEdit = () => {
     editBtn.textContent = editing ? '■ 編輯中(點家具拖曳)' : '▶ 進入編輯模式';
@@ -75,8 +86,7 @@ export function buildUi(opts: UiOptions): void {
   // 匯出
   const exportBtn = document.createElement('button');
   exportBtn.textContent = '複製場景 JSON';
-  exportBtn.style.cssText =
-    'display:none;width:100%;margin-top:6px;border:1px solid #4a3a26;border-radius:6px;padding:5px 8px;cursor:pointer;font:12px monospace;background:#2e2418;color:#e8dcc8';
+  exportBtn.style.cssText = `display:none;width:100%;margin-top:6px;${BTN_CSS};padding:5px 8px`;
   exportBtn.onclick = async () => {
     const json = opts.exportJson();
     try {

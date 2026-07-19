@@ -2,3 +2,5 @@ node_modules/
 dist/
 assets/raw/*.codex.log
 assets/raw/queue-status.log
+assets/queue/
+tools/__pycache__/

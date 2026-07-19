@@ -3,7 +3,7 @@ import { loadManifest, loadFrames, sheetExists } from './assets';
 import { buildScene, loadScene } from './scene';
 import { Player } from './player';
 import { SceneEditor } from './editor';
-import { buildUi } from './ui';
+import { buildUi, type SlotGroup } from './ui';
 import { AnimatedSprite } from 'pixi.js';
 
 async function boot() {
@@ -74,22 +74,62 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   const idleDef = manifest.assets['char-body-idle'];
   const charReady =
     !!walkDef && !!idleDef && (await sheetExists(walkDef)) && (await sheetExists(idleDef));
-  // 髮色變體:sheet 已落地的才進選單
-  const hairs: { label: string; name: string | null }[] = [{ label: '原色', name: null }];
+  // 換裝插槽群組:sheet(walk+idle)已落地的變體才進選單
+  const slotDefs: { slot: string; title: string; none: string; variants: [string, string][] }[] = [
+    {
+      slot: 'hair',
+      title: '髮色',
+      none: '原色',
+      variants: [
+        ['金', 'char-hair-blonde'],
+        ['粉', 'char-hair-pink'],
+        ['銀', 'char-hair-silver'],
+      ],
+    },
+    {
+      slot: 'shirt',
+      title: '上衣',
+      none: '原色',
+      variants: [
+        ['紅', 'char-shirt-red'],
+        ['藍', 'char-shirt-blue'],
+        ['綠', 'char-shirt-green'],
+      ],
+    },
+    {
+      slot: 'pants',
+      title: '褲子',
+      none: '原色',
+      variants: [
+        ['棕', 'char-pants-brown'],
+        ['綠', 'char-pants-green'],
+      ],
+    },
+    {
+      slot: 'hat',
+      title: '帽子',
+      none: '無',
+      variants: [['棒球帽', 'char-hat-cap']],
+    },
+  ];
+  const groups: SlotGroup[] = [];
   if (charReady) {
-    const variants: [string, string][] = [
-      ['金', 'char-hair-blonde'],
-      ['粉', 'char-hair-pink'],
-      ['銀', 'char-hair-silver'],
-    ];
-    for (const [label, name] of variants) {
-      const w = manifest.assets[`${name}-walk`];
-      const i = manifest.assets[`${name}-idle`];
-      if (w && i && (await sheetExists(w)) && (await sheetExists(i))) hairs.push({ label, name });
+    for (const def of slotDefs) {
+      const options: SlotGroup['options'] = [{ label: def.none, name: null }];
+      for (const [label, name] of def.variants) {
+        const w = manifest.assets[`${name}-walk`];
+        const i = manifest.assets[`${name}-idle`];
+        if (w && i && (await sheetExists(w)) && (await sheetExists(i))) options.push({ label, name });
+      }
+      if (options.length > 1) groups.push({ slot: def.slot, title: def.title, options, active: null });
     }
     player = await Player.create(manifest, ['char-body'], 0.55);
-    const defaultHair = hairs.find((h) => h.name === 'char-hair-blonde')?.name ?? null;
-    if (defaultHair) await player.setOverlay(manifest, 'hair', defaultHair);
+    const hairGrp = groups.find((g) => g.slot === 'hair');
+    const defaultHair = hairGrp?.options.find((o) => o.name === 'char-hair-blonde')?.name ?? null;
+    if (defaultHair) {
+      await player.setOverlay(manifest, 'hair', defaultHair);
+      hairGrp!.active = defaultHair;
+    }
     player.x = data.spawn.x;
     player.y = data.spawn.y;
     built.objectLayer.addChild(player.view);
@@ -103,9 +143,8 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   dbg.__built = built;
   dbg.__editor = editor;
   buildUi({
-    hairs,
-    defaultHair: player ? 'char-hair-blonde' : null,
-    onHair: (name) => void player?.setOverlay(manifest, 'hair', name),
+    groups,
+    onSlot: (slot, name) => void player?.setOverlay(manifest, slot, name),
     onEditToggle: (on) => editor.setEnabled(on),
     exportJson: () => editor.exportJson(),
   });
