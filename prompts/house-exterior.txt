@@ -1,0 +1,8 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a sprite sheet: a 2x2 grid of 4 animation frames. Frame order: top-left, top-right, bottom-left, bottom-right. Each frame occupies exactly one 512x512 quadrant.
+- Subject: the exterior of a cozy small cottage office seen from the front in top-down 2D RPG perspective (like Stardew Valley buildings): warm brown wooden walls, a red-tiled roof, a stone chimney, two windows with warm light, and ONE centered front door at the bottom edge of the building.
+- Animation across the 4 frames: the building stays pixel-identical; soft smoke puffs drift up from the chimney and the window light flickers warmly, forming a smooth loop.
+- Background: fully transparent. NO ground, NO shadow.
+- No grid lines, no labels, no text.
