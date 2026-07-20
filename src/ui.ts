@@ -97,6 +97,48 @@ function fmtTime(ms: number): string {
   return hh > 0 ? `${hh}:${pad(mm)}:${pad(ss)}` : `${mm}:${pad(ss)}`;
 }
 
+/** 破關紙屑慶祝:一次性注入 keyframes,呼叫時噴一批 DOM 紙屑,落地後自清。零 asset、不碰 PixiJS。 */
+let confettiCssInjected = false;
+const CONFETTI_COLORS = ['#ffd35a', '#8ad86e', '#7ec9e0', '#e0a458', '#ff9f7a', '#f5f0e6'];
+function burstConfetti(count = 80): void {
+  if (!confettiCssInjected) {
+    const style = document.createElement('style');
+    style.textContent =
+      '@keyframes rpg-confetti-fall{0%{transform:translateY(-8vh) rotate(0deg);opacity:1}' +
+      '100%{transform:translateY(108vh) rotate(720deg);opacity:.9}}';
+    document.head.appendChild(style);
+    confettiCssInjected = true;
+  }
+  const layer = document.createElement('div');
+  layer.style.cssText =
+    'position:fixed;inset:0;z-index:13;pointer-events:none;overflow:hidden';
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement('div');
+    // 位置/大小/色/時長/延遲用 index 派生,避免 Math.random(在部分環境被禁);夠散就好
+    const leftPct = (i * 37) % 100;
+    const size = 6 + ((i * 13) % 8);
+    const color = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+    const dur = 2.2 + ((i * 7) % 18) / 10;
+    const delay = ((i * 11) % 12) / 10;
+    const round = i % 3 === 0 ? '50%' : '2px';
+    p.style.cssText = [
+      'position:absolute',
+      `left:${leftPct}%`,
+      'top:0',
+      `width:${size}px`,
+      `height:${size + 3}px`,
+      `background:${color}`,
+      `border-radius:${round}`,
+      `animation:rpg-confetti-fall ${dur}s linear ${delay}s forwards`,
+      'opacity:0',
+    ].join(';');
+    layer.appendChild(p);
+  }
+  document.body.appendChild(layer);
+  // 最長動畫(dur+delay ≈ 4+1.2)結束後移除整層
+  setTimeout(() => layer.remove(), 5500);
+}
+
 export function buildUi(opts: UiOptions): UiHandle {
   // 暗角 vignette:四角壓暗,營造密室/解謎氛圍(蓋在 canvas 上、不擋操作)
   const vignette = document.createElement('div');
@@ -643,6 +685,10 @@ export function buildUi(opts: UiOptions): UiHandle {
       cRestart.style.display = 'none';
     }
     completeOverlay.style.display = 'flex';
+    // 全破(有再玩鈕、無下一關鈕)→ 噴紙屑慶祝,強化逃脫成功的情緒高點
+    if (info.onRestart && !info.onNext) {
+      burstConfetti();
+    }
   };
 
   // ── 開場簡報(進遊戲第一眼):框住「密室逃脫」前提 + 操作,按鈕才開始 ──
