@@ -1,0 +1,38 @@
+name: Deploy to GitHub Pages
+
+# push 到 master 就自動 build + 部署到 gh-pages 分支。
+# 以前只有手動 npm run build + 手動推 gh-pages,常發生「master 改了但線上沒更新」。
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: {}  # 允許手動觸發
+
+permissions:
+  contents: write  # peaceiris 要 push 回 gh-pages 分支
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build (tsc + vite)
+        run: npm run build
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages

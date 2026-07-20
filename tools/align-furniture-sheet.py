@@ -63,19 +63,30 @@ def align(in_path, out_path, cols, rows, baseline, unify_size, size_metric,
             fby0, fby1 = ys.min(), ys.max() + 1
             fbx0, fbx1 = xs.min(), xs.max() + 1
             mc = main_component_box(a)
+            if mc is not None:
+                (my0, my1, mx0, mx1), mmask = mc
+            else:
+                my0, my1, mx0, mx1, mmask = fby0, fby1, fbx0, fbx1, None
             if size_metric == 'main' and mc is not None:
-                (my0, my1, _, _), _ = mc
                 measure_h = my1 - my0
                 base_y = my1  # 用主體底緣當基線(蒸汽在上不影響)
             else:
                 measure_h = fby1 - fby0
                 base_y = fby1
+            # 水平對齊基準用「本體質心 x(第一動量)」而非 bbox 幾何中心:
+            # 垃圾桶/書架這類本體偏一邊或帶雜點時,bbox 中心會被雜點拉偏,
+            # 幀間本體其實在左右移 → 用本體像素質心才能真的把本體釘在格中心。
+            if mmask is not None:
+                mys, mxs = np.where(mmask[my0:my1, mx0:mx1])
+                body_cx = mx0 + mxs.mean()   # 本體質心在整格內的 x
+            else:
+                body_cx = (fbx0 + fbx1) / 2
             cells.append({
                 'r': r, 'c': c,
                 'patch': cell[fby0:fby1, fbx0:fbx1].copy(),
                 'fbx0': fbx0, 'fby0': fby0,
                 'base_y_in_patch': base_y - fby0,   # 主體底緣在 patch 內的 y
-                'cx_in_patch': (fbx0 + fbx1) / 2 - fbx0,
+                'cx_in_patch': body_cx - fbx0,      # 本體質心在 patch 內的 x
                 'measure_h': measure_h,
                 'patch_w': fbx1 - fbx0,
             })
@@ -112,9 +123,11 @@ def align(in_path, out_path, cols, rows, baseline, unify_size, size_metric,
         else:  # baseline
             ty = int(round((r + 1) * ch - baseline - base_y))
         tx = int(round(c * cw + cw / 2 - cx))
-        # 夾邊界防溢出
+        # 垂直夾在格內(避免侵入上下鄰格);水平只夾在整張圖內,
+        # 不夾回格界——否則本體偏寬時「置中」會被夾回原位,質心對齊白做。
+        # 家具本體不會寬到侵入左右鄰格半格,水平放寬是安全的。
         ty = max(r * ch, min(ty, (r + 1) * ch - ph))
-        tx = max(c * cw, min(tx, (c + 1) * cw - pw))
+        tx = max(0, min(tx, W - pw))
         region = out[ty:ty + ph, tx:tx + pw]
         h2, w2 = region.shape[:2]
         p = patch[:h2, :w2]
