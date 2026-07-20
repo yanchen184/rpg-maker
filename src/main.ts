@@ -92,6 +92,7 @@ const LEVELS: LevelDef[] = [
   { scene: 'level1', name: '第 1 關 · 辦公室', hint: '找到門上密碼,離開房間' },
   { scene: 'level2', name: '第 2 關 · 倉庫', hint: '兩張紙條各藏一半密碼' },
   { scene: 'level3', name: '第 3 關 · 控制室', hint: '踩下踏板,再算出密碼' },
+  { scene: 'level4', name: '第 4 關 · 機房', hint: '合上雙保險絲,再算出密碼' },
 ];
 // 起始場景:預設第 1 關;開發時可用 ?scene=level3 直接跳關驗證(玩家不會手打此參數)
 const FIRST_SCENE =
