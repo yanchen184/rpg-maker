@@ -1,0 +1,9 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x256, fully transparent background (alpha channel). Do nothing else (no file ops, no code).
+
+Spec:
+- A single horizontal strip: 1 row x 4 columns = 4 frames. Each frame is exactly one 256x256 cell (4 cells left to right).
+Character: cute chibi office worker, top-down 2D RPG style like Stardew Valley (about 2.5 heads tall), short dark brown hair, plain white t-shirt, dark navy pants, brown shoes. 16-bit pixel art, warm palette.
+- ALL 4 frames show the SAME character at EXACTLY the same pixel height and the same size, feet planted on the SAME baseline near the bottom of every cell. The ONLY difference between frames is the pose.
+- Character horizontally CENTERED in each 256-wide cell, fully inside its cell, not touching left/right/top edges.
+- Fully transparent background. NO floor, NO shadow, NO grid lines, NO text.
+- Direction: facing AWAY from viewer (walking UP, we see the BACK of the head and back, NO face visible). WALK cycle, 4 frames of legs stepping. Same height as front view.
