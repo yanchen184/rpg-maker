@@ -299,7 +299,12 @@ export function buildUi(opts: UiOptions): UiHandle {
     }
     const dots = '●'.repeat(p.cluesSeen) + '○'.repeat(Math.max(0, p.cluesTotal - p.cluesSeen));
     const lock = p.unlocked ? '<span style="color:#8ad86e">🔓 門已解鎖</span>' : '🔒 門上鎖';
-    hudProgress.innerHTML = `線索 <span style="color:#ffd27a">${dots}</span> ${p.cluesSeen}/${p.cluesTotal} · ${lock}`;
+    // 收集到第一條線索後,才提示 Tab 可翻筆記本 —— 避免一開始就塞太多字
+    const tabHint =
+      p.cluesSeen > 0 && !p.unlocked
+        ? '<br><span style="font-size:11px;color:#8a7a60">按 Tab 翻線索筆記本</span>'
+        : '';
+    hudProgress.innerHTML = `線索 <span style="color:#ffd27a">${dots}</span> ${p.cluesSeen}/${p.cluesTotal} · ${lock}${tabHint}`;
     hudProgress.style.display = 'block';
   };
 
