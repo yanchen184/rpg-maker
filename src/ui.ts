@@ -121,7 +121,7 @@ export function buildUi(opts: UiOptions): UiHandle {
   panel.appendChild(bag);
 
   const hint = document.createElement('div');
-  hint.textContent = 'WASD / 方向鍵移動 · E 打招呼 · F 撿取';
+  hint.textContent = 'WASD / 方向鍵移動 · E 打招呼 · F 撿取 · G 上下車';
   hint.style.cssText = 'color:#a89878;margin-top:8px;font-size:11px';
   panel.appendChild(hint);
 

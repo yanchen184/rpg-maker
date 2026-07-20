@@ -1,6 +1,7 @@
 import { Application, Container, Text } from 'pixi.js';
 import { loadManifest, loadFrames, sheetExists } from './assets';
 import { aabbOverlap, buildScene, loadScene } from './scene';
+import type { Aabb } from './types';
 import { Player } from './player';
 import { SceneEditor } from './editor';
 import { buildUi, type SlotGroup } from './ui';
@@ -187,6 +188,83 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     if (e.key.toLowerCase() === 'f') pickupHandled = false;
   });
 
+  // 載具:G 上/下車;上車後角色隱身、車帶著人以車速移動
+  let riding: (typeof built.vehicles)[number] | null = null;
+  const RIDE_RANGE = 110; // 上車距離
+  const DEFAULT_VEHICLE_SPEED = 380; // 車比人(220)快
+  const vehKeys = new Set<string>();
+  let rideHandled = false;
+  dbg.__riding = () => (riding ? riding.data.id : null);
+  const enterVehicle = () => {
+    if (!player) return;
+    let best: (typeof built.vehicles)[number] | null = null;
+    let bestD = RIDE_RANGE;
+    for (const v of built.vehicles) {
+      const d = Math.hypot(v.x - player.x, v.y - player.y);
+      if (d < bestD) {
+        bestD = d;
+        best = v;
+      }
+    }
+    if (!best) return;
+    riding = best;
+    player.view.visible = false; // 人坐進車裡,先隱身(基本版)
+  };
+  const exitVehicle = () => {
+    if (!player || !riding) return;
+    // 角色落回車旁(車正下方一點,避免疊在車上)
+    player.x = riding.x;
+    player.y = riding.y + 60;
+    player.view.visible = true;
+    riding = null;
+  };
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === 'g' && !rideHandled) {
+      rideHandled = true;
+      if (riding) exitVehicle();
+      else enterVehicle();
+    }
+    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) {
+      vehKeys.add(k);
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === 'g') rideHandled = false;
+    vehKeys.delete(k);
+  });
+  // 車移動:讀方向鍵,吃碰撞牆(沿牆滑),更新車 sprite + 讓角色座標跟車
+  const updateVehicle = (dtSec: number) => {
+    if (!riding || !player) return;
+    let dx = 0;
+    let dy = 0;
+    if (vehKeys.has('w') || vehKeys.has('arrowup')) dy -= 1;
+    if (vehKeys.has('s') || vehKeys.has('arrowdown')) dy += 1;
+    if (vehKeys.has('a') || vehKeys.has('arrowleft')) dx -= 1;
+    if (vehKeys.has('d') || vehKeys.has('arrowright')) dx += 1;
+    if (dx !== 0 || dy !== 0) {
+      const len = Math.hypot(dx, dy);
+      const speed = riding.data.speed ?? DEFAULT_VEHICLE_SPEED;
+      const step = (speed * dtSec) / len;
+      const half = { w: 60, h: 30 }; // 車底碰撞框(約車身)
+      const canMove = (nx: number, ny: number): boolean => {
+        const box: Aabb = { x: nx, y: ny - half.h / 2, w: half.w, h: half.h };
+        return !built.colliders.some((c) => aabbOverlap(box, c));
+      };
+      const nx = riding.x + dx * step;
+      if (canMove(nx, riding.y)) riding.x = nx;
+      const ny = riding.y + dy * step;
+      if (canMove(riding.x, ny)) riding.y = ny;
+    }
+    riding.sprite.x = riding.x;
+    riding.sprite.y = riding.y;
+    riding.sprite.zIndex = riding.y;
+    // 角色跟著車(座標同步,view 雖隱身但保持位置正確,下車才對)
+    player.x = riding.x;
+    player.y = riding.y;
+  };
+
   // 鏡頭:整個房間置中、縮放至可視範圍
   const fit = () => {
     const d = built.data;
@@ -203,6 +281,11 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   let switching = false;
   const switchScene = async (to: string, spawn: { x: number; y: number }) => {
     switching = true;
+    // 切場景先強制下車(舊場景的車 sprite 會被銷毀,riding 不能懸空)
+    if (riding && player) {
+      player.view.visible = true;
+      riding = null;
+    }
     try {
       const next = await buildScene(await loadScene(to), manifest);
       if (player) built.objectLayer.removeChild(player.view);
@@ -226,8 +309,14 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   };
 
   app.ticker.add((t) => {
-    player?.update(t.deltaMS / 1000, built.colliders);
-    if (player && !switching) {
+    const dt = t.deltaMS / 1000;
+    if (riding) {
+      // 騎乘中:只由車帶人移動,角色不自走(不跑 player.update,避免方向鍵人車搶控)
+      updateVehicle(dt);
+    } else {
+      player?.update(dt, built.colliders);
+    }
+    if (player && !switching && !riding) {
       for (const ex of built.data.exits ?? []) {
         if (aabbOverlap(player.aabb, ex.zone)) {
           void switchScene(ex.to, ex.spawn);

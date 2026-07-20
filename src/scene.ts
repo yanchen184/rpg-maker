@@ -1,10 +1,18 @@
 import { AnimatedSprite, Container, Text, Texture } from 'pixi.js';
 import { loadFrames, sheetExists } from './assets';
-import type { Aabb, AssetDef, Manifest, Pickup, SceneData, SceneObject } from './types';
+import type { Aabb, AssetDef, Manifest, Pickup, SceneData, SceneObject, Vehicle } from './types';
 
 export interface PlacedPickup {
   data: Pickup;
   sprite: Text;
+}
+
+export interface PlacedVehicle {
+  data: Vehicle;
+  sprite: Text;
+  /** 車自身座標(上車後由玩家操控更新;下車後角色落回車旁) */
+  x: number;
+  y: number;
 }
 
 export interface BuiltScene {
@@ -17,6 +25,8 @@ export interface BuiltScene {
   placed: PlacedObject[];
   /** 地上可撿取物品(撿起時從此移除並拿掉 sprite) */
   pickups: PlacedPickup[];
+  /** 可騎乘載具 */
+  vehicles: PlacedVehicle[];
 }
 
 export interface PlacedObject {
@@ -115,7 +125,19 @@ export async function buildScene(data: SceneData, manifest: Manifest): Promise<B
     pickups.push({ data: p, sprite: sp });
   }
 
-  return { root, objectLayer, colliders, data, placed, pickups };
+  // 可騎乘載具:emoji sprite,吃 y-sort 遮擋;碰撞在 main 動態處理(未上車擋路、上車後不擋自己)
+  const vehicles: PlacedVehicle[] = [];
+  for (const v of data.vehicles ?? []) {
+    const sp = new Text({ text: v.emoji, style: { fontSize: 72, fill: 0xffffff } });
+    sp.anchor.set(0.5, 1);
+    sp.x = v.x;
+    sp.y = v.y;
+    sp.zIndex = v.y;
+    objectLayer.addChild(sp);
+    vehicles.push({ data: v, sprite: sp, x: v.x, y: v.y });
+  }
+
+  return { root, objectLayer, colliders, data, placed, pickups, vehicles };
 }
 
 export async function addObject(
