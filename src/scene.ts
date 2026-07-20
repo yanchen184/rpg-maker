@@ -1,6 +1,11 @@
-import { AnimatedSprite, Container, Texture } from 'pixi.js';
+import { AnimatedSprite, Container, Text, Texture } from 'pixi.js';
 import { loadFrames, sheetExists } from './assets';
-import type { Aabb, AssetDef, Manifest, SceneData, SceneObject } from './types';
+import type { Aabb, AssetDef, Manifest, Pickup, SceneData, SceneObject } from './types';
+
+export interface PlacedPickup {
+  data: Pickup;
+  sprite: Text;
+}
 
 export interface BuiltScene {
   root: Container;
@@ -10,6 +15,8 @@ export interface BuiltScene {
   data: SceneData;
   /** 編輯模式用:場景物件與其 sprite / collider 的對應 */
   placed: PlacedObject[];
+  /** 地上可撿取物品(撿起時從此移除並拿掉 sprite) */
+  pickups: PlacedPickup[];
 }
 
 export interface PlacedObject {
@@ -96,7 +103,19 @@ export async function buildScene(data: SceneData, manifest: Manifest): Promise<B
     if (rec) placed.push(rec);
   }
 
-  return { root, objectLayer, colliders, data, placed };
+  // 地上可撿取物品:emoji sprite,不擋路(無 collider),吃 y-sort 遮擋
+  const pickups: PlacedPickup[] = [];
+  for (const p of data.pickups ?? []) {
+    const sp = new Text({ text: p.emoji, style: { fontSize: 40, fill: 0xffffff } });
+    sp.anchor.set(0.5, 1);
+    sp.x = p.x;
+    sp.y = p.y;
+    sp.zIndex = p.y;
+    objectLayer.addChild(sp);
+    pickups.push({ data: p, sprite: sp });
+  }
+
+  return { root, objectLayer, colliders, data, placed, pickups };
 }
 
 export async function addObject(

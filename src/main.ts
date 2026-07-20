@@ -147,11 +147,44 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   dbg.__player = player;
   dbg.__built = built;
   dbg.__editor = editor;
-  buildUi({
+  const ui = buildUi({
     groups,
     onSlot: (slot, name) => void player?.setOverlay(manifest, slot, name),
     onEditToggle: (on) => editor.setEnabled(on),
     exportJson: () => editor.exportJson(),
+  });
+
+  // 背包:撿到的物品計數(跨場景保留)
+  let bagCount = 0;
+  const PICKUP_RANGE = 90; // 角色與物品距離小於此才能撿(場景像素)
+  let pickupHandled = false;
+  dbg.__bag = () => bagCount;
+  // 撿取最近且在範圍內的地上物品
+  const tryPickup = () => {
+    if (!player) return;
+    let best: (typeof built.pickups)[number] | null = null;
+    let bestD = PICKUP_RANGE;
+    for (const pk of built.pickups) {
+      const d = Math.hypot(pk.data.x - player.x, pk.data.y - player.y);
+      if (d < bestD) {
+        bestD = d;
+        best = pk;
+      }
+    }
+    if (!best) return;
+    best.sprite.destroy();
+    built.pickups = built.pickups.filter((p) => p !== best);
+    bagCount++;
+    ui.setBag(bagCount);
+  };
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'f' && !pickupHandled) {
+      pickupHandled = true;
+      tryPickup();
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.key.toLowerCase() === 'f') pickupHandled = false;
   });
 
   // 鏡頭:整個房間置中、縮放至可視範圍

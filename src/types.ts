@@ -31,6 +31,16 @@ export interface SceneObject {
   z?: number;
 }
 
+/** 地上可撿取物品:走近按 F 撿起,計入背包 */
+export interface Pickup {
+  /** 場景內唯一 id(撿起後從清單移除用) */
+  id: string;
+  /** 用 emoji 當圖示(免生圖):☕ 📄 🔑 💾 ... */
+  emoji: string;
+  x: number;
+  y: number;
+}
+
 /** 場景出入口:角色踩進 zone 就切到 to 場景、落在 spawn */
 export interface SceneExit {
   /** 觸發區(場景座標,中心式 AABB) */
@@ -53,6 +63,8 @@ export interface SceneData {
   objects: SceneObject[];
   spawn: { x: number; y: number };
   exits?: SceneExit[];
+  /** 地上可撿取物品 */
+  pickups?: Pickup[];
 }
 
 export interface Aabb {

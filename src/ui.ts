@@ -17,10 +17,15 @@ export interface UiOptions {
   exportJson: () => string;
 }
 
+export interface UiHandle {
+  /** 更新背包計數顯示 */
+  setBag: (count: number) => void;
+}
+
 const BTN_CSS =
   'border:1px solid #4a3a26;border-radius:6px;padding:3px 8px;cursor:pointer;font:12px monospace;background:#2e2418;color:#e8dcc8';
 
-export function buildUi(opts: UiOptions): void {
+export function buildUi(opts: UiOptions): UiHandle {
   const panel = document.createElement('div');
   panel.style.cssText = [
     'position:fixed', 'top:12px', 'right:12px', 'z-index:10',
@@ -105,10 +110,21 @@ export function buildUi(opts: UiOptions): void {
   };
   panel.appendChild(exportBtn);
 
+  // 背包計數
+  title('背包');
+  const bag = document.createElement('div');
+  bag.style.cssText = 'font-size:14px';
+  const setBag = (count: number) => {
+    bag.textContent = `🎒 撿到 ${count} 個`;
+  };
+  setBag(0);
+  panel.appendChild(bag);
+
   const hint = document.createElement('div');
-  hint.textContent = 'WASD / 方向鍵移動 · E 打招呼';
+  hint.textContent = 'WASD / 方向鍵移動 · E 打招呼 · F 撿取';
   hint.style.cssText = 'color:#a89878;margin-top:8px;font-size:11px';
   panel.appendChild(hint);
 
   document.body.appendChild(panel);
+  return { setBag };
 }
