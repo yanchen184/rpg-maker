@@ -1,31 +1,87 @@
 {
   "name": "level3",
-  "size": { "w": 1400, "h": 850 },
+  "size": {
+    "w": 1400,
+    "h": 850
+  },
   "wallHeight": 130,
   "floorTile": 300,
   "floor": "floor-wood",
   "wall": "wall-top",
-  "spawn": { "x": 700, "y": 200 },
+  "spawn": {
+    "x": 700,
+    "y": 200
+  },
   "objects": [
-    { "asset": "whiteboard", "x": 400, "y": -60 },
-    { "asset": "whiteboard", "x": 1000, "y": -60 },
-    { "asset": "wall-lamp", "x": 700, "y": -95 },
-    { "asset": "desk-computer", "x": 250, "y": 300 },
-    { "asset": "office-chair", "x": 250, "y": 350 },
-    { "asset": "desk-computer", "x": 1150, "y": 300 },
-    { "asset": "office-chair", "x": 1150, "y": 350 },
-    { "asset": "plant-large", "x": 60, "y": 780 },
-    { "asset": "plant-large", "x": 1340, "y": 780 },
-    { "asset": "trash-bin", "x": 1200, "y": 640 }
+    {
+      "asset": "whiteboard",
+      "x": 400,
+      "y": -60
+    },
+    {
+      "asset": "whiteboard",
+      "x": 1000,
+      "y": -60
+    },
+    {
+      "asset": "wall-lamp",
+      "x": 700,
+      "y": -95
+    },
+    {
+      "asset": "desk-computer",
+      "x": 250,
+      "y": 300
+    },
+    {
+      "asset": "office-chair",
+      "x": 250,
+      "y": 350
+    },
+    {
+      "asset": "desk-computer",
+      "x": 1150,
+      "y": 300
+    },
+    {
+      "asset": "office-chair",
+      "x": 1150,
+      "y": 350
+    },
+    {
+      "asset": "plant-large",
+      "x": 60,
+      "y": 780
+    },
+    {
+      "asset": "plant-large",
+      "x": 1340,
+      "y": 780
+    },
+    {
+      "asset": "trash-bin",
+      "x": 1200,
+      "y": 640
+    }
   ],
   "exits": [
     {
-      "zone": { "x": 700, "y": 830, "w": 160, "h": 40 },
+      "zone": {
+        "x": 700,
+        "y": 830,
+        "w": 160,
+        "h": 40
+      },
       "to": "win",
-      "spawn": { "x": 700, "y": 200 },
+      "spawn": {
+        "x": 700,
+        "y": 200
+      },
       "lock": {
         "code": "58",
-        "needFlags": ["l3-power"],
+        "needFlags": [
+          "l3-power"
+        ],
         "hint": "鎖芯沒電——先接通電源(踩板),再輸入算出的密碼"
       }
     }
@@ -46,14 +102,14 @@
       "id": "l3-base",
       "emoji": "🔢",
       "x": 250,
-      "y": 250,
+      "y": 410,
       "text": "牆上的數字:基數 = 15。"
     },
     {
       "id": "l3-formula",
       "emoji": "📐",
-      "x": 1150,
-      "y": 250,
+      "x": 1130,
+      "y": 410,
       "text": "算式便條:密碼 = 基數 × 4 − 2。"
     },
     {

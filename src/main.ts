@@ -93,7 +93,9 @@ const LEVELS: LevelDef[] = [
   { scene: 'level2', name: '第 2 關 · 倉庫', hint: '兩張紙條各藏一半密碼' },
   { scene: 'level3', name: '第 3 關 · 控制室', hint: '踩下踏板,再算出密碼' },
 ];
-const FIRST_SCENE = LEVELS[0].scene;
+// 起始場景:預設第 1 關;開發時可用 ?scene=level3 直接跳關驗證(玩家不會手打此參數)
+const FIRST_SCENE =
+  new URLSearchParams(location.search).get('scene') ?? LEVELS[0].scene;
 
 async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof loadManifest>>) {
   let built = await buildScene(await loadScene(FIRST_SCENE), manifest);
@@ -381,6 +383,13 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     dev.active = true;
     puzzleState.flags.add(dev.data.setFlag);
     dev.sprite.text = dev.data.kind === 'switch' ? '🟢' : dev.sprite.text;
+    // 機關觸發 → 光暈轉綠常亮,標示「這個已完成」
+    dev.halo.clear();
+    dev.halo.circle(0, 0, 40).fill({ color: 0x8ad86e, alpha: 0.3 });
+    dev.halo.circle(0, 0, 30).fill({ color: 0x8ad86e, alpha: 0.4 });
+    dev.halo.circle(0, 0, 30).stroke({ color: 0xffffff, alpha: 0.6, width: 2.5 });
+    dev.halo.alpha = 1;
+    dev.halo.scale.set(1);
     ui.showToast(dev.data.hint ?? '喀噠——某處起了變化', 2000);
     // 觸發後可能滿足某扇門的 flag 條件 → 重畫門讓玩家看到變化
     for (const ex of built.data.exits ?? []) {
@@ -591,8 +600,21 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     }
   };
 
+  let haloClock = 0;
   app.ticker.add((t) => {
     const dt = t.deltaMS / 1000;
+    // 互動光暈呼吸:未觸發的線索/機關脈動放大,吸引玩家注意;已觸發的機關維持綠色常亮
+    haloClock += dt;
+    const pulse = 0.85 + Math.sin(haloClock * 2.6) * 0.15; // 0.70~1.00
+    for (const c of built.clues) {
+      c.halo.alpha = c.data.id && curClue?.data.id === c.data.id ? 1 : pulse;
+      c.halo.scale.set(pulse);
+    }
+    for (const dev of built.devices) {
+      if (dev.active) continue;
+      dev.halo.alpha = pulse;
+      dev.halo.scale.set(pulse);
+    }
     if (riding) {
       // 騎乘中:只由車帶人移動,角色不自走(不跑 player.update,避免方向鍵人車搶控)
       updateVehicle(dt);

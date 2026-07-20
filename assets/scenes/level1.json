@@ -1,53 +1,147 @@
 {
   "name": "level1",
-  "size": { "w": 1500, "h": 900 },
+  "size": {
+    "w": 1500,
+    "h": 900
+  },
   "wallHeight": 130,
   "floorTile": 300,
   "floor": "floor-wood",
   "wall": "wall-top",
-  "spawn": { "x": 750, "y": 470 },
+  "spawn": {
+    "x": 750,
+    "y": 470
+  },
   "objects": [
-    { "asset": "rug-red", "x": 750, "y": 470 },
-    { "asset": "window-blinds", "x": 300, "y": -65 },
-    { "asset": "window-blinds", "x": 750, "y": -65 },
-    { "asset": "whiteboard", "x": 1050, "y": -60 },
-    { "asset": "wall-lamp", "x": 520, "y": -95 },
-    { "asset": "wall-lamp", "x": 980, "y": -95 },
-    { "asset": "bookshelf", "x": 150, "y": 90 },
-    { "asset": "bookshelf", "x": 280, "y": 90 },
-    { "asset": "plant-small", "x": 370, "y": 80 },
-    { "asset": "desk-computer", "x": 330, "y": 300 },
-    { "asset": "office-chair", "x": 330, "y": 350 },
-    { "asset": "desk-computer", "x": 1170, "y": 300 },
-    { "asset": "office-chair", "x": 1170, "y": 350 },
-    { "asset": "desk-computer", "x": 750, "y": 620 },
-    { "asset": "office-chair", "x": 750, "y": 670 },
-    { "asset": "plant-large", "x": 60, "y": 120 },
-    { "asset": "plant-large", "x": 1440, "y": 860 },
-    { "asset": "fridge", "x": 1420, "y": 85 },
-    { "asset": "coffee-machine", "x": 1180, "y": -18, "z": 95 }
+    {
+      "asset": "rug-red",
+      "x": 750,
+      "y": 470
+    },
+    {
+      "asset": "window-blinds",
+      "x": 300,
+      "y": -65
+    },
+    {
+      "asset": "window-blinds",
+      "x": 750,
+      "y": -65
+    },
+    {
+      "asset": "whiteboard",
+      "x": 1050,
+      "y": -60
+    },
+    {
+      "asset": "wall-lamp",
+      "x": 520,
+      "y": -95
+    },
+    {
+      "asset": "wall-lamp",
+      "x": 980,
+      "y": -95
+    },
+    {
+      "asset": "bookshelf",
+      "x": 150,
+      "y": 90
+    },
+    {
+      "asset": "bookshelf",
+      "x": 280,
+      "y": 90
+    },
+    {
+      "asset": "plant-small",
+      "x": 370,
+      "y": 80
+    },
+    {
+      "asset": "desk-computer",
+      "x": 330,
+      "y": 300
+    },
+    {
+      "asset": "office-chair",
+      "x": 330,
+      "y": 350
+    },
+    {
+      "asset": "desk-computer",
+      "x": 1170,
+      "y": 300
+    },
+    {
+      "asset": "office-chair",
+      "x": 1170,
+      "y": 350
+    },
+    {
+      "asset": "desk-computer",
+      "x": 750,
+      "y": 620
+    },
+    {
+      "asset": "office-chair",
+      "x": 750,
+      "y": 670
+    },
+    {
+      "asset": "plant-large",
+      "x": 60,
+      "y": 120
+    },
+    {
+      "asset": "plant-large",
+      "x": 1440,
+      "y": 860
+    },
+    {
+      "asset": "fridge",
+      "x": 1420,
+      "y": 85
+    },
+    {
+      "asset": "coffee-machine",
+      "x": 1180,
+      "y": -18,
+      "z": 95
+    }
   ],
   "exits": [
     {
-      "zone": { "x": 750, "y": 880, "w": 160, "h": 40 },
+      "zone": {
+        "x": 750,
+        "y": 880,
+        "w": 160,
+        "h": 40
+      },
       "to": "level2",
-      "spawn": { "x": 750, "y": 200 },
-      "lock": { "code": "427", "hint": "白板上寫著三個數字…" }
+      "spawn": {
+        "x": 750,
+        "y": 200
+      },
+      "lock": {
+        "code": "427",
+        "hint": "白板上寫著三個數字…"
+      }
     }
   ],
   "clues": [
     {
       "id": "l1-board",
       "emoji": "📋",
-      "x": 1050,
-      "y": 120,
+      "x": 1080,
+      "y": 340,
       "text": "白板便條:離開密碼是 4-2-7。走到下方的門,按 E 輸入。"
     },
     {
       "id": "l1-hint",
       "emoji": "📌",
-      "x": 330,
-      "y": 250,
+      "x": 300,
+      "y": 430,
       "text": "第 1 關教學:靠近發亮的物件按 E 看線索,走到門口按 E 開鎖。"
     }
   ]

@@ -20,6 +20,8 @@ export interface PlacedPickup {
 export interface PlacedClue {
   data: Clue;
   sprite: Text;
+  /** 互動光暈(呼吸脈動,讓玩家遠遠就看得到「這裡能按 E」) */
+  halo: Graphics;
 }
 
 export interface PlacedDevice {
@@ -27,6 +29,8 @@ export interface PlacedDevice {
   sprite: Text;
   /** 機關已觸發(踩板/開關 on);繪製狀態、避免重複觸發 */
   active: boolean;
+  /** 互動光暈(觸發後轉綠常亮) */
+  halo: Graphics;
 }
 
 export interface PlacedVehicle {
@@ -70,6 +74,23 @@ function makeAnim(frames: Texture[], fps: number): AnimatedSprite {
   sp.animationSpeed = fps / 60;
   sp.play();
   return sp;
+}
+
+/**
+ * 互動光暈:一圈柔和的圓,放在線索/機關腳下,由 main 的 ticker 做呼吸脈動,
+ * 讓玩家遠遠就看得到「這裡能按 E」。zIndex 壓在 emoji 底下(y-2 略高一點避免蓋腳)。
+ */
+export function makeInteractHalo(x: number, y: number, color: number): Graphics {
+  const g = new Graphics();
+  // 外圈柔光 + 內圈亮環,對比拉高讓玩家一眼看到「這裡可互動」
+  g.circle(0, 0, 40).fill({ color, alpha: 0.22 });
+  g.circle(0, 0, 30).fill({ color, alpha: 0.3 });
+  g.circle(0, 0, 30).stroke({ color: 0xffffff, alpha: 0.55, width: 2.5 });
+  g.x = x;
+  g.y = y - 22;
+  // 光暈壓在物件 sprite 上方一點,但仍在同一 y-sort 群,避免被家具完全蓋掉
+  g.zIndex = y + 0.5;
+  return g;
 }
 
 export async function loadScene(name: string): Promise<SceneData> {
@@ -193,25 +214,29 @@ export async function buildScene(data: SceneData, manifest: Manifest): Promise<B
   // 線索物件:emoji sprite(不擋路、不入袋),靠近按 E 顯示 text
   const clues: PlacedClue[] = [];
   for (const c of data.clues ?? []) {
+    const halo = makeInteractHalo(c.x, c.y, 0xffe08a);
+    objectLayer.addChild(halo);
     const sp = new Text({ text: c.emoji, style: { fontSize: 44, fill: 0xffffff } });
     sp.anchor.set(0.5, 1);
     sp.x = c.x;
     sp.y = c.y;
     sp.zIndex = c.y;
     objectLayer.addChild(sp);
-    clues.push({ data: c, sprite: sp });
+    clues.push({ data: c, sprite: sp, halo });
   }
 
   // 機關:emoji sprite(不擋路),踩板/開關由 main 偵測觸發
   const devices: PlacedDevice[] = [];
   for (const d of data.devices ?? []) {
+    const halo = makeInteractHalo(d.x, d.y, 0x8ad6ff);
+    objectLayer.addChild(halo);
     const sp = new Text({ text: d.emoji, style: { fontSize: 44, fill: 0xffffff } });
     sp.anchor.set(0.5, 1);
     sp.x = d.x;
     sp.y = d.y;
     sp.zIndex = d.y;
     objectLayer.addChild(sp);
-    devices.push({ data: d, sprite: sp, active: false });
+    devices.push({ data: d, sprite: sp, active: false, halo });
   }
 
   return {
