@@ -200,6 +200,12 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   ui.setLevel(initLevel ? { name: initLevel.name, hint: initLevel.hint } : null);
   ui.setPuzzleMode(!!initLevel); // 解謎關收面板+開暗角;自由場景展開面板+關暗角
 
+  // 開場簡報:正常從第 1 關進場才顯示(?scene= 除錯跳關時跳過,不擋除錯)
+  const jumpedViaParam = new URLSearchParams(location.search).has('scene');
+  if (initLevel && built.data.name === LEVELS[0].scene && !jumpedViaParam) {
+    ui.showIntro(() => {});
+  }
+
   // 背包:撿到的物品計數 + 持有物品 id 集合(跨場景保留;解謎鎖門的 needItems 查它)
   let bagCount = 0;
   const heldItems = new Set<string>();
@@ -659,7 +665,7 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       dev.halo.alpha = pulse;
       dev.halo.scale.set(pulse);
     }
-    const uiPaused = ui.isModalOpen() || ui.isNotebookOpen();
+    const uiPaused = ui.isModalOpen() || ui.isNotebookOpen() || ui.isIntroOpen();
     if (riding) {
       // 騎乘中:只由車帶人移動,角色不自走(不跑 player.update,避免方向鍵人車搶控)
       updateVehicle(dt);

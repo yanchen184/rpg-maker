@@ -58,6 +58,10 @@ export interface UiHandle {
   ) => void;
   /** 解謎關 vs 自由場景:解謎關收起換裝面板 + 開暗角氛圍;自由場景展開面板 + 關暗角 */
   setPuzzleMode: (on: boolean) => void;
+  /** 開場簡報:進遊戲第一眼顯示密室逃脫前提 + 操作,按鈕/Enter/E 才開始(onStart) */
+  showIntro: (onStart: () => void) => void;
+  /** 開場簡報是否開啟中 — main 用來 gate 遊戲移動/互動 */
+  isIntroOpen: () => boolean;
 }
 
 const BTN_CSS =
@@ -530,6 +534,56 @@ export function buildUi(opts: UiOptions): UiHandle {
     completeOverlay.style.display = 'flex';
   };
 
+  // ── 開場簡報(進遊戲第一眼):框住「密室逃脫」前提 + 操作,按鈕才開始 ──
+  const introOverlay = document.createElement('div');
+  introOverlay.style.cssText = [
+    'position:fixed', 'inset:0', 'z-index:24', 'display:none',
+    'flex-direction:column', 'align-items:center', 'justify-content:center', 'gap:16px',
+    'background:rgba(8,6,4,.95)', 'color:#e8dcc8', 'font:15px/1.7 monospace', 'text-align:center',
+  ].join(';');
+  const introInner = document.createElement('div');
+  introInner.style.cssText = 'max-width:min(86vw,460px);padding:0 20px';
+  introInner.innerHTML = [
+    '<div style="font-size:34px;font-weight:bold;color:#e0a458;margin-bottom:4px">🔐 密室逃脫</div>',
+    '<div style="color:#8a7a60;margin-bottom:18px">數字解謎 · 逐關脫逃</div>',
+    '<div style="text-align:left;line-height:1.9">',
+    '你被鎖在一連串房間裡。每一關的門都上了<b>數字密碼鎖</b>,',
+    '線索藏在房間的物件與機關中。',
+    '<br><br>',
+    '<span style="color:#ffd27a">WASD</span> 移動 · ',
+    '<span style="color:#ffd27a">E</span> 靠近發亮物件看線索 / 開鎖門 · ',
+    '<span style="color:#ffd27a">Tab</span> 翻線索筆記本',
+    '<br><br>找齊線索、算出密碼,打開每一道門逃出去。',
+    '</div>',
+  ].join('');
+  const introBtn = document.createElement('button');
+  introBtn.style.cssText =
+    'margin-top:8px;padding:12px 32px;border:1px solid #e0a458;border-radius:8px;cursor:pointer;font:16px monospace;background:#e0a458;color:#1a1410;font-weight:bold';
+  introBtn.textContent = '開始逃脫 ▶';
+  introOverlay.append(introInner, introBtn);
+  document.body.appendChild(introOverlay);
+  let introOpen = false;
+  const showIntro = (onStart: () => void) => {
+    introOpen = true;
+    introOverlay.style.display = 'flex';
+    const start = () => {
+      introOpen = false;
+      introOverlay.style.display = 'none';
+      window.removeEventListener('keydown', onKey, true);
+      onStart();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ' || e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        e.stopPropagation();
+        start();
+      }
+    };
+    introBtn.onclick = start;
+    window.addEventListener('keydown', onKey, true); // capture:別讓遊戲 window 也收到
+  };
+  const isIntroOpen = () => introOpen;
+
   return {
     setBag,
     setExitPrompt,
@@ -543,5 +597,7 @@ export function buildUi(opts: UiOptions): UiHandle {
     isModalOpen,
     showLevelComplete,
     setPuzzleMode,
+    showIntro,
+    isIntroOpen,
   };
 }
