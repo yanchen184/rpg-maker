@@ -590,9 +590,14 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   const switchScene = async (to: string, spawn: { x: number; y: number }) => {
     // 破關:最後一關的門通往 'win' → 顯示破關畫面,不載場景
     if (to === 'win') {
+      const cluesFound = puzzleState.seenClues.size;
       ui.showLevelComplete({
         title: '🎉 全部過關!',
-        body: `你解開了全部 ${LEVELS.length} 道門,成功脫逃!\n感謝遊玩。`,
+        body: `你解開了全部 ${LEVELS.length} 道門,一路蒐集 ${cluesFound} 條線索,成功脫逃!\n感謝遊玩。`,
+        // 破關是死路 —— 重載到乾淨首頁重玩(去掉 ?scene= 除錯參數,狀態全歸零)
+        onRestart: () => {
+          location.href = location.pathname;
+        },
       });
       return;
     }

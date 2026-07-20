@@ -53,7 +53,9 @@ export interface UiHandle {
   /** modal(密碼面板)是否開啟中 — main 用來 gate 遊戲鍵盤/移動 */
   isModalOpen: () => boolean;
   /** 過關/破關全螢幕畫面(傳 null 關閉) */
-  showLevelComplete: (info: { title: string; body: string; onNext?: () => void } | null) => void;
+  showLevelComplete: (
+    info: { title: string; body: string; onNext?: () => void; onRestart?: () => void } | null,
+  ) => void;
   /** 解謎關 vs 自由場景:解謎關收起換裝面板 + 開暗角氛圍;自由場景展開面板 + 關暗角 */
   setPuzzleMode: (on: boolean) => void;
 }
@@ -490,10 +492,15 @@ export function buildUi(opts: UiOptions): UiHandle {
   const cBtn = document.createElement('button');
   cBtn.style.cssText =
     'margin-top:8px;padding:10px 24px;border:1px solid #e0a458;border-radius:8px;cursor:pointer;font:16px monospace;background:#e0a458;color:#1a1410;font-weight:bold';
-  completeOverlay.append(cTitle, cBody, cBtn);
+  // 破關「再玩一次」次要按鈕:破關畫面是死路,沒它玩家只能改網址重來
+  const cRestart = document.createElement('button');
+  cRestart.style.cssText =
+    'margin-top:2px;padding:8px 20px;border:1px solid #7a6547;border-radius:8px;cursor:pointer;font:14px monospace;background:transparent;color:#c8b79a';
+  cRestart.textContent = '↻ 再玩一次';
+  completeOverlay.append(cTitle, cBody, cBtn, cRestart);
   document.body.appendChild(completeOverlay);
   const showLevelComplete = (
-    info: { title: string; body: string; onNext?: () => void } | null,
+    info: { title: string; body: string; onNext?: () => void; onRestart?: () => void } | null,
   ) => {
     if (!info) {
       completeOverlay.style.display = 'none';
@@ -510,6 +517,15 @@ export function buildUi(opts: UiOptions): UiHandle {
       };
     } else {
       cBtn.style.display = 'none';
+    }
+    if (info.onRestart) {
+      cRestart.style.display = 'block';
+      cRestart.onclick = () => {
+        completeOverlay.style.display = 'none';
+        info.onRestart?.();
+      };
+    } else {
+      cRestart.style.display = 'none';
     }
     completeOverlay.style.display = 'flex';
   };
