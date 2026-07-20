@@ -6,6 +6,8 @@ import { Player } from './player';
 import { SceneEditor } from './editor';
 import { buildUi, type SlotGroup } from './ui';
 import { AnimatedSprite } from 'pixi.js';
+import { Net } from './net';
+import { RemotePlayer } from './remote-player';
 
 async function boot() {
   const app = new Application();
@@ -277,10 +279,72 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   fit();
   window.addEventListener('resize', fit);
 
+  // ── 多人連線:把本地玩家位置廣播到 Firebase RTDB,渲染同場景的其他玩家 ──
+  let net: Net | null = null;
+  const remotes = new Map<string, RemotePlayer>();
+  // 正在建立中的 remote(避免 async 建立期間同一 id 重複建)
+  const remoteBuilding = new Set<string>();
+  const PLAYER_SCALE = 0.55;
+  try {
+    net = new Net();
+    dbg.__net = () => ({
+      id: net?.clientId,
+      name: net?.name,
+      peers: net ? Object.keys(net.peers).length : 0,
+      shown: remotes.size,
+    });
+  } catch (e) {
+    console.warn('多人連線初始化失敗(單機仍可玩):', e);
+  }
+  // 每幀對帳:依 net.peers 增/刪/更新 remote sprite,只顯示與本地同場景者
+  const syncRemotes = (dtSec: number) => {
+    if (!net) return;
+    const sceneName = built.data.name;
+    const peers = net.peers;
+    // 移除:已離線、或跑到別的場景的 remote
+    for (const [id, rp] of remotes) {
+      const st = peers[id];
+      if (!st || st.scene !== sceneName) {
+        built.objectLayer.removeChild(rp.view);
+        rp.destroy();
+        remotes.delete(id);
+      }
+    }
+    // 新增/更新:同場景的 peer
+    for (const [id, st] of Object.entries(peers)) {
+      if (st.scene !== sceneName) continue;
+      const rp = remotes.get(id);
+      if (rp) {
+        rp.onUpdate(st);
+      } else if (!remoteBuilding.has(id)) {
+        remoteBuilding.add(id);
+        void RemotePlayer.create(manifest, PLAYER_SCALE, st).then((newRp) => {
+          remoteBuilding.delete(id);
+          // 建立期間可能已切場景/該 peer 已離線 → 再確認一次才掛上
+          if (!net || net.peers[id]?.scene !== built.data.name) {
+            newRp.destroy();
+            return;
+          }
+          remotes.set(id, newRp);
+          built.objectLayer.addChild(newRp.view);
+        });
+      }
+    }
+    // 插值移動所有 remote
+    for (const rp of remotes.values()) rp.update(dtSec);
+  };
+  // 切場景時清掉所有 remote(objectLayer 會被銷毀重建)
+  const clearRemotes = () => {
+    for (const rp of remotes.values()) rp.destroy();
+    remotes.clear();
+    remoteBuilding.clear();
+  };
+
   // 場景切換:換裝狀態跟著 Player 實例保留
   let switching = false;
   const switchScene = async (to: string, spawn: { x: number; y: number }) => {
     switching = true;
+    clearRemotes(); // 舊場景 objectLayer 即將銷毀,先清遠端玩家 sprite
     // 切場景先強制下車(舊場景的車 sprite 會被銷毀,riding 不能懸空)
     if (riding && player) {
       player.view.visible = true;
@@ -323,6 +387,11 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
           break;
         }
       }
+    }
+    // 多人:廣播自己 + 對帳/渲染其他玩家(切場景中不推,避免場景名跳動)
+    if (net && player && !switching) {
+      net.push({ x: player.x, y: player.y, dir: player.dir, scene: built.data.name });
+      syncRemotes(dt);
     }
   });
 }
