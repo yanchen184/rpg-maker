@@ -25,6 +25,16 @@ async function boot() {
   } else {
     await sceneMode(app, manifest);
   }
+  hideLoading();
+}
+
+/** 首屏載入畫面(index.html 的 #loading):場景與角色都 build 完後淡出移除 */
+function hideLoading() {
+  const el = document.getElementById('loading');
+  if (!el) return;
+  el.classList.add('hide');
+  // 等 CSS transition(.45s)跑完再從 DOM 拔掉,避免蓋住 canvas 互動
+  window.setTimeout(() => el.remove(), 500);
 }
 
 /** 素材預覽:所有已生好的素材排格子、播動畫 */
