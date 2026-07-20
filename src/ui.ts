@@ -20,6 +20,8 @@ export interface UiOptions {
 export interface UiHandle {
   /** 更新背包計數顯示 */
   setBag: (count: number) => void;
+  /** 門口提示:傳字串顯示「按 E 離開」浮條,傳 null 隱藏 */
+  setExitPrompt: (text: string | null) => void;
 }
 
 const BTN_CSS =
@@ -121,10 +123,30 @@ export function buildUi(opts: UiOptions): UiHandle {
   panel.appendChild(bag);
 
   const hint = document.createElement('div');
-  hint.textContent = 'WASD / 方向鍵移動 · E 打招呼 · F 撿取 · G 上下車';
+  hint.textContent = 'WASD / 方向鍵移動 · E 打招呼(門口=離開) · F 撿取 · G 上下車';
   hint.style.cssText = 'color:#a89878;margin-top:8px;font-size:11px';
   panel.appendChild(hint);
 
   document.body.appendChild(panel);
-  return { setBag };
+
+  // 門口互動提示:畫面下方置中浮條,靠近出口才顯示
+  const exitPrompt = document.createElement('div');
+  exitPrompt.style.cssText = [
+    'position:fixed', 'left:50%', 'bottom:48px', 'transform:translateX(-50%)',
+    'z-index:10', 'background:rgba(20,14,8,.9)', 'border:1px solid #e0a458',
+    'border-radius:8px', 'padding:8px 16px', 'color:#ffe0a8',
+    'font:15px/1.4 monospace', 'user-select:none', 'pointer-events:none',
+    'display:none', 'box-shadow:0 2px 12px rgba(0,0,0,.5)',
+  ].join(';');
+  document.body.appendChild(exitPrompt);
+  const setExitPrompt = (text: string | null) => {
+    if (text) {
+      exitPrompt.textContent = text;
+      exitPrompt.style.display = 'block';
+    } else {
+      exitPrompt.style.display = 'none';
+    }
+  };
+
+  return { setBag, setExitPrompt };
 }

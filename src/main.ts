@@ -162,9 +162,9 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   const PICKUP_RANGE = 90; // 角色與物品距離小於此才能撿(場景像素)
   let pickupHandled = false;
   dbg.__bag = () => bagCount;
-  // 撿取最近且在範圍內的地上物品
+  // 撿取最近且在範圍內的地上物品:先播撿取動作(彎腰),動作到一半才真的入袋
   const tryPickup = () => {
-    if (!player) return;
+    if (!player || player.inAction) return;
     let best: (typeof built.pickups)[number] | null = null;
     let bestD = PICKUP_RANGE;
     for (const pk of built.pickups) {
@@ -175,10 +175,16 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       }
     }
     if (!best) return;
-    best.sprite.destroy();
-    built.pickups = built.pickups.filter((p) => p !== best);
-    bagCount++;
-    ui.setBag(bagCount);
+    const target = best;
+    player.pickupAction(); // 彎腰動作 + ✨ 泡泡
+    // 動作到「最深(彎下去)」那刻才把物品收走,視覺上像撿起來
+    window.setTimeout(() => {
+      if (!built.pickups.includes(target)) return; // 場景已切換等情況,保險
+      target.sprite.destroy();
+      built.pickups = built.pickups.filter((p) => p !== target);
+      bagCount++;
+      ui.setBag(bagCount);
+    }, 280);
   };
   window.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() === 'f' && !pickupHandled) {
@@ -188,6 +194,25 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   });
   window.addEventListener('keyup', (e) => {
     if (e.key.toLowerCase() === 'f') pickupHandled = false;
+  });
+
+  // 門口離開:站在出口 zone 內按 E 才切場景(靠近時畫面下方顯示提示)
+  const SCENE_LABEL: Record<string, string> = {
+    office: '辦公室',
+    outdoor: '戶外',
+    cabin: '小木屋',
+    storage: '倉庫',
+  };
+  let curExit: { to: string; spawn: { x: number; y: number } } | null = null;
+  let exitHandled = false;
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'e' && !exitHandled) {
+      exitHandled = true;
+      if (curExit && !switching) void switchScene(curExit.to, curExit.spawn);
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.key.toLowerCase() === 'e') exitHandled = false;
   });
 
   // 載具:G 上/下車;上車後角色隱身、車帶著人以車速移動
@@ -380,13 +405,21 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     } else {
       player?.update(dt, built.colliders);
     }
+    // 門口偵測:站在出口 zone 內 → 記下該出口、顯示「按 E 離開」提示、E 交給離開不打招呼
     if (player && !switching && !riding) {
+      let found: { to: string; spawn: { x: number; y: number } } | null = null;
       for (const ex of built.data.exits ?? []) {
         if (aabbOverlap(player.aabb, ex.zone)) {
-          void switchScene(ex.to, ex.spawn);
+          found = { to: ex.to, spawn: ex.spawn };
           break;
         }
       }
+      curExit = found;
+      player.atExit = found !== null;
+      ui.setExitPrompt(found ? `按 E 前往「${SCENE_LABEL[found.to] ?? found.to}」` : null);
+    } else if (player) {
+      curExit = null;
+      player.atExit = false;
     }
     // 多人:廣播自己 + 對帳/渲染其他玩家(切場景中不推,避免場景名跳動)
     if (net && player && !switching) {

@@ -99,10 +99,27 @@ export async function buildScene(data: SceneData, manifest: Manifest): Promise<B
     colliders.push({ x: data.size.w / 2, y: -20, w: data.size.w, h: 40 });
   }
 
-  // 房間四周邊界(角色不能走出地板)
+  // 房間四周邊界(角色不能走出地板)。底邊在有出口(exit)的 x 段留門洞,
+  // 讓角色能走到門口 zone 觸發離開,不會被邊界牆擋死。
   const B = 40;
+  const bottomExits = (data.exits ?? []).filter((ex) => ex.zone.y >= data.size.h - 80);
+  const gaps = bottomExits
+    .map((ex) => ({ lo: ex.zone.x - ex.zone.w / 2 - 20, hi: ex.zone.x + ex.zone.w / 2 + 20 }))
+    .sort((a, b) => a.lo - b.lo);
+  // 依門洞把底邊切成數段實心牆
+  let cursor = 0;
+  const bottomY = data.size.h + B / 2;
+  for (const g of gaps) {
+    const lo = Math.max(0, g.lo);
+    if (lo > cursor) {
+      colliders.push({ x: (cursor + lo) / 2, y: bottomY, w: lo - cursor, h: B });
+    }
+    cursor = Math.max(cursor, Math.min(data.size.w, g.hi));
+  }
+  if (cursor < data.size.w) {
+    colliders.push({ x: (cursor + data.size.w) / 2, y: bottomY, w: data.size.w - cursor, h: B });
+  }
   colliders.push(
-    { x: data.size.w / 2, y: data.size.h + B / 2, w: data.size.w, h: B },
     { x: -B / 2, y: data.size.h / 2, w: B, h: data.size.h + 400 },
     { x: data.size.w + B / 2, y: data.size.h / 2, w: B, h: data.size.h + 400 },
   );

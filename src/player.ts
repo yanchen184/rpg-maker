@@ -35,11 +35,16 @@ export class Player {
   private turnLock = 0;
   /** 轉身頓挫時長(秒);太長會頓住不跟手,90ms 約一個 beat */
   private static readonly TURN_LOCK_SEC = 0.09;
-  /** 打招呼:頭上 👋 氣泡的剩餘秒數 + 氣泡本體 */
-  private greetLeft = 0;
-  private greetBubble: Text | null = null;
+  /** 動作(打招呼/撿東西):期間定格站姿並播一段程式動畫(彈跳/下蹲),不需專用素材 */
+  private actionKind: 'greet' | 'pickup' | null = null;
+  private actionLeft = 0;
+  private actionDur = 0;
+  private bubble: Text | null = null;
   private greetHandled = false;
-  private static readonly GREET_SEC = 1.0;
+  private static readonly GREET_SEC = 0.9;
+  private static readonly PICKUP_SEC = 0.55;
+  /** 站在出口門口時 = true:此時 E 用來離開(交給 main),不觸發打招呼 */
+  atExit = false;
 
   static async create(manifest: Manifest, layerNames: string[], scale: number): Promise<Player> {
     const p = new Player();
@@ -121,28 +126,71 @@ export class Player {
     this.turnLock = turning ? Player.TURN_LOCK_SEC : 0;
   }
 
-  /** 打招呼:頭上冒 👋 氣泡並定格站姿一下(純程式,不需招手素材) */
+  /** 打招呼:👋 泡泡 + 身體上下彈跳兩下(純程式,不需招手素材) */
   greet() {
-    if (this.greetLeft > 0) return; // 招呼中不重複觸發
-    this.greetLeft = Player.GREET_SEC;
-    if (!this.greetBubble) {
-      this.greetBubble = new Text({
-        text: '👋',
-        style: { fontSize: 48, fill: 0xffffff },
-      });
-      this.greetBubble.anchor.set(0.5, 1);
-      // 角色原點在腳底(anchor 0.5,1),頭頂約在 -身高;氣泡放頭頂上方
-      this.greetBubble.y = -this.spriteHeight() - 8;
-      this.view.addChild(this.greetBubble);
+    this.startAction('greet', Player.GREET_SEC, '👋', 48);
+  }
+
+  /** 撿東西:✨ 泡泡 + 往下蹲一下再起來(模擬彎腰撿) */
+  pickupAction() {
+    this.startAction('pickup', Player.PICKUP_SEC, '✨', 40);
+  }
+
+  /** 動作是否進行中(main 撿取邏輯要在動作尾端才真的入袋) */
+  get inAction(): boolean {
+    return this.actionKind !== null;
+  }
+
+  private startAction(kind: 'greet' | 'pickup', dur: number, emoji: string, size: number) {
+    if (this.actionKind) return; // 動作中不重複觸發
+    this.actionKind = kind;
+    this.actionLeft = dur;
+    this.actionDur = dur;
+    if (!this.bubble) {
+      this.bubble = new Text({ style: { fontSize: size, fill: 0xffffff } });
+      this.bubble.anchor.set(0.5, 1);
+      this.view.addChild(this.bubble);
     }
-    this.greetBubble.visible = true;
-    // 定格:停在當前方向 idle/walk 首幀(靜止站姿),更像「停下來打招呼」
+    this.bubble.text = emoji;
+    this.bubble.style.fontSize = size;
+    this.bubble.y = -this.spriteHeight() - 8;
+    this.bubble.visible = true;
+    // 定格:停在當前方向 idle 首幀(靜止站姿),動作靠下面的 sprite 偏移做
     const row = DIRS.indexOf(this.dir);
     for (const l of this.layers) {
       l.sprite.textures = l.idle.slice(row * 4, row * 4 + 4);
       l.sprite.gotoAndStop(0);
     }
-    this.moving = false; // 招呼期間視為靜止,交回 update 後由 setAnim 復原
+    this.moving = false;
+  }
+
+  /** 依動作進度算出角色 sprite 的 y 偏移/旋轉,做出彈跳或下蹲 */
+  private applyActionPose() {
+    if (!this.actionKind) return;
+    const t = 1 - this.actionLeft / this.actionDur; // 0→1 進度
+    let offsetY = 0;
+    let rot = 0;
+    if (this.actionKind === 'greet') {
+      // 上下彈跳兩下(sin 兩個週期),越後面幅度越收
+      const damp = 1 - t * 0.4;
+      offsetY = -Math.abs(Math.sin(t * Math.PI * 2)) * 14 * damp;
+      rot = Math.sin(t * Math.PI * 4) * 0.06; // 輕微左右晃,像揮手帶動身體
+    } else {
+      // 撿東西:先下蹲(往下移)到中段最深,再回彈(用 sin 半週期)
+      offsetY = Math.sin(t * Math.PI) * 12;
+    }
+    for (const l of this.layers) {
+      l.sprite.y = offsetY;
+      l.sprite.rotation = rot;
+    }
+  }
+
+  private clearActionPose() {
+    for (const l of this.layers) {
+      l.sprite.y = 0;
+      l.sprite.rotation = 0;
+      l.sprite.play();
+    }
   }
 
   /** 角色縮放後的顯示高度(取 body 那層) */
@@ -156,19 +204,22 @@ export class Player {
   }
 
   update(dtSec: number, colliders: Aabb[]) {
-    // 打招呼:E 觸發一次(按住不連發);招呼期間定格、不移動
+    // 打招呼:E 觸發一次(按住不連發);動作期間定格、不移動
+    // 站門口時 E 改作「離開」由 main 處理,這裡不打招呼
     const greetKey = this.keys.has('e');
-    if (greetKey && !this.greetHandled) this.greet();
+    if (greetKey && !this.greetHandled && !this.atExit) this.greet();
     this.greetHandled = greetKey;
-    if (this.greetLeft > 0) {
-      this.greetLeft -= dtSec;
-      if (this.greetLeft <= 0) {
-        this.greetLeft = 0;
-        if (this.greetBubble) this.greetBubble.visible = false;
-        // 恢復動畫播放(招呼時 gotoAndStop 停住了),下方 setAnim 會依實際狀態重設
-        for (const l of this.layers) l.sprite.play();
+    // 動作進行中(打招呼/撿東西):播程式動畫(彈跳/下蹲),不移動
+    if (this.actionKind) {
+      this.actionLeft -= dtSec;
+      if (this.actionLeft <= 0) {
+        this.actionKind = null;
+        this.actionLeft = 0;
+        if (this.bubble) this.bubble.visible = false;
+        this.clearActionPose(); // 復原 sprite 偏移並恢復動畫,setAnim 之後依狀態重設
       } else {
-        // 招呼中:定住位置,只更新 view 座標(角色可能剛移動到此)
+        this.applyActionPose();
+        // 動作中:定住位置,只更新 view 座標(角色可能剛移動到此)
         this.view.x = this.x;
         this.view.y = this.y;
         this.view.zIndex = this.y;
