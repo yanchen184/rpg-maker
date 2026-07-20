@@ -62,6 +62,18 @@ export interface UiHandle {
       onNext?: () => void;
       onRestart?: () => void;
       stats?: { elapsedMs: number; steps: number; grade: string };
+      /**
+       * 歷史最佳(全破畫面用)。isNew=本局刷新紀錄則打「新紀錄」徽章。
+       * firstClear=首次通關(沒有前一次可對比,只打徽章不秀對比數字)。
+       * 非首次時 elapsedMs/steps/grade 是「用來對比的舊紀錄」。
+       */
+      best?: {
+        elapsedMs: number;
+        steps: number;
+        grade: string;
+        isNew: boolean;
+        firstClear?: boolean;
+      };
     } | null,
   ) => void;
   /** 解謎關 vs 自由場景:解謎關收起換裝面板 + 開暗角氛圍;自由場景展開面板 + 關暗角 */
@@ -533,6 +545,9 @@ export function buildUi(opts: UiOptions): UiHandle {
   const GRADE_COLOR: Record<string, string> = {
     S: '#ffd35a', A: '#8ad86e', B: '#7ec9e0', C: '#c8b79a',
   };
+  // 歷史最佳紀錄行(全破畫面用):破紀錄時整行金色 + 🏆 徽章
+  const cBest = document.createElement('div');
+  cBest.style.cssText = 'display:none;font-size:13px;color:#a89878;margin-top:-6px';
   const cBtn = document.createElement('button');
   cBtn.style.cssText =
     'margin-top:8px;padding:10px 24px;border:1px solid #e0a458;border-radius:8px;cursor:pointer;font:16px monospace;background:#e0a458;color:#1a1410;font-weight:bold';
@@ -541,7 +556,7 @@ export function buildUi(opts: UiOptions): UiHandle {
   cRestart.style.cssText =
     'margin-top:2px;padding:8px 20px;border:1px solid #7a6547;border-radius:8px;cursor:pointer;font:14px monospace;background:transparent;color:#c8b79a';
   cRestart.textContent = '↻ 再玩一次';
-  completeOverlay.append(cTitle, cBody, cStats, cBtn, cRestart);
+  completeOverlay.append(cTitle, cBody, cStats, cBest, cBtn, cRestart);
   document.body.appendChild(completeOverlay);
   const showLevelComplete = (
     info: {
@@ -550,6 +565,13 @@ export function buildUi(opts: UiOptions): UiHandle {
       onNext?: () => void;
       onRestart?: () => void;
       stats?: { elapsedMs: number; steps: number; grade: string };
+      best?: {
+        elapsedMs: number;
+        steps: number;
+        grade: string;
+        isNew: boolean;
+        firstClear?: boolean;
+      };
     } | null,
   ) => {
     if (!info) {
@@ -568,6 +590,19 @@ export function buildUi(opts: UiOptions): UiHandle {
       cStats.style.display = 'block';
     } else {
       cStats.style.display = 'none';
+    }
+    if (info.best) {
+      const b = info.best;
+      if (b.firstClear) {
+        cBest.innerHTML = `<span style="color:#ffd35a;font-weight:bold">🏆 首次通關 · 已記錄!</span>`;
+      } else if (b.isNew) {
+        cBest.innerHTML = `<span style="color:#ffd35a;font-weight:bold">🏆 新紀錄!</span> 前一次最佳 ${fmtTime(b.elapsedMs)} · ${b.steps} 步 · ${b.grade}`;
+      } else {
+        cBest.innerHTML = `🏆 最佳紀錄　${fmtTime(b.elapsedMs)} · ${b.steps} 步 · ${b.grade}`;
+      }
+      cBest.style.display = 'block';
+    } else {
+      cBest.style.display = 'none';
     }
     if (info.onNext) {
       cBtn.style.display = 'block';

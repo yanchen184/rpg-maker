@@ -143,6 +143,33 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   const dbgWin = window as unknown as Record<string, unknown>;
   dbgWin.__run = () => ({ ...run, grade: gradeFor(run.elapsedMs) });
 
+  // ── 最佳紀錄(localStorage 持久化;閉合「破自己紀錄」的重玩循環)──
+  const BEST_KEY = 'rpg-escape-best';
+  interface BestRecord {
+    elapsedMs: number;
+    steps: number;
+    grade: string;
+  }
+  const loadBest = (): BestRecord | null => {
+    try {
+      const raw = localStorage.getItem(BEST_KEY);
+      if (!raw) return null;
+      const b = JSON.parse(raw) as Partial<BestRecord>;
+      if (typeof b.elapsedMs !== 'number' || typeof b.steps !== 'number') return null;
+      return { elapsedMs: b.elapsedMs, steps: b.steps, grade: String(b.grade ?? gradeFor(b.elapsedMs)) };
+    } catch {
+      return null; // localStorage 被擋 / JSON 壞掉 → 當作沒有紀錄,不擋破關畫面
+    }
+  };
+  const saveBest = (r: BestRecord): void => {
+    try {
+      localStorage.setItem(BEST_KEY, JSON.stringify(r));
+    } catch {
+      /* 隱私模式等 localStorage 不可寫 → 靜默略過,紀錄僅本局有效 */
+    }
+  };
+  dbgWin.__best = () => loadBest();
+
   // 角色(紙娃娃層,素材未生成時場景仍可看)
   let player: Player | null = null;
   const walkDef = manifest.assets['char-body-walk'];
@@ -641,10 +668,26 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       const cluesFound = puzzleState.seenClues.size;
       run.finished = true; // 凍結計時,成績單定格
       const grade = gradeFor(run.elapsedMs);
+      // 最佳紀錄:用時較短算刷新(時間是逃脫的主指標);破紀錄前先留舊值給畫面對比
+      const prevBest = loadBest();
+      const isNew = !prevBest || run.elapsedMs < prevBest.elapsedMs;
+      const thisRun: BestRecord = { elapsedMs: run.elapsedMs, steps: run.steps, grade };
+      if (isNew) saveBest(thisRun);
+      // 破紀錄且有舊紀錄 → 秀「前一次最佳」對比;沒破 → 秀現有最佳;首次通關 → 秀本局當新紀錄
+      const bestForCard:
+        | (BestRecord & { isNew: boolean; firstClear?: boolean })
+        | undefined = isNew
+        ? prevBest
+          ? { ...prevBest, isNew: true } // 破了舊紀錄:徽章 + 對比舊值
+          : { ...thisRun, isNew: true, firstClear: true } // 首次通關:徽章,無對比
+        : prevBest
+          ? { ...prevBest, isNew: false } // 沒破:顯示現有最佳
+          : undefined;
       ui.showLevelComplete({
         title: '🎉 全部過關!',
         body: `你解開了全部 ${LEVELS.length} 道門,一路蒐集 ${cluesFound} 條線索,成功脫逃!`,
         stats: { elapsedMs: run.elapsedMs, steps: run.steps, grade },
+        best: bestForCard,
         // 破關是死路 —— 重載到乾淨首頁重玩(去掉 ?scene= 除錯參數,狀態全歸零)
         onRestart: () => {
           location.href = location.pathname;
