@@ -44,6 +44,8 @@ export interface UiHandle {
   setLevel: (info: { name: string; hint: string } | null) => void;
   /** 解謎進度:找到幾條線索 + 門是否解鎖(傳 null 或 cluesTotal=0 則隱藏) */
   setProgress: (p: { cluesSeen: number; cluesTotal: number; unlocked: boolean } | null) => void;
+  /** 逃脫計時/步數 HUD(顯示在關卡名上方一排;傳 null 隱藏) */
+  setStats: (s: { elapsedMs: number; steps: number } | null) => void;
   /** 線索筆記本開/關(Tab):open 時傳入已找到的線索清單 */
   setNotebook: (open: boolean, clues: { emoji: string; text: string }[]) => void;
   /** 筆記本是否開啟中 — main 用來 gate 遊戲操作 */
@@ -52,9 +54,15 @@ export interface UiHandle {
   openPassword: (p: PasswordPrompt) => void;
   /** modal(密碼面板)是否開啟中 — main 用來 gate 遊戲鍵盤/移動 */
   isModalOpen: () => boolean;
-  /** 過關/破關全螢幕畫面(傳 null 關閉) */
+  /** 過關/破關全螢幕畫面(傳 null 關閉);帶 stats 時多顯示一張成績單(用時/步數/評級) */
   showLevelComplete: (
-    info: { title: string; body: string; onNext?: () => void; onRestart?: () => void } | null,
+    info: {
+      title: string;
+      body: string;
+      onNext?: () => void;
+      onRestart?: () => void;
+      stats?: { elapsedMs: number; steps: number; grade: string };
+    } | null,
   ) => void;
   /** 解謎關 vs 自由場景:解謎關收起換裝面板 + 開暗角氛圍;自由場景展開面板 + 關暗角 */
   setPuzzleMode: (on: boolean) => void;
@@ -66,6 +74,16 @@ export interface UiHandle {
 
 const BTN_CSS =
   'border:1px solid #4a3a26;border-radius:6px;padding:3px 8px;cursor:pointer;font:12px monospace;background:#2e2418;color:#e8dcc8';
+
+/** 毫秒 → m:ss(逃脫用時,超過一小時才顯示 h:mm:ss) */
+function fmtTime(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  const hh = Math.floor(s / 3600);
+  const mm = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return hh > 0 ? `${hh}:${pad(mm)}:${pad(ss)}` : `${mm}:${pad(ss)}`;
+}
 
 export function buildUi(opts: UiOptions): UiHandle {
   // 暗角 vignette:四角壓暗,營造密室/解謎氛圍(蓋在 canvas 上、不擋操作)
@@ -279,6 +297,10 @@ export function buildUi(opts: UiOptions): UiHandle {
     'padding:10px 14px', 'color:#e8dcc8', 'font:13px/1.5 monospace', 'user-select:none',
     'max-width:260px', 'display:none',
   ].join(';');
+  // 逃脫計時/步數:放在關卡名上方(等寬字對齊,秒數跳動不推擠版面)
+  const hudStats = document.createElement('div');
+  hudStats.style.cssText =
+    'font-size:13px;color:#ffd27a;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid #4a3a26;letter-spacing:.5px;display:none';
   const hudName = document.createElement('div');
   hudName.style.cssText = 'color:#e0a458;font-weight:bold;font-size:15px;margin-bottom:3px';
   const hudHint = document.createElement('div');
@@ -286,8 +308,16 @@ export function buildUi(opts: UiOptions): UiHandle {
   const hudProgress = document.createElement('div');
   hudProgress.style.cssText =
     'margin-top:7px;padding-top:7px;border-top:1px solid #4a3a26;font-size:12px;color:#d8cbb2;display:none';
-  hud.append(hudName, hudHint, hudProgress);
+  hud.append(hudStats, hudName, hudHint, hudProgress);
   document.body.appendChild(hud);
+  const setStats = (s: { elapsedMs: number; steps: number } | null) => {
+    if (!s) {
+      hudStats.style.display = 'none';
+      return;
+    }
+    hudStats.textContent = `⏱ ${fmtTime(s.elapsedMs)}   👣 ${s.steps}`;
+    hudStats.style.display = 'block';
+  };
   const setLevel = (info: { name: string; hint: string } | null) => {
     if (!info) {
       hud.style.display = 'none';
@@ -493,6 +523,16 @@ export function buildUi(opts: UiOptions): UiHandle {
   cTitle.style.cssText = 'color:#e0a458;font-weight:bold;font-size:34px';
   const cBody = document.createElement('div');
   cBody.style.cssText = 'max-width:min(80vw,480px);color:#e8dcc8';
+  // 成績單:用時 / 步數 / 評級(帶 stats 才顯示)。評級字色隨等級變(S 金、A 綠…)
+  const cStats = document.createElement('div');
+  cStats.style.cssText = [
+    'display:none', 'margin-top:4px', 'padding:14px 22px',
+    'background:rgba(40,28,16,.7)', 'border:1px solid #6a5334', 'border-radius:12px',
+    'font:15px/1.9 monospace', 'color:#e8dcc8', 'min-width:210px',
+  ].join(';');
+  const GRADE_COLOR: Record<string, string> = {
+    S: '#ffd35a', A: '#8ad86e', B: '#7ec9e0', C: '#c8b79a',
+  };
   const cBtn = document.createElement('button');
   cBtn.style.cssText =
     'margin-top:8px;padding:10px 24px;border:1px solid #e0a458;border-radius:8px;cursor:pointer;font:16px monospace;background:#e0a458;color:#1a1410;font-weight:bold';
@@ -501,10 +541,16 @@ export function buildUi(opts: UiOptions): UiHandle {
   cRestart.style.cssText =
     'margin-top:2px;padding:8px 20px;border:1px solid #7a6547;border-radius:8px;cursor:pointer;font:14px monospace;background:transparent;color:#c8b79a';
   cRestart.textContent = '↻ 再玩一次';
-  completeOverlay.append(cTitle, cBody, cBtn, cRestart);
+  completeOverlay.append(cTitle, cBody, cStats, cBtn, cRestart);
   document.body.appendChild(completeOverlay);
   const showLevelComplete = (
-    info: { title: string; body: string; onNext?: () => void; onRestart?: () => void } | null,
+    info: {
+      title: string;
+      body: string;
+      onNext?: () => void;
+      onRestart?: () => void;
+      stats?: { elapsedMs: number; steps: number; grade: string };
+    } | null,
   ) => {
     if (!info) {
       completeOverlay.style.display = 'none';
@@ -512,6 +558,17 @@ export function buildUi(opts: UiOptions): UiHandle {
     }
     cTitle.textContent = info.title;
     cBody.textContent = info.body;
+    if (info.stats) {
+      const gc = GRADE_COLOR[info.stats.grade] ?? '#c8b79a';
+      cStats.innerHTML = [
+        `<div>⏱ 用時　<span style="color:#ffe8c8">${fmtTime(info.stats.elapsedMs)}</span></div>`,
+        `<div>👣 步數　<span style="color:#ffe8c8">${info.stats.steps}</span></div>`,
+        `<div>🏅 評級　<span style="color:${gc};font-weight:bold;font-size:22px">${info.stats.grade}</span></div>`,
+      ].join('');
+      cStats.style.display = 'block';
+    } else {
+      cStats.style.display = 'none';
+    }
     if (info.onNext) {
       cBtn.style.display = 'block';
       cBtn.textContent = '前往下一關 ▶';
@@ -591,6 +648,7 @@ export function buildUi(opts: UiOptions): UiHandle {
     showToast,
     setLevel,
     setProgress,
+    setStats,
     setNotebook,
     isNotebookOpen,
     openPassword,

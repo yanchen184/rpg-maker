@@ -116,6 +116,33 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   };
   const levelOf = (scene: string): LevelDef | undefined => LEVELS.find((l) => l.scene === scene);
 
+  // ── 逃脫計時/步數(整場一份;過關結算與破關成績單用)──
+  // elapsedMs 只在遊戲進行時累加(開場簡報/密碼面板/筆記本/過關畫面暫停時不計,對玩家公平)。
+  // steps 由玩家實際位移距離換算(每 STEP_DIST 場景像素算一步),避免「原地狂按」灌步數。
+  const STEP_DIST = 42;
+  const run = {
+    elapsedMs: 0,
+    steps: 0,
+    running: false, // 開場簡報按下開始 / 除錯跳關後才轉 true
+    finished: false, // 破關後凍結,不再累加
+    moveAcc: 0, // 位移累加器,滿 STEP_DIST 進一步
+    lastX: 0,
+    lastY: 0,
+  };
+  // 每關「應花時間」預算(秒);逐關遞增(後面關較難)。總預算決定評級門檻。
+  const LEVEL_PAR_SEC = [45, 60, 75, 90, 105];
+  const parTotalMs = LEVEL_PAR_SEC.reduce((a, b) => a + b, 0) * 1000;
+  /** 依用時 vs 預算給評級:≤預算 S、≤1.5× A、≤2.2× B、其餘 C */
+  const gradeFor = (elapsedMs: number): string => {
+    const r = elapsedMs / parTotalMs;
+    if (r <= 1) return 'S';
+    if (r <= 1.5) return 'A';
+    if (r <= 2.2) return 'B';
+    return 'C';
+  };
+  const dbgWin = window as unknown as Record<string, unknown>;
+  dbgWin.__run = () => ({ ...run, grade: gradeFor(run.elapsedMs) });
+
   // 角色(紙娃娃層,素材未生成時場景仍可看)
   let player: Player | null = null;
   const walkDef = manifest.assets['char-body-walk'];
@@ -202,10 +229,20 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   ui.setLevel(initLevel ? { name: initLevel.name, hint: initLevel.hint } : null);
   ui.setPuzzleMode(!!initLevel); // 解謎關收面板+開暗角;自由場景展開面板+關暗角
 
+  // 計時起點:按下「開始逃脫」那刻才啟動(除錯跳關無簡報 → 直接啟動)
+  const startRun = () => {
+    run.running = true;
+    if (player) {
+      run.lastX = player.x;
+      run.lastY = player.y;
+    }
+  };
   // 開場簡報:正常從第 1 關進場才顯示(?scene= 除錯跳關時跳過,不擋除錯)
   const jumpedViaParam = new URLSearchParams(location.search).has('scene');
   if (initLevel && built.data.name === LEVELS[0].scene && !jumpedViaParam) {
-    ui.showIntro(() => {});
+    ui.showIntro(startRun);
+  } else if (initLevel) {
+    startRun(); // 除錯跳關:沒有簡報,直接開始計時
   }
 
   // 背包:撿到的物品計數 + 持有物品 id 集合(跨場景保留;解謎鎖門的 needItems 查它)
@@ -602,9 +639,12 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     // 破關:最後一關的門通往 'win' → 顯示破關畫面,不載場景
     if (to === 'win') {
       const cluesFound = puzzleState.seenClues.size;
+      run.finished = true; // 凍結計時,成績單定格
+      const grade = gradeFor(run.elapsedMs);
       ui.showLevelComplete({
         title: '🎉 全部過關!',
-        body: `你解開了全部 ${LEVELS.length} 道門,一路蒐集 ${cluesFound} 條線索,成功脫逃!\n感謝遊玩。`,
+        body: `你解開了全部 ${LEVELS.length} 道門,一路蒐集 ${cluesFound} 條線索,成功脫逃!`,
+        stats: { elapsedMs: run.elapsedMs, steps: run.steps, grade },
         // 破關是死路 —— 重載到乾淨首頁重玩(去掉 ?scene= 除錯參數,狀態全歸零)
         onRestart: () => {
           location.href = location.pathname;
@@ -626,6 +666,8 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       ui.showLevelComplete({
         title: `✅ 第 ${idx} 關 解開!`,
         body: `${clueLine}\n下一關:${toLv.name}`,
+        // 過關中途顯示累計用時/步數(不給評級 —— 評級留到全破才揭曉),讓玩家感覺時間在跑
+        stats: { elapsedMs: run.elapsedMs, steps: run.steps, grade: gradeFor(run.elapsedMs) },
         onNext: () => {
           switching = false;
           void loadAndSwap(to, spawn);
@@ -655,6 +697,8 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
         player.x = spawn.x;
         player.y = spawn.y;
         built.objectLayer.addChild(player.view);
+        run.lastX = player.x; // 換關 teleport 後重設步數基準,避免補算跨關大位移
+        run.lastY = player.y;
       }
       editor = new SceneEditor(app, built);
       dbg.__built = built;
@@ -695,6 +739,24 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       dev.halo.scale.set(pulse);
     }
     const uiPaused = ui.isModalOpen() || ui.isNotebookOpen() || ui.isIntroOpen();
+    // 逃脫計時/步數:遊戲進行中(未暫停、未破關、未切場景慶祝)才累加
+    if (run.running && !run.finished && !uiPaused && !switching) {
+      run.elapsedMs += t.deltaMS;
+      if (player) {
+        run.moveAcc += Math.hypot(player.x - run.lastX, player.y - run.lastY);
+        run.lastX = player.x;
+        run.lastY = player.y;
+        while (run.moveAcc >= STEP_DIST) {
+          run.moveAcc -= STEP_DIST;
+          run.steps++;
+        }
+      }
+      ui.setStats({ elapsedMs: run.elapsedMs, steps: run.steps });
+    } else if (player && run.running) {
+      // 暫停期間玩家位置可能被 teleport/切場景改動,重設基準避免暫停後補算大位移
+      run.lastX = player.x;
+      run.lastY = player.y;
+    }
     if (riding) {
       // 騎乘中:只由車帶人移動,角色不自走(不跑 player.update,避免方向鍵人車搶控)
       updateVehicle(dt);
