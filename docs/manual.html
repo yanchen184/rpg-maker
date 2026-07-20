@@ -133,6 +133,7 @@ python3 tools/make-clothes-overlay.py assets/raw/char-body-walk_sheet.png \
       <li><b>flat 素材</b>(地毯 <code>rug-red</code>、石徑 <code>stone-path</code>):鋪在地上、永遠不遮擋角色,直接放 objects 即可(素材在 manifest 已標 <code>"flat": true</code>)。</li>
       <li><b><code>z</code> 排序覆寫</b>:想把小物疊在檯面上,給大的 <code>z</code>,如 office 的咖啡機 <code>{"asset":"coffee-machine","x":1180,"y":-18,"z":95}</code> 疊在流理臺上。</li>
       <li><b>碰撞箱</b>:定義在 manifest 的素材 <code>collider</code>,家具放進場景自動生效,不用另外設。</li>
+      <li><b>解謎欄位</b>(<code>clues</code> / <code>devices</code>,選填):場景可放線索與機關做數字解謎。線索靠近按 E 看提示,機關(踩板/開關)踩上或按 E 觸發 flag。例:<code>"clues":[{"id":"c1","emoji":"📋","x":1050,"y":120,"text":"密碼是 4-2-7"}]</code>、<code>"devices":[{"id":"d1","kind":"plate","emoji":"🟦","x":700,"y":470,"setFlag":"power"}]</code>。搭配 exit 的 <code>lock</code>(見章 3-1)就能鎖門。</li>
     </ul>
   </div>
 
@@ -147,6 +148,18 @@ python3 tools/make-clothes-overlay.py assets/raw/char-body-walk_sheet.png \
   { "zone": { "x": 1450, "y": 525, "w": 90, "h": 30 }, "to": "storage",
     "spawn": { "x": 400, "y": 460 } }
 ]</code></pre>
+    <p style="margin-top:10px"><b>把門變成解謎門</b>:給 exit 加一個 <code>lock</code>,角色走到門口不會直接通過,而是按 E 才觸發解鎖判定。三種條件可單用或混用:</p>
+<pre><code>"exits": [ {
+  "zone": { "x": 700, "y": 830, "w": 160, "h": 40 },
+  "to": "level2", "spawn": { "x": 750, "y": 200 },
+  "lock": {
+    "code": "427",                    // 數字密碼:按 E 開鍵盤面板,輸對才解鎖
+    "needFlags": ["power"],           // 機關 flag:要先觸發對應 device(踩板/開關)
+    "needItems": ["key-red"],         // 持有物品:撿到指定 pickup 才算(不消耗)
+    "hint": "白板上寫著三個數字…"      // 鎖住時的提示文字
+  }
+} ]</code></pre>
+    <p>鎖住的門畫成紅色🔒、解開後變綠色把手(引擎自動畫,免生圖)。<code>needFlags</code>/<code>needItems</code> 沒滿足時,連密碼面板都不會開 —— 逼玩家照「先解機關、再輸密碼」的順序。省略 <code>lock</code> 就是一般直接通過的門。</p>
   </div>
 
   <h3>3-2 從零建村莊 step-by-step</h3>
