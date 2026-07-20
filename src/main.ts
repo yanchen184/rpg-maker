@@ -594,6 +594,9 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
 
   // 場景切換:換裝狀態跟著 Player 實例保留
   let switching = false;
+  // 門一解開就切場景 → 玩家沒有「我剛破了一關」的成就感。這裡插一層過關慶祝:
+  // 非最後一關 → 顯示「第 N 關 解開!」+ 本關線索數 + 「前往下一關」鈕,按了才真的載下一關;
+  // 最後一關 → 直接走全破畫面。ex.to === 'win' 的死路照舊。
   const switchScene = async (to: string, spawn: { x: number; y: number }) => {
     // 破關:最後一關的門通往 'win' → 顯示破關畫面,不載場景
     if (to === 'win') {
@@ -608,6 +611,30 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       });
       return;
     }
+    // 從解謎關的門走向下一個解謎關 → 先慶祝剛破的這關,按鈕才載下一關
+    const fromLv = levelOf(puzzleState.curScene);
+    const toLv = levelOf(to);
+    if (fromLv && toLv) {
+      const idx = LEVELS.indexOf(fromLv) + 1;
+      const cluesThisLevel = seenCluesInScene().length;
+      const clueLine =
+        cluesThisLevel > 0
+          ? `本關蒐集了 ${cluesThisLevel} 條線索。`
+          : '你靠推理直接破解了密碼!';
+      switching = true; // 慶祝期間鎖住輸入,避免又按 E 觸發別的
+      ui.showLevelComplete({
+        title: `✅ 第 ${idx} 關 解開!`,
+        body: `${clueLine}\n下一關:${toLv.name}`,
+        onNext: () => {
+          switching = false;
+          void loadAndSwap(to, spawn);
+        },
+      });
+      return;
+    }
+    void loadAndSwap(to, spawn);
+  };
+  const loadAndSwap = async (to: string, spawn: { x: number; y: number }) => {
     switching = true;
     clearRemotes(); // 舊場景 objectLayer 即將銷毀,先清遠端玩家 sprite
     // 切場景先強制下車(舊場景的車 sprite 會被銷毀,riding 不能懸空)
