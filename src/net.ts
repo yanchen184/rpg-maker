@@ -60,11 +60,27 @@ export class Net {
   readonly clientId: string;
   readonly name: string;
   private selfRef;
-  /** 其他玩家最新狀態(不含自己) */
-  peers: Record<string, PeerState> = {};
+  /** Firebase 最新快照(未過濾;含可能的死節點),只在 onValue 觸發時更新 */
+  private rawPeers: Record<string, PeerState> = {};
   /** 節流:上次寫入的內容與時間 */
   private lastSent = '';
   private lastSentAt = 0;
+
+  /**
+   * 其他玩家最新狀態(不含自己、且已濾掉逾時死節點)。
+   * 每次讀取都用當下時間重算 staleness——死節點永遠不會再 push 快照,
+   * 若只在 onValue 濾就會有「載入當下還沒逾時 → 之後卡著永遠不重濾」的漏洞,
+   * 故做成 getter,每幀 syncRemotes 讀 peers 時都重新判活。
+   */
+  get peers(): Record<string, PeerState> {
+    const nowMs = Date.now();
+    const live: Record<string, PeerState> = {};
+    for (const [id, st] of Object.entries(this.rawPeers)) {
+      if (typeof st.ts === 'number' && nowMs - st.ts > PEER_TTL_MS) continue;
+      live[id] = st;
+    }
+    return live;
+  }
 
   constructor() {
     const app = initializeApp(firebaseConfig);
@@ -78,16 +94,13 @@ export class Net {
     const rootRef = ref(this.db, PRESENCE_ROOT);
     onValue(rootRef, (snap) => {
       const all = (snap.val() ?? {}) as Record<string, PeerState>;
-      const nowMs = Date.now();
       const next: Record<string, PeerState> = {};
       for (const [id, st] of Object.entries(all)) {
         if (id === this.clientId || !st) continue;
-        // ts 是伺服器時間(number);剛寫入時可能還是 serverTimestamp 佔位(非 number),
-        // 那種視為剛上線放行,只擋「有明確舊時戳」的死節點。
-        if (typeof st.ts === 'number' && nowMs - st.ts > PEER_TTL_MS) continue;
         next[id] = st;
       }
-      this.peers = next;
+      // 只存原始快照;逾時過濾交給 peers getter 每幀即時判活(見 getter 註解)。
+      this.rawPeers = next;
     });
   }
 

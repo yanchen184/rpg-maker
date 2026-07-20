@@ -110,6 +110,12 @@ export interface SceneData {
   floor: string;
   /** 上牆素材;室外場景不填 */
   wall?: string;
+  /**
+   * 地板/牆色調(0xRRGGBB,PixiJS tint;省略=不染色=原色 0xffffff)。
+   * 每關套不同色調讓房間有各自氛圍——用現有素材做出「不同場所」的感覺,不必生新地板圖。
+   * 例:控制室偏冷藍、機房偏工業青、檔案室偏暖褐。
+   */
+  floorTint?: number;
   objects: SceneObject[];
   spawn: { x: number; y: number };
   exits?: SceneExit[];

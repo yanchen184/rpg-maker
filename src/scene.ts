@@ -109,6 +109,9 @@ export async function buildScene(data: SceneData, manifest: Manifest): Promise<B
 
   const colliders: Aabb[] = [];
 
+  // 每關色調:套在地板/牆上做出各房間氛圍差異(省略=原色)
+  const tint = data.floorTint ?? 0xffffff;
+
   // 地板:animated tile 鋪滿房間(房間原點 = 地板左上角,牆畫在 y<0 區)
   const floorDef = manifest.assets[data.floor];
   if (floorDef && (await sheetExists(floorDef))) {
@@ -121,6 +124,7 @@ export async function buildScene(data: SceneData, manifest: Manifest): Promise<B
         sp.height = t;
         sp.x = tx * t;
         sp.y = ty * t;
+        sp.tint = tint;
         floorLayer.addChild(sp);
       }
     }
@@ -139,6 +143,7 @@ export async function buildScene(data: SceneData, manifest: Manifest): Promise<B
       sp.width = w;
       sp.x = wx * w;
       sp.y = -h;
+      sp.tint = tint;
       wallLayer.addChild(sp);
     }
     // 牆是實心的:整條上牆一個 collider
