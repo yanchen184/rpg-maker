@@ -62,7 +62,15 @@
       "asset": "trash-bin",
       "x": 1200,
       "y": 640
-    }
+    },
+    { "asset": "wall-lamp", "x": 400, "y": -95 },
+    { "asset": "wall-lamp", "x": 1000, "y": -95 },
+    { "asset": "bookshelf", "x": 130, "y": 560 },
+    { "asset": "kitchen-counter", "x": 1180, "y": 470 },
+    { "asset": "plant-small", "x": 430, "y": 620 },
+    { "asset": "plant-small", "x": 970, "y": 620 },
+    { "asset": "trash-bin", "x": 250, "y": 640 },
+    { "asset": "rug-red", "x": 700, "y": 690 }
   ],
   "exits": [
     {

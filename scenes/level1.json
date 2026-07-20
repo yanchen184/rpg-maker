@@ -108,7 +108,14 @@
       "x": 1180,
       "y": -18,
       "z": 95
-    }
+    },
+    { "asset": "bookshelf", "x": 150, "y": 760 },
+    { "asset": "trash-bin", "x": 300, "y": 800 },
+    { "asset": "plant-small", "x": 1180, "y": 780 },
+    { "asset": "plant-small", "x": 1000, "y": 820 },
+    { "asset": "kitchen-counter", "x": 1300, "y": 500 },
+    { "asset": "plant-small", "x": 560, "y": 200 },
+    { "asset": "trash-bin", "x": 1350, "y": 720 }
   ],
   "exits": [
     {
