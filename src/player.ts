@@ -31,6 +31,10 @@ export class Player {
   private scale = 1;
   /** 具名 overlay 插槽(hair / outfit ...),可 runtime 換 */
   private overlays = new Map<string, LayerAnim>();
+  /** 轉身過渡:純轉向(移動中改方向)時,先頓一下再邁步的剩餘秒數 */
+  private turnLock = 0;
+  /** 轉身頓挫時長(秒);太長會頓住不跟手,90ms 約一個 beat */
+  private static readonly TURN_LOCK_SEC = 0.09;
 
   static async create(manifest: Manifest, layerNames: string[], scale: number): Promise<Player> {
     const p = new Player();
@@ -92,6 +96,8 @@ export class Player {
 
   private setAnim(moving: boolean, dir: Dir) {
     if (moving === this.moving && dir === this.dir) return;
+    // 純轉身(移動中只改方向)→ 先頓一下再邁步;起步/停步不頓
+    const turning = moving && this.moving && dir !== this.dir;
     this.moving = moving;
     this.dir = dir;
     const row = DIRS.indexOf(dir);
@@ -100,8 +106,14 @@ export class Player {
       const fps = moving ? 8 : 4;
       l.sprite.textures = src.slice(row * 4, row * 4 + 4);
       l.sprite.animationSpeed = fps / 60;
-      l.sprite.play();
+      if (turning) {
+        // 定格在該方向首幀(靜止站姿),鎖到期才由 update 放行邁步
+        l.sprite.gotoAndStop(0);
+      } else {
+        l.sprite.play();
+      }
     }
+    this.turnLock = turning ? Player.TURN_LOCK_SEC : 0;
   }
 
   get aabb(): Aabb {
@@ -123,6 +135,15 @@ export class Player {
     if (dx > 0) dir = 'right';
     else if (dx < 0) dir = 'left';
     this.setAnim(moving, dir);
+
+    // 轉身鎖:到期後從定格首幀放行邁步(只放行一次,避免每幀重呼 play)
+    if (this.turnLock > 0) {
+      this.turnLock -= dtSec;
+      if (this.turnLock <= 0) {
+        this.turnLock = 0;
+        for (const l of this.layers) l.sprite.play();
+      }
+    }
 
     if (moving) {
       const len = Math.hypot(dx, dy);
