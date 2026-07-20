@@ -359,9 +359,15 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       return;
     }
     if (lock.code) {
+      // 走到這裡代表 needFlags/needItems 都已滿足;此時的 hint 不該再喊「先接電源」,
+      // 有前置條件的門顯示「已解除前置、請輸密碼」,單純密碼門才沿用場景 hint
+      const gated = (lock.needFlags?.length ?? 0) > 0 || (lock.needItems?.length ?? 0) > 0;
+      const panelHint = gated
+        ? `前置已解除 · 輸入 ${lock.code.length} 位密碼`
+        : lock.hint ?? `輸入 ${lock.code.length} 位密碼`;
       ui.openPassword({
         title: '🔒 門鎖',
-        hint: lock.hint ?? `輸入 ${lock.code.length} 位密碼`,
+        hint: panelHint,
         length: lock.code.length,
         onSubmit: (code) => {
           if (code === lock.code) {
