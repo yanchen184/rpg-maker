@@ -18,6 +18,14 @@ import {
 } from 'firebase/database';
 import { firebaseConfig, PRESENCE_ROOT } from './firebase-config';
 
+/**
+ * peer 存活門檻:超過這麼久沒心跳的 presence 視為死節點,不渲染。
+ * 硬關分頁 / 當機時 onDisconnect 不一定觸發,會在 RTDB 留下永久 ghost,
+ * 讀取端一律用 ts 過濾,才不會有陌生「訪客」卡在別人的解謎房間裡。
+ * 心跳每 ~2s 一次(見 push()),30s = 容忍 ~15 次漏跳。
+ */
+const PEER_TTL_MS = 30_000;
+
 export interface PeerState {
   x: number;
   y: number;
@@ -70,9 +78,14 @@ export class Net {
     const rootRef = ref(this.db, PRESENCE_ROOT);
     onValue(rootRef, (snap) => {
       const all = (snap.val() ?? {}) as Record<string, PeerState>;
+      const nowMs = Date.now();
       const next: Record<string, PeerState> = {};
       for (const [id, st] of Object.entries(all)) {
-        if (id !== this.clientId && st) next[id] = st;
+        if (id === this.clientId || !st) continue;
+        // ts 是伺服器時間(number);剛寫入時可能還是 serverTimestamp 佔位(非 number),
+        // 那種視為剛上線放行,只擋「有明確舊時戳」的死節點。
+        if (typeof st.ts === 'number' && nowMs - st.ts > PEER_TTL_MS) continue;
+        next[id] = st;
       }
       this.peers = next;
     });
