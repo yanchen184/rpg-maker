@@ -293,9 +293,25 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     redrawDoors(built.doorGraphics, built.data, bottomExits, puzzleState.unlocked, doorOpening);
   };
 
+  // 更新左上角解謎進度:本場景線索找到幾條 + 底部鎖門是否已解鎖
+  const refreshProgress = () => {
+    const clues = built.clues;
+    const lockedExit = (built.data.exits ?? []).find(
+      (ex) => ex.lock && ex.zone.y >= built.data.size.h - 80,
+    );
+    if (clues.length === 0 && !lockedExit) {
+      ui.setProgress(null);
+      return;
+    }
+    const seen = clues.filter((c) => puzzleState.seenClues.has(c.data.id)).length;
+    const unlocked = lockedExit ? puzzleState.unlocked.has(lockedExit.to) : false;
+    ui.setProgress({ cluesSeen: seen, cluesTotal: clues.length, unlocked });
+  };
+
   // 解鎖一扇門:記到 puzzleState、播開門動畫(門板滑開+掛鎖掉落),動畫完再定格成綠門
   const unlockExit = (to: string) => {
     puzzleState.unlocked.add(to);
+    refreshProgress();
     // 只對「底部有畫門」的出口播動畫;非底門(無 doorGraphics)直接定格
     const isBottomDoor = (built.data.exits ?? []).some(
       (ex) => ex.to === to && ex.zone.y >= built.data.size.h - 80,
@@ -319,6 +335,8 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     };
     app.ticker.add(step);
   };
+
+  refreshProgress(); // 初始關卡的進度(0 條線索 + 上鎖)先顯示
 
   // 目前站在門口的出口(每幀由 ticker 更新);curClue/curDevice 同理
   let curExit: NonNullable<typeof built.data.exits>[number] | null = null;
@@ -369,6 +387,7 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     } else if (curClue) {
       ui.showToast(`${curClue.data.emoji}  ${curClue.data.text}`, 4200);
       puzzleState.seenClues.add(curClue.data.id);
+      refreshProgress();
     } else if (curDevice) {
       triggerDevice(curDevice);
     }
@@ -590,6 +609,7 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       ui.setLevel(lv ? { name: lv.name, hint: lv.hint } : null);
       ui.setPuzzleMode(!!lv); // 解謎關收面板+開暗角;自由場景展開+關暗角
       redrawBuiltDoors();
+      refreshProgress();
       if (lv) {
         const idx = LEVELS.indexOf(lv);
         ui.showToast(`${lv.name}\n${lv.hint}`, 2600);

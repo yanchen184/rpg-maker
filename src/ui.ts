@@ -42,6 +42,8 @@ export interface UiHandle {
   showToast: (text: string, ms?: number) => void;
   /** 關卡 HUD:左上角顯示目前關卡名 + 目標提示 */
   setLevel: (info: { name: string; hint: string } | null) => void;
+  /** 解謎進度:找到幾條線索 + 門是否解鎖(傳 null 或 cluesTotal=0 則隱藏) */
+  setProgress: (p: { cluesSeen: number; cluesTotal: number; unlocked: boolean } | null) => void;
   /** 開密碼輸入面板(置中 modal);開啟期間 isModalOpen() 為 true,main 應 gate 掉遊戲操作 */
   openPassword: (p: PasswordPrompt) => void;
   /** modal(密碼面板)是否開啟中 — main 用來 gate 遊戲鍵盤/移動 */
@@ -271,7 +273,10 @@ export function buildUi(opts: UiOptions): UiHandle {
   hudName.style.cssText = 'color:#e0a458;font-weight:bold;font-size:15px;margin-bottom:3px';
   const hudHint = document.createElement('div');
   hudHint.style.cssText = 'color:#c8bca8;font-size:12px';
-  hud.append(hudName, hudHint);
+  const hudProgress = document.createElement('div');
+  hudProgress.style.cssText =
+    'margin-top:7px;padding-top:7px;border-top:1px solid #4a3a26;font-size:12px;color:#d8cbb2;display:none';
+  hud.append(hudName, hudHint, hudProgress);
   document.body.appendChild(hud);
   const setLevel = (info: { name: string; hint: string } | null) => {
     if (!info) {
@@ -281,6 +286,17 @@ export function buildUi(opts: UiOptions): UiHandle {
     hudName.textContent = info.name;
     hudHint.textContent = info.hint;
     hud.style.display = 'block';
+  };
+  // 解謎進度:找到幾條線索 + 門是否已解鎖,讓玩家有「接近答案」的手感
+  const setProgress = (p: { cluesSeen: number; cluesTotal: number; unlocked: boolean } | null) => {
+    if (!p || p.cluesTotal === 0) {
+      hudProgress.style.display = 'none';
+      return;
+    }
+    const dots = '●'.repeat(p.cluesSeen) + '○'.repeat(Math.max(0, p.cluesTotal - p.cluesSeen));
+    const lock = p.unlocked ? '<span style="color:#8ad86e">🔓 門已解鎖</span>' : '🔒 門上鎖';
+    hudProgress.innerHTML = `線索 <span style="color:#ffd27a">${dots}</span> ${p.cluesSeen}/${p.cluesTotal} · ${lock}`;
+    hudProgress.style.display = 'block';
   };
 
   // ── 密碼輸入 modal(置中,含數字鍵盤)──
@@ -445,6 +461,7 @@ export function buildUi(opts: UiOptions): UiHandle {
     setActionPrompt,
     showToast,
     setLevel,
+    setProgress,
     openPassword,
     isModalOpen,
     showLevelComplete,
