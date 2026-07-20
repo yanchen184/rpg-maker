@@ -106,7 +106,7 @@ export function buildUi(opts: UiOptions): void {
   panel.appendChild(exportBtn);
 
   const hint = document.createElement('div');
-  hint.textContent = 'WASD / 方向鍵移動';
+  hint.textContent = 'WASD / 方向鍵移動 · E 打招呼';
   hint.style.cssText = 'color:#a89878;margin-top:8px;font-size:11px';
   panel.appendChild(hint);
 

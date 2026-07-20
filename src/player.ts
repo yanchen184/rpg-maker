@@ -1,4 +1,4 @@
-import { AnimatedSprite, Container, Texture } from 'pixi.js';
+import { AnimatedSprite, Container, Text, Texture } from 'pixi.js';
 import { loadFrames } from './assets';
 import { aabbOverlap } from './scene';
 import type { Aabb, Manifest } from './types';
@@ -35,6 +35,11 @@ export class Player {
   private turnLock = 0;
   /** 轉身頓挫時長(秒);太長會頓住不跟手,90ms 約一個 beat */
   private static readonly TURN_LOCK_SEC = 0.09;
+  /** 打招呼:頭上 👋 氣泡的剩餘秒數 + 氣泡本體 */
+  private greetLeft = 0;
+  private greetBubble: Text | null = null;
+  private greetHandled = false;
+  private static readonly GREET_SEC = 1.0;
 
   static async create(manifest: Manifest, layerNames: string[], scale: number): Promise<Player> {
     const p = new Player();
@@ -116,11 +121,61 @@ export class Player {
     this.turnLock = turning ? Player.TURN_LOCK_SEC : 0;
   }
 
+  /** 打招呼:頭上冒 👋 氣泡並定格站姿一下(純程式,不需招手素材) */
+  greet() {
+    if (this.greetLeft > 0) return; // 招呼中不重複觸發
+    this.greetLeft = Player.GREET_SEC;
+    if (!this.greetBubble) {
+      this.greetBubble = new Text({
+        text: '👋',
+        style: { fontSize: 48, fill: 0xffffff },
+      });
+      this.greetBubble.anchor.set(0.5, 1);
+      // 角色原點在腳底(anchor 0.5,1),頭頂約在 -身高;氣泡放頭頂上方
+      this.greetBubble.y = -this.spriteHeight() - 8;
+      this.view.addChild(this.greetBubble);
+    }
+    this.greetBubble.visible = true;
+    // 定格:停在當前方向 idle/walk 首幀(靜止站姿),更像「停下來打招呼」
+    const row = DIRS.indexOf(this.dir);
+    for (const l of this.layers) {
+      l.sprite.textures = l.idle.slice(row * 4, row * 4 + 4);
+      l.sprite.gotoAndStop(0);
+    }
+    this.moving = false; // 招呼期間視為靜止,交回 update 後由 setAnim 復原
+  }
+
+  /** 角色縮放後的顯示高度(取 body 那層) */
+  private spriteHeight(): number {
+    const body = this.layers[0]?.sprite;
+    return body ? body.height : 200 * this.scale;
+  }
+
   get aabb(): Aabb {
     return { x: this.x, y: this.y - this.collider.h / 2, w: this.collider.w, h: this.collider.h };
   }
 
   update(dtSec: number, colliders: Aabb[]) {
+    // 打招呼:E 觸發一次(按住不連發);招呼期間定格、不移動
+    const greetKey = this.keys.has('e');
+    if (greetKey && !this.greetHandled) this.greet();
+    this.greetHandled = greetKey;
+    if (this.greetLeft > 0) {
+      this.greetLeft -= dtSec;
+      if (this.greetLeft <= 0) {
+        this.greetLeft = 0;
+        if (this.greetBubble) this.greetBubble.visible = false;
+        // 恢復動畫播放(招呼時 gotoAndStop 停住了),下方 setAnim 會依實際狀態重設
+        for (const l of this.layers) l.sprite.play();
+      } else {
+        // 招呼中:定住位置,只更新 view 座標(角色可能剛移動到此)
+        this.view.x = this.x;
+        this.view.y = this.y;
+        this.view.zIndex = this.y;
+        return;
+      }
+    }
+
     let dx = 0;
     let dy = 0;
     if (this.keys.has('w') || this.keys.has('arrowup')) dy -= 1;
