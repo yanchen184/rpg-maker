@@ -1,0 +1,67 @@
+{
+  "name": "level3",
+  "size": { "w": 1400, "h": 850 },
+  "wallHeight": 130,
+  "floorTile": 300,
+  "floor": "floor-wood",
+  "wall": "wall-top",
+  "spawn": { "x": 700, "y": 200 },
+  "objects": [
+    { "asset": "whiteboard", "x": 400, "y": -60 },
+    { "asset": "whiteboard", "x": 1000, "y": -60 },
+    { "asset": "wall-lamp", "x": 700, "y": -95 },
+    { "asset": "desk-computer", "x": 250, "y": 300 },
+    { "asset": "office-chair", "x": 250, "y": 350 },
+    { "asset": "desk-computer", "x": 1150, "y": 300 },
+    { "asset": "office-chair", "x": 1150, "y": 350 },
+    { "asset": "plant-large", "x": 60, "y": 780 },
+    { "asset": "plant-large", "x": 1340, "y": 780 },
+    { "asset": "trash-bin", "x": 1200, "y": 640 }
+  ],
+  "exits": [
+    {
+      "zone": { "x": 700, "y": 830, "w": 160, "h": 40 },
+      "to": "win",
+      "spawn": { "x": 700, "y": 200 },
+      "lock": {
+        "code": "58",
+        "needFlags": ["l3-power"],
+        "hint": "鎖芯沒電——先接通電源(踩板),再輸入算出的密碼"
+      }
+    }
+  ],
+  "devices": [
+    {
+      "id": "l3-plate",
+      "kind": "plate",
+      "emoji": "🟦",
+      "x": 700,
+      "y": 470,
+      "setFlag": "l3-power",
+      "hint": "⚡ 電源接通!門的鎖芯亮了,現在可以輸入密碼。"
+    }
+  ],
+  "clues": [
+    {
+      "id": "l3-base",
+      "emoji": "🔢",
+      "x": 250,
+      "y": 250,
+      "text": "牆上的數字:基數 = 15。"
+    },
+    {
+      "id": "l3-formula",
+      "emoji": "📐",
+      "x": 1150,
+      "y": 250,
+      "text": "算式便條:密碼 = 基數 × 4 − 2。"
+    },
+    {
+      "id": "l3-hint",
+      "emoji": "📌",
+      "x": 700,
+      "y": 620,
+      "text": "第 3 關:先踩中央踏板接通電源,再用兩張線索算出密碼(15 × 4 − 2)。"
+    }
+  ]
+}
