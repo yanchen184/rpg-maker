@@ -22,9 +22,19 @@ GRID = 4
 HAIR_REGION = 0.48  # 角色 bbox 頂部往下這個比例內才視為髮區(避開鞋子/膚色陰影)
 
 
+def is_skin(r: int, g: int, b: int) -> bool:
+    """膚色:亮且偏橘(r 高、r>g>b 但整體亮)。髮區內唯一要排除的非髮像素是臉。"""
+    return r >= 175 and g >= 120 and b >= 90
+
+
 def is_hair_color(r: int, g: int, b: int) -> bool:
-    """深棕髮色:偏紅棕、不亮(膚色 r>=170 排除、白衣/藍褲不符 r>g>b)"""
-    return r > g > b and (r - b) > 12 and 35 <= r < 170
+    """髮區內判定「是頭髮」:非膚色即視為髮(含暗部/抗鋸齒邊緣)。
+
+    舊版用嚴格棕色門檻 (35<=r<170 且 r>g>b),會漏抓頭髮的暗部與邊緣抗鋸齒像素,
+    導致 overlay 蓋不滿 → 走動時露出底下棕色 body 頭髮邊 → 每幀髒邊分布不同 →
+    視覺上頭部忽大忽小/閃爍(呼大呼小主因)。改為「髮區內非膚色 = 頭髮」,
+    用 body 自己的 alpha 完整覆蓋,邊緣抗鋸齒繼承 body,不再漏底。"""
+    return not is_skin(r, g, b)
 
 
 def make_overlay(src_path: str, out_path: str, color: str) -> None:
