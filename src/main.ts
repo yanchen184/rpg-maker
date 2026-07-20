@@ -396,6 +396,18 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     if (e.key.toLowerCase() === 'e') exitHandled = false;
   });
 
+  // Tab:開/關線索筆記本(把本關找過的線索留存,方便回頭對照數字)
+  const seenCluesInScene = () =>
+    built.clues
+      .filter((c) => puzzleState.seenClues.has(c.data.id))
+      .map((c) => ({ emoji: c.data.emoji, text: c.data.text }));
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    e.preventDefault(); // 別讓 Tab 跑去切換瀏覽器焦點
+    if (ui.isModalOpen() || switching) return;
+    ui.setNotebook(!ui.isNotebookOpen(), seenCluesInScene());
+  });
+
   // 觸發機關:開關 = toggle flag;踩板由 ticker 自動觸發(這裡也支援按 E 當開關)
   const triggerDevice = (dev: (typeof built.devices)[number]) => {
     if (dev.active) return; // 已觸發不重複(單向:觸發後維持)
@@ -608,6 +620,7 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       const lv = levelOf(to);
       ui.setLevel(lv ? { name: lv.name, hint: lv.hint } : null);
       ui.setPuzzleMode(!!lv); // 解謎關收面板+開暗角;自由場景展開+關暗角
+      ui.setNotebook(false, []); // 換關把筆記本關掉(避免顯示上一關的線索)
       redrawBuiltDoors();
       refreshProgress();
       if (lv) {
@@ -635,14 +648,15 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       dev.halo.alpha = pulse;
       dev.halo.scale.set(pulse);
     }
+    const uiPaused = ui.isModalOpen() || ui.isNotebookOpen();
     if (riding) {
       // 騎乘中:只由車帶人移動,角色不自走(不跑 player.update,避免方向鍵人車搶控)
       updateVehicle(dt);
-    } else {
+    } else if (!uiPaused) {
       player?.update(dt, built.colliders);
     }
     // 互動偵測:門口 / 線索 / 機關。優先序 門 > 線索 > 機關(同時靠近時 E 先給門)
-    if (player && !switching && !riding && !ui.isModalOpen()) {
+    if (player && !switching && !riding && !uiPaused) {
       // 門:aabb 重疊 OR 站在門口附近(放寬,避免被牆碰撞箱擋住差幾 px 就觸發不到)
       let foundExit: typeof curExit = null;
       let exitD = DOOR_RANGE;

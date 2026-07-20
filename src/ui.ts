@@ -44,6 +44,10 @@ export interface UiHandle {
   setLevel: (info: { name: string; hint: string } | null) => void;
   /** 解謎進度:找到幾條線索 + 門是否解鎖(傳 null 或 cluesTotal=0 則隱藏) */
   setProgress: (p: { cluesSeen: number; cluesTotal: number; unlocked: boolean } | null) => void;
+  /** 線索筆記本開/關(Tab):open 時傳入已找到的線索清單 */
+  setNotebook: (open: boolean, clues: { emoji: string; text: string }[]) => void;
+  /** 筆記本是否開啟中 — main 用來 gate 遊戲操作 */
+  isNotebookOpen: () => boolean;
   /** 開密碼輸入面板(置中 modal);開啟期間 isModalOpen() 為 true,main 應 gate 掉遊戲操作 */
   openPassword: (p: PasswordPrompt) => void;
   /** modal(密碼面板)是否開啟中 — main 用來 gate 遊戲鍵盤/移動 */
@@ -299,6 +303,56 @@ export function buildUi(opts: UiOptions): UiHandle {
     hudProgress.style.display = 'block';
   };
 
+  // ── 線索筆記本(Tab 開關):把找過的線索留存,方便玩家回頭對照數字 ──
+  const notebook = document.createElement('div');
+  notebook.style.cssText = [
+    'position:fixed', 'top:50%', 'left:50%', 'transform:translate(-50%,-50%) scale(.92)',
+    'z-index:19', 'width:min(440px,86vw)', 'max-height:70vh', 'overflow-y:auto',
+    'background:rgba(28,20,12,.97)', 'border:2px solid #e0a458', 'border-radius:14px',
+    'padding:20px 22px', 'color:#e8dcc8', 'font:14px/1.6 monospace',
+    'box-shadow:0 10px 50px rgba(0,0,0,.75)', 'display:none', 'opacity:0',
+    'transition:opacity .18s, transform .18s', 'user-select:none',
+  ].join(';');
+  const nbTitle = document.createElement('div');
+  nbTitle.style.cssText =
+    'color:#e0a458;font-weight:bold;font-size:17px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center';
+  nbTitle.innerHTML = '<span>📖 線索筆記本</span><span style="font-size:11px;color:#8a7a60">Tab 關閉</span>';
+  const nbList = document.createElement('div');
+  notebook.append(nbTitle, nbList);
+  document.body.appendChild(notebook);
+  let notebookOpen = false;
+  const renderNotebook = (clues: { emoji: string; text: string }[]) => {
+    if (clues.length === 0) {
+      nbList.innerHTML =
+        '<div style="color:#8a7a60;text-align:center;padding:16px 0">還沒找到任何線索。<br>靠近發亮的物件按 E 收集。</div>';
+      return;
+    }
+    nbList.innerHTML = clues
+      .map(
+        (c) =>
+          `<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #3a2c1a"><span style="font-size:20px;flex:0 0 auto">${c.emoji}</span><span>${c.text}</span></div>`,
+      )
+      .join('');
+  };
+  const setNotebook = (open: boolean, clues: { emoji: string; text: string }[]) => {
+    notebookOpen = open;
+    if (open) {
+      renderNotebook(clues);
+      notebook.style.display = 'block';
+      requestAnimationFrame(() => {
+        notebook.style.opacity = '1';
+        notebook.style.transform = 'translate(-50%,-50%) scale(1)';
+      });
+    } else {
+      notebook.style.opacity = '0';
+      notebook.style.transform = 'translate(-50%,-50%) scale(.92)';
+      setTimeout(() => {
+        if (!notebookOpen) notebook.style.display = 'none';
+      }, 180);
+    }
+  };
+  const isNotebookOpen = () => notebookOpen;
+
   // ── 密碼輸入 modal(置中,含數字鍵盤)──
   let modalOpen = false;
   const overlay = document.createElement('div');
@@ -462,6 +516,8 @@ export function buildUi(opts: UiOptions): UiHandle {
     showToast,
     setLevel,
     setProgress,
+    setNotebook,
+    isNotebookOpen,
     openPassword,
     isModalOpen,
     showLevelComplete,
