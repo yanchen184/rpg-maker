@@ -1,55 +1,193 @@
 {
   "name": "level5",
-  "size": { "w": 1400, "h": 850 },
+  "size": {
+    "w": 1400,
+    "h": 850
+  },
   "wallHeight": 130,
   "floorTile": 300,
   "floor": "floor-wood",
   "wall": "wall-top",
-  "spawn": { "x": 700, "y": 200 },
+  "spawn": {
+    "x": 700,
+    "y": 200
+  },
   "objects": [
-    { "asset": "whiteboard", "x": 400, "y": -60 },
-    { "asset": "whiteboard", "x": 1000, "y": -60 },
-    { "asset": "wall-lamp", "x": 400, "y": -95 },
-    { "asset": "wall-lamp", "x": 700, "y": -95 },
-    { "asset": "wall-lamp", "x": 1000, "y": -95 },
-    { "asset": "window-side", "x": 560, "y": 40 },
-    { "asset": "window-side", "x": 840, "y": 40 },
-    { "asset": "bookshelf", "x": 130, "y": 90 },
-    { "asset": "bookshelf", "x": 260, "y": 90 },
-    { "asset": "bookshelf", "x": 1140, "y": 90 },
-    { "asset": "bookshelf", "x": 1270, "y": 90 },
-    { "asset": "desk-computer", "x": 250, "y": 320 },
-    { "asset": "office-chair", "x": 250, "y": 370 },
-    { "asset": "kitchen-counter", "x": 1160, "y": 340 },
-    { "asset": "bookshelf", "x": 130, "y": 560 },
-    { "asset": "bookshelf", "x": 1270, "y": 560 },
-    { "asset": "trash-bin", "x": 300, "y": 620 },
-    { "asset": "trash-bin", "x": 1100, "y": 620 },
-    { "asset": "plant-small", "x": 500, "y": 660 },
-    { "asset": "plant-small", "x": 900, "y": 660 },
-    { "asset": "plant-large", "x": 60, "y": 780 },
-    { "asset": "plant-large", "x": 1340, "y": 780 },
-    { "asset": "rug-red", "x": 700, "y": 690 }
+    {
+      "asset": "whiteboard",
+      "x": 400,
+      "y": -60
+    },
+    {
+      "asset": "whiteboard",
+      "x": 1000,
+      "y": -60
+    },
+    {
+      "asset": "wall-lamp",
+      "x": 400,
+      "y": -95
+    },
+    {
+      "asset": "wall-lamp",
+      "x": 700,
+      "y": -95
+    },
+    {
+      "asset": "wall-lamp",
+      "x": 1000,
+      "y": -95
+    },
+    {
+      "asset": "window-side",
+      "x": 560,
+      "y": 40
+    },
+    {
+      "asset": "window-side",
+      "x": 840,
+      "y": 40
+    },
+    {
+      "asset": "bookshelf",
+      "x": 130,
+      "y": 90
+    },
+    {
+      "asset": "bookshelf",
+      "x": 260,
+      "y": 90
+    },
+    {
+      "asset": "bookshelf",
+      "x": 1140,
+      "y": 90
+    },
+    {
+      "asset": "bookshelf",
+      "x": 1270,
+      "y": 90
+    },
+    {
+      "asset": "desk-computer",
+      "x": 250,
+      "y": 320
+    },
+    {
+      "asset": "office-chair",
+      "x": 250,
+      "y": 370
+    },
+    {
+      "asset": "kitchen-counter",
+      "x": 1160,
+      "y": 340
+    },
+    {
+      "asset": "bookshelf",
+      "x": 130,
+      "y": 560
+    },
+    {
+      "asset": "bookshelf",
+      "x": 1270,
+      "y": 560
+    },
+    {
+      "asset": "trash-bin",
+      "x": 300,
+      "y": 620
+    },
+    {
+      "asset": "trash-bin",
+      "x": 1100,
+      "y": 620
+    },
+    {
+      "asset": "plant-small",
+      "x": 500,
+      "y": 660
+    },
+    {
+      "asset": "plant-small",
+      "x": 900,
+      "y": 660
+    },
+    {
+      "asset": "plant-large",
+      "x": 60,
+      "y": 780
+    },
+    {
+      "asset": "plant-large",
+      "x": 1340,
+      "y": 780
+    },
+    {
+      "asset": "rug-red",
+      "x": 700,
+      "y": 690
+    }
   ],
   "exits": [
     {
-      "zone": { "x": 700, "y": 830, "w": 160, "h": 40 },
+      "zone": {
+        "x": 700,
+        "y": 830,
+        "w": 160,
+        "h": 40
+      },
       "to": "win",
-      "spawn": { "x": 700, "y": 200 },
+      "spawn": {
+        "x": 700,
+        "y": 200
+      },
       "lock": {
         "code": "735",
-        "needItems": ["l5-keycard"],
+        "needItems": [
+          "l5-keycard"
+        ],
         "hint": "門是磁卡鎖——先撿到鑰匙卡(按 F),再輸入檔案編號"
       }
     }
   ],
   "pickups": [
-    { "id": "l5-keycard", "emoji": "🔑", "x": 250, "y": 470 }
+    {
+      "id": "l5-keycard",
+      "emoji": "🔑",
+      "x": 250,
+      "y": 470
+    }
   ],
   "clues": [
-    { "id": "l5-card", "emoji": "🗄️", "x": 250, "y": 470, "text": "牆角掉了一張鑰匙卡(🔑)——走過去按 F 撿起來。" },
-    { "id": "l5-num-a", "emoji": "🔢", "x": 1160, "y": 470, "text": "檔案櫃標籤:編號前一位是 7。" },
-    { "id": "l5-num-b", "emoji": "📇", "x": 700, "y": 470, "text": "索引卡:編號後兩位是 35。合起來就是門的檔案編號。" },
-    { "id": "l5-hint", "emoji": "📌", "x": 700, "y": 620, "text": "第 5 關:磁卡門——先撿起地上的鑰匙卡(F),再把兩張標籤的數字接成 3 位編號(7 + 35)輸入。" }
-  ]
+    {
+      "id": "l5-card",
+      "emoji": "🗄️",
+      "x": 250,
+      "y": 470,
+      "text": "牆角掉了一張鑰匙卡(🔑)——走過去按 F 撿起來。"
+    },
+    {
+      "id": "l5-num-a",
+      "emoji": "🔢",
+      "x": 1160,
+      "y": 470,
+      "text": "檔案櫃標籤:編號前一位是 7。"
+    },
+    {
+      "id": "l5-num-b",
+      "emoji": "📇",
+      "x": 700,
+      "y": 470,
+      "text": "索引卡:編號後兩位是 35。合起來就是門的檔案編號。"
+    },
+    {
+      "id": "l5-hint",
+      "emoji": "📌",
+      "x": 700,
+      "y": 620,
+      "text": "第 5 關:磁卡門——先撿起地上的鑰匙卡(F),再把兩張標籤的數字接成 3 位編號(7 + 35)輸入。"
+    }
+  ],
+  "floorTint": 13674608
 }

@@ -1,42 +1,151 @@
 {
   "name": "level2",
-  "size": { "w": 1400, "h": 850 },
+  "size": {
+    "w": 1400,
+    "h": 850
+  },
   "wallHeight": 130,
   "floorTile": 300,
   "floor": "floor-wood",
   "wall": "wall-top",
-  "spawn": { "x": 700, "y": 200 },
+  "spawn": {
+    "x": 700,
+    "y": 200
+  },
   "objects": [
-    { "asset": "bookshelf", "x": 130, "y": 90 },
-    { "asset": "bookshelf", "x": 260, "y": 90 },
-    { "asset": "bookshelf", "x": 390, "y": 90 },
-    { "asset": "bookshelf", "x": 1010, "y": 90 },
-    { "asset": "bookshelf", "x": 1140, "y": 90 },
-    { "asset": "bookshelf", "x": 1270, "y": 90 },
-    { "asset": "kitchen-counter", "x": 240, "y": 420 },
-    { "asset": "trash-bin", "x": 1180, "y": 430 },
-    { "asset": "plant-large", "x": 60, "y": 780 },
-    { "asset": "plant-large", "x": 1340, "y": 780 },
-    { "asset": "wall-lamp", "x": 400, "y": -95 },
-    { "asset": "wall-lamp", "x": 700, "y": -95 },
-    { "asset": "wall-lamp", "x": 1000, "y": -95 },
-    { "asset": "window-side", "x": 560, "y": 40 },
-    { "asset": "window-side", "x": 840, "y": 40 },
-    { "asset": "rug-red", "x": 700, "y": 600 },
-    { "asset": "bookshelf", "x": 130, "y": 560 },
-    { "asset": "trash-bin", "x": 250, "y": 610 },
-    { "asset": "kitchen-counter", "x": 1160, "y": 620 },
-    { "asset": "plant-small", "x": 470, "y": 690 },
-    { "asset": "plant-small", "x": 940, "y": 690 },
-    { "asset": "plant-small", "x": 700, "y": 300 },
-    { "asset": "trash-bin", "x": 1000, "y": 500 }
+    {
+      "asset": "bookshelf",
+      "x": 130,
+      "y": 90
+    },
+    {
+      "asset": "bookshelf",
+      "x": 260,
+      "y": 90
+    },
+    {
+      "asset": "bookshelf",
+      "x": 390,
+      "y": 90
+    },
+    {
+      "asset": "bookshelf",
+      "x": 1010,
+      "y": 90
+    },
+    {
+      "asset": "bookshelf",
+      "x": 1140,
+      "y": 90
+    },
+    {
+      "asset": "bookshelf",
+      "x": 1270,
+      "y": 90
+    },
+    {
+      "asset": "kitchen-counter",
+      "x": 240,
+      "y": 420
+    },
+    {
+      "asset": "trash-bin",
+      "x": 1180,
+      "y": 430
+    },
+    {
+      "asset": "plant-large",
+      "x": 60,
+      "y": 780
+    },
+    {
+      "asset": "plant-large",
+      "x": 1340,
+      "y": 780
+    },
+    {
+      "asset": "wall-lamp",
+      "x": 400,
+      "y": -95
+    },
+    {
+      "asset": "wall-lamp",
+      "x": 700,
+      "y": -95
+    },
+    {
+      "asset": "wall-lamp",
+      "x": 1000,
+      "y": -95
+    },
+    {
+      "asset": "window-side",
+      "x": 560,
+      "y": 40
+    },
+    {
+      "asset": "window-side",
+      "x": 840,
+      "y": 40
+    },
+    {
+      "asset": "rug-red",
+      "x": 700,
+      "y": 600
+    },
+    {
+      "asset": "bookshelf",
+      "x": 130,
+      "y": 560
+    },
+    {
+      "asset": "trash-bin",
+      "x": 250,
+      "y": 610
+    },
+    {
+      "asset": "kitchen-counter",
+      "x": 1160,
+      "y": 620
+    },
+    {
+      "asset": "plant-small",
+      "x": 470,
+      "y": 690
+    },
+    {
+      "asset": "plant-small",
+      "x": 940,
+      "y": 690
+    },
+    {
+      "asset": "plant-small",
+      "x": 700,
+      "y": 300
+    },
+    {
+      "asset": "trash-bin",
+      "x": 1000,
+      "y": 500
+    }
   ],
   "exits": [
     {
-      "zone": { "x": 700, "y": 830, "w": 160, "h": 40 },
+      "zone": {
+        "x": 700,
+        "y": 830,
+        "w": 160,
+        "h": 40
+      },
       "to": "level3",
-      "spawn": { "x": 700, "y": 200 },
-      "lock": { "code": "1963", "hint": "兩張紙條各藏一半,4 位密碼" }
+      "spawn": {
+        "x": 700,
+        "y": 200
+      },
+      "lock": {
+        "code": "1963",
+        "hint": "兩張紙條各藏一半,4 位密碼"
+      }
     }
   ],
   "clues": [
@@ -61,5 +170,6 @@
       "y": 470,
       "text": "第 2 關:密碼被拆成兩半藏在房間兩側,合起來就是完整密碼。"
     }
-  ]
+  ],
+  "floorTint": 14203016
 }
