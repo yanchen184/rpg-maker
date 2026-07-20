@@ -13,121 +13,40 @@
     "y": 200
   },
   "objects": [
-    {
-      "asset": "bookshelf",
-      "x": 130,
-      "y": 90
-    },
-    {
-      "asset": "bookshelf",
-      "x": 260,
-      "y": 90
-    },
-    {
-      "asset": "bookshelf",
-      "x": 390,
-      "y": 90
-    },
-    {
-      "asset": "bookshelf",
-      "x": 1010,
-      "y": 90
-    },
-    {
-      "asset": "bookshelf",
-      "x": 1140,
-      "y": 90
-    },
-    {
-      "asset": "bookshelf",
-      "x": 1270,
-      "y": 90
-    },
-    {
-      "asset": "kitchen-counter",
-      "x": 240,
-      "y": 420
-    },
-    {
-      "asset": "trash-bin",
-      "x": 1180,
-      "y": 430
-    },
-    {
-      "asset": "plant-large",
-      "x": 60,
-      "y": 780
-    },
-    {
-      "asset": "plant-large",
-      "x": 1340,
-      "y": 780
-    },
-    {
-      "asset": "wall-lamp",
-      "x": 400,
-      "y": -95
-    },
-    {
-      "asset": "wall-lamp",
-      "x": 700,
-      "y": -95
-    },
-    {
-      "asset": "wall-lamp",
-      "x": 1000,
-      "y": -95
-    },
-    {
-      "asset": "window-side",
-      "x": 560,
-      "y": 40
-    },
-    {
-      "asset": "window-side",
-      "x": 840,
-      "y": 40
-    },
-    {
-      "asset": "rug-red",
-      "x": 700,
-      "y": 600
-    },
-    {
-      "asset": "bookshelf",
-      "x": 130,
-      "y": 560
-    },
-    {
-      "asset": "trash-bin",
-      "x": 250,
-      "y": 610
-    },
-    {
-      "asset": "kitchen-counter",
-      "x": 1160,
-      "y": 620
-    },
-    {
-      "asset": "plant-small",
-      "x": 470,
-      "y": 690
-    },
-    {
-      "asset": "plant-small",
-      "x": 940,
-      "y": 690
-    },
-    {
-      "asset": "plant-small",
-      "x": 700,
-      "y": 300
-    },
-    {
-      "asset": "trash-bin",
-      "x": 1000,
-      "y": 500
-    }
+    { "asset": "wall-lamp", "x": 250, "y": -95 },
+    { "asset": "wall-lamp", "x": 550, "y": -95 },
+    { "asset": "wall-lamp", "x": 850, "y": -95 },
+    { "asset": "wall-lamp", "x": 1150, "y": -95 },
+    { "asset": "window-side", "x": 700, "y": 40 },
+
+    { "asset": "bookshelf", "x": 130, "y": 95 },
+    { "asset": "bookshelf", "x": 260, "y": 95 },
+    { "asset": "bookshelf", "x": 130, "y": 240 },
+    { "asset": "bookshelf", "x": 260, "y": 240 },
+
+    { "asset": "bookshelf", "x": 1140, "y": 95 },
+    { "asset": "bookshelf", "x": 1270, "y": 95 },
+    { "asset": "bookshelf", "x": 1140, "y": 240 },
+    { "asset": "bookshelf", "x": 1270, "y": 240 },
+
+    { "asset": "kitchen-counter", "x": 240, "y": 470 },
+    { "asset": "kitchen-counter", "x": 1160, "y": 470 },
+
+    { "asset": "bookshelf", "x": 470, "y": 210 },
+    { "asset": "bookshelf", "x": 930, "y": 210 },
+
+    { "asset": "trash-bin", "x": 130, "y": 620 },
+    { "asset": "trash-bin", "x": 1270, "y": 620 },
+    { "asset": "trash-bin", "x": 1000, "y": 520 },
+
+    { "asset": "rug-red", "x": 700, "y": 600 },
+
+    { "asset": "plant-large", "x": 60, "y": 800 },
+    { "asset": "plant-large", "x": 1340, "y": 800 },
+    { "asset": "plant-small", "x": 470, "y": 700 },
+    { "asset": "plant-small", "x": 940, "y": 700 },
+    { "asset": "plant-small", "x": 340, "y": 640 },
+    { "asset": "plant-small", "x": 1060, "y": 640 }
   ],
   "exits": [
     {
