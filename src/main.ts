@@ -1,6 +1,6 @@
 import { Application, Container, Text } from 'pixi.js';
 import { loadManifest, loadFrames, sheetExists } from './assets';
-import { aabbOverlap, buildScene, loadScene, redrawDoors } from './scene';
+import { aabbOverlap, buildScene, loadScene, redrawDoors, type DoorOpening } from './scene';
 import type { Aabb } from './types';
 import { Player } from './player';
 import { SceneEditor } from './editor';
@@ -202,6 +202,7 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   const heldItems = new Set<string>();
   const PICKUP_RANGE = 90; // 角色與物品距離小於此才能撿(場景像素)
   const INTERACT_RANGE = 100; // 線索/開關互動距離
+  const DOOR_RANGE = 110; // 門互動距離(比 aabb 重疊寬鬆,站門口附近就能按 E)
   let pickupHandled = false;
   dbg.__bag = () => bagCount;
   dbg.__held = () => [...heldItems];
@@ -276,17 +277,44 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     return false;
   };
 
-  // 解鎖一扇門:記到 puzzleState、重畫門(紅→綠)、回饋
-  const unlockExit = (to: string) => {
-    puzzleState.unlocked.add(to);
-    redrawBuiltDoors();
-  };
+  // 正在播放開門動畫的門(null = 沒有);由 ticker 每幀推進 progress
+  let doorOpening: DoorOpening | null = null;
+  const DOOR_ANIM_SEC = 0.9; // 開門動畫時長(鎖解開→門板滑開,拉長讓玩家看得清)
+  dbg.__doorAnim = () => (doorOpening ? { ...doorOpening } : null); // 除錯:讀開門動畫進度
+
   const redrawBuiltDoors = () => {
     if (!built.doorGraphics) return;
     const bottomExits = (built.data.exits ?? []).filter(
       (ex) => ex.zone.y >= built.data.size.h - 80,
     );
-    redrawDoors(built.doorGraphics, built.data, bottomExits, puzzleState.unlocked);
+    redrawDoors(built.doorGraphics, built.data, bottomExits, puzzleState.unlocked, doorOpening);
+  };
+
+  // 解鎖一扇門:記到 puzzleState、播開門動畫(門板滑開+掛鎖掉落),動畫完再定格成綠門
+  const unlockExit = (to: string) => {
+    puzzleState.unlocked.add(to);
+    // 只對「底部有畫門」的出口播動畫;非底門(無 doorGraphics)直接定格
+    const isBottomDoor = (built.data.exits ?? []).some(
+      (ex) => ex.to === to && ex.zone.y >= built.data.size.h - 80,
+    );
+    if (!built.doorGraphics || !isBottomDoor) {
+      redrawBuiltDoors();
+      return;
+    }
+    let elapsed = 0;
+    doorOpening = { to, progress: 0 };
+    const step = (tk: { deltaMS: number }) => {
+      elapsed += tk.deltaMS / 1000;
+      const p = Math.min(1, elapsed / DOOR_ANIM_SEC);
+      doorOpening = { to, progress: p };
+      redrawBuiltDoors();
+      if (p >= 1) {
+        app.ticker.remove(step);
+        doorOpening = null;
+        redrawBuiltDoors(); // 定格成靜態綠門把
+      }
+    };
+    app.ticker.add(step);
   };
 
   // 目前站在門口的出口(每幀由 ticker 更新);curClue/curDevice 同理
@@ -571,12 +599,18 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     }
     // 互動偵測:門口 / 線索 / 機關。優先序 門 > 線索 > 機關(同時靠近時 E 先給門)
     if (player && !switching && !riding && !ui.isModalOpen()) {
-      // 門
+      // 門:aabb 重疊 OR 站在門口附近(放寬,避免被牆碰撞箱擋住差幾 px 就觸發不到)
       let foundExit: typeof curExit = null;
+      let exitD = DOOR_RANGE;
       for (const ex of built.data.exits ?? []) {
         if (aabbOverlap(player.aabb, ex.zone)) {
           foundExit = ex;
           break;
+        }
+        const d = Math.hypot(ex.zone.x - player.x, ex.zone.y - player.y);
+        if (d < exitD) {
+          exitD = d;
+          foundExit = ex;
         }
       }
       // 線索(距離判定)

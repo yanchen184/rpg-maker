@@ -250,11 +250,18 @@ function drawBottomWallWithDoors(
  * 依鎖狀態(重)畫底牆與門。unlocked = 已解鎖的目標場景名集合;
  * 有 lock 但不在 unlocked 的門畫紅框 + 🔒,其餘畫正常木門。整個 g.clear() 後重畫。
  */
+/** 正在播放開門動畫的門:to=目標場景名,progress 0→1(門板滑開、掛鎖掉落) */
+export interface DoorOpening {
+  to: string;
+  progress: number;
+}
+
 export function redrawDoors(
   g: Graphics,
   data: SceneData,
   bottomExits: SceneData['exits'],
   unlocked: Set<string>,
+  opening?: DoorOpening | null,
 ): void {
   g.clear();
   const wallH = 46; // 底牆高度(視覺,像素風矮牆)
@@ -283,31 +290,70 @@ export function redrawDoors(
     g.rect(x0, data.size.h - 4, x1 - x0, 4).fill(0x2e2418); // 牆底陰影
   }
 
-  // 每扇門:門框 + 門板 + 門把;鎖住的門加紅框 + 掛鎖
+  // 每扇門:門框 + 門板 + 門把;鎖住加紅框+掛鎖;開門中門板往兩側滑開
   for (const ex of exits) {
     const dx = ex.zone.x;
     const left = dx - halfDoor;
     const top = data.size.h - doorH;
     const isLocked = !!ex.lock && !unlocked.has(ex.to);
+    const anim = opening && opening.to === ex.to ? opening.progress : null;
 
-    // 門框(鎖住=暗紅框、可通=深棕框)
+    // 門洞(門框內側暗色,門板滑開後露出的通道)
+    g.rect(left, top, doorW, doorH).fill(0x1a120a);
+    // 門框
     g.rect(left - 6, top - 6, doorW + 12, doorH + 6).fill(isLocked ? 0x5a1e18 : 0x2e2013);
-    // 門板(木色)
-    g.rect(left, top, doorW, doorH).fill(0x7a4a24);
-    // 木紋 + 雙扇分隔線
-    g.rect(dx - 2, top, 4, doorH).fill(0x5a3418); // 中縫
-    g.rect(left + 10, top + 8, doorW - 20, 3).fill(0x8a5a30); // 上橫飾
-    g.rect(left + 10, top + doorH - 20, doorW - 20, 3).fill(0x8a5a30); // 下橫飾
-    if (isLocked) {
-      // 鎖住:紅色掛鎖(鎖身 + 鎖環)畫在門中央
-      const cy = top + doorH / 2;
-      g.rect(dx - 11, cy - 2, 22, 18).fill(0xd83a2a); // 鎖身
-      g.circle(dx, cy - 2, 9).stroke({ width: 4, color: 0xd83a2a }); // 鎖環
-      g.rect(dx - 2, cy + 4, 4, 8).fill(0x3a0e08); // 鎖孔
+    g.rect(left, top, doorW, doorH).fill(0x1a120a); // 門洞(蓋回框內)
+
+    if (anim !== null) {
+      // 兩階段開門動畫:
+      //   phase 1 (0~0.35):鎖彈開、往下掉、門板還閉合 → 讓玩家「看到鎖解開」
+      //   phase 2 (0.35~1):雙扇門板往左右滑開,露出金色門洞光 → 明確的「開門」
+      const unlockP = Math.min(1, anim / 0.35); // 掛鎖階段進度
+      const swingP = Math.max(0, (anim - 0.35) / 0.65); // 門板階段進度(0~1)
+      const ease = swingP * swingP * (3 - 2 * swingP); // smoothstep,開門有加減速手感
+      const slide = halfDoor * ease; // 每扇最多滑開半扇寬 = 全開
+
+      // 門洞底光:門越開,金色暖光越亮(暗示外面有光透進來)
+      if (swingP > 0) {
+        const glow = 0.15 + 0.5 * swingP;
+        g.rect(left + 6, top + 4, doorW - 12, doorH - 8).fill({ color: 0xffcc66, alpha: glow });
+      }
+
+      // 左扇門板(往左滑)
+      g.rect(left - slide, top, halfDoor, doorH).fill(0x7a4a24);
+      g.rect(left - slide, top, 4, doorH).fill(0x5a3418); // 外緣
+      g.rect(left + 10 - slide, top + 8, halfDoor - 16, 3).fill(0x8a5a30);
+      // 右扇門板(往右滑)
+      g.rect(dx + slide, top, halfDoor, doorH).fill(0x7a4a24);
+      g.rect(dx + slide + halfDoor - 4, top, 4, doorH).fill(0x5a3418); // 外緣
+      g.rect(dx + 6 + slide, top + 8, halfDoor - 16, 3).fill(0x8a5a30);
+
+      // 掛鎖:先原地小彈(unlockP<1),彈完往下掉 + 淡出
+      if (anim < 0.72) {
+        const bounce = unlockP < 1 ? Math.sin(unlockP * Math.PI) * -4 : 0; // 解開瞬間往上彈一下
+        const fall = unlockP >= 1 ? (anim - 0.35) * 140 : 0; // 掉落
+        const cy = top + doorH / 2 + bounce + fall;
+        const alpha = anim < 0.55 ? 1 : Math.max(0, 1 - (anim - 0.55) / 0.17);
+        g.rect(dx - 11, cy - 2, 22, 18).fill({ color: 0xd83a2a, alpha });
+        g.circle(dx, cy - 2, 9).stroke({ width: 4, color: unlockP < 1 ? 0xd83a2a : 0x8ad86e, alpha }); // 解開後鎖環轉綠
+      }
     } else {
-      // 可通:綠色門把(雙扇)
-      g.circle(dx - 12, top + doorH / 2, 4).fill(0x6ee06e);
-      g.circle(dx + 12, top + doorH / 2, 4).fill(0x6ee06e);
+      // 靜態:整片門板
+      g.rect(left, top, doorW, doorH).fill(0x7a4a24);
+      g.rect(dx - 2, top, 4, doorH).fill(0x5a3418); // 中縫
+      g.rect(left + 10, top + 8, doorW - 20, 3).fill(0x8a5a30); // 上橫飾
+      g.rect(left + 10, top + doorH - 20, doorW - 20, 3).fill(0x8a5a30); // 下橫飾
+      if (isLocked) {
+        // 鎖住:紅色掛鎖(鎖身 + 鎖環)
+        const cy = top + doorH / 2;
+        g.rect(dx - 11, cy - 2, 22, 18).fill(0xd83a2a);
+        g.circle(dx, cy - 2, 9).stroke({ width: 4, color: 0xd83a2a });
+        g.rect(dx - 2, cy + 4, 4, 8).fill(0x3a0e08); // 鎖孔
+      } else {
+        // 可通:綠色門把(雙扇)
+        g.circle(dx - 12, top + doorH / 2, 4).fill(0x6ee06e);
+        g.circle(dx + 12, top + doorH / 2, 4).fill(0x6ee06e);
+      }
     }
   }
 }
