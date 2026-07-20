@@ -1,6 +1,6 @@
 import { Application, Container, Text } from 'pixi.js';
 import { loadManifest, loadFrames, sheetExists } from './assets';
-import { aabbOverlap, buildScene, loadScene } from './scene';
+import { aabbOverlap, buildScene, loadScene, redrawDoors } from './scene';
 import type { Aabb } from './types';
 import { Player } from './player';
 import { SceneEditor } from './editor';
@@ -82,9 +82,35 @@ async function previewMode(app: Application, manifest: Awaited<ReturnType<typeof
 }
 
 /** 場景模式:office 房間 + 可操作角色,踩到出入口切場景 */
+/** 解謎關卡定義:每關一個場景 JSON + 顯示名 + 目標提示。門的 exit.to 串起下一關。 */
+interface LevelDef {
+  scene: string;
+  name: string;
+  hint: string;
+}
+const LEVELS: LevelDef[] = [
+  { scene: 'level1', name: '第 1 關 · 辦公室', hint: '找到門上密碼,離開房間' },
+  { scene: 'level2', name: '第 2 關 · 倉庫', hint: '兩張紙條各藏一半密碼' },
+  { scene: 'level3', name: '第 3 關 · 控制室', hint: '踩下踏板,再算出密碼' },
+];
+const FIRST_SCENE = LEVELS[0].scene;
+
 async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof loadManifest>>) {
-  let built = await buildScene(await loadScene('office'), manifest);
+  let built = await buildScene(await loadScene(FIRST_SCENE), manifest);
   app.stage.addChild(built.root);
+
+  // ── 解謎狀態(跨關保留:照 bagCount 的 closure 模式,switchScene 不碰它就會留著)──
+  const puzzleState = {
+    /** 已解鎖的門(以目標場景名 exit.to 記);redrawDoors 用它決定門畫紅或綠 */
+    unlocked: new Set<string>(),
+    /** 已觸發的機關 flag(device.setFlag) */
+    flags: new Set<string>(),
+    /** 已看過的線索 id(避免 toast 洗頻,可重看) */
+    seenClues: new Set<string>(),
+    /** 目前所在關卡(場景名) */
+    curScene: FIRST_SCENE,
+  };
+  const levelOf = (scene: string): LevelDef | undefined => LEVELS.find((l) => l.scene === scene);
 
   // 角色(紙娃娃層,素材未生成時場景仍可看)
   let player: Player | null = null;
@@ -167,11 +193,25 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     exportJson: () => editor.exportJson(),
   });
 
-  // 背包:撿到的物品計數(跨場景保留)
+  // 初始關卡 HUD;若起始場景不是解謎關(如自由 office),不顯示 HUD
+  const initLevel = levelOf(built.data.name);
+  ui.setLevel(initLevel ? { name: initLevel.name, hint: initLevel.hint } : null);
+
+  // 背包:撿到的物品計數 + 持有物品 id 集合(跨場景保留;解謎鎖門的 needItems 查它)
   let bagCount = 0;
+  const heldItems = new Set<string>();
   const PICKUP_RANGE = 90; // 角色與物品距離小於此才能撿(場景像素)
+  const INTERACT_RANGE = 100; // 線索/開關互動距離
   let pickupHandled = false;
   dbg.__bag = () => bagCount;
+  dbg.__held = () => [...heldItems];
+  dbg.__puzzle = () => ({
+    scene: built.data.name,
+    unlocked: [...puzzleState.unlocked],
+    flags: [...puzzleState.flags],
+    held: [...heldItems],
+    seenClues: [...puzzleState.seenClues],
+  });
   // 撿取最近且在範圍內的地上物品:先播撿取動作(彎腰),動作到一半才真的入袋
   const tryPickup = () => {
     if (!player || player.inAction) return;
@@ -193,7 +233,13 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       target.sprite.destroy();
       built.pickups = built.pickups.filter((p) => p !== target);
       bagCount++;
+      heldItems.add(target.data.id);
       ui.setBag(bagCount);
+      // 撿到鑰匙可能解某扇 needItems 門 → 重畫
+      for (const ex of built.data.exits ?? []) {
+        if (ex.lock && isExitOpen(ex)) puzzleState.unlocked.add(ex.to);
+      }
+      redrawBuiltDoors();
     }, 280);
   };
   window.addEventListener('keydown', (e) => {
@@ -212,18 +258,107 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     outdoor: '戶外',
     cabin: '小木屋',
     storage: '倉庫',
+    level1: '辦公室',
+    level2: '倉庫',
+    level3: '控制室',
+    win: '出口',
   };
-  let curExit: { to: string; spawn: { x: number; y: number } } | null = null;
+  const sceneLabel = (to: string) => levelOf(to)?.name ?? SCENE_LABEL[to] ?? to;
+
+  // 門鎖是否已解:沒 lock = 通行;有 code 已解鎖;有 needFlags/needItems 全滿足才通
+  const isExitOpen = (ex: NonNullable<typeof built.data.exits>[number]): boolean => {
+    if (!ex.lock) return true;
+    if (puzzleState.unlocked.has(ex.to)) return true;
+    const flagsOk = (ex.lock.needFlags ?? []).every((f) => puzzleState.flags.has(f));
+    const itemsOk = (ex.lock.needItems ?? []).every((i) => heldItems.has(i));
+    // 沒有 code、只靠 flag/item 的門:條件滿足即視為已開
+    if (!ex.lock.code && (ex.lock.needFlags || ex.lock.needItems)) return flagsOk && itemsOk;
+    return false;
+  };
+
+  // 解鎖一扇門:記到 puzzleState、重畫門(紅→綠)、回饋
+  const unlockExit = (to: string) => {
+    puzzleState.unlocked.add(to);
+    redrawBuiltDoors();
+  };
+  const redrawBuiltDoors = () => {
+    if (!built.doorGraphics) return;
+    const bottomExits = (built.data.exits ?? []).filter(
+      (ex) => ex.zone.y >= built.data.size.h - 80,
+    );
+    redrawDoors(built.doorGraphics, built.data, bottomExits, puzzleState.unlocked);
+  };
+
+  // 目前站在門口的出口(每幀由 ticker 更新);curClue/curDevice 同理
+  let curExit: NonNullable<typeof built.data.exits>[number] | null = null;
+  let curClue: (typeof built.clues)[number] | null = null;
+  let curDevice: (typeof built.devices)[number] | null = null;
   let exitHandled = false;
+
+  // 開鎖門:靠近鎖門按 E → 若已滿足條件直接開,否則(有 code)開密碼面板
+  const tryOpenLockedExit = (ex: NonNullable<typeof built.data.exits>[number]) => {
+    if (isExitOpen(ex)) {
+      void switchScene(ex.to, ex.spawn);
+      return;
+    }
+    const lock = ex.lock!;
+    // 前置條件:有 needFlags/needItems 卻沒滿足 → 先擋,不讓輸密碼(密碼對也沒用)
+    const flagsOk = (lock.needFlags ?? []).every((f) => puzzleState.flags.has(f));
+    const itemsOk = (lock.needItems ?? []).every((i) => heldItems.has(i));
+    if (!flagsOk || !itemsOk) {
+      ui.showToast(lock.hint ?? '這扇門還打不開,先找找機關或鑰匙', 2400);
+      return;
+    }
+    if (lock.code) {
+      ui.openPassword({
+        title: '🔒 門鎖',
+        hint: lock.hint ?? `輸入 ${lock.code.length} 位密碼`,
+        length: lock.code.length,
+        onSubmit: (code) => {
+          if (code === lock.code) {
+            unlockExit(ex.to);
+            ui.showToast('🔓 喀噠——門開了!', 1600);
+            return true;
+          }
+          return false;
+        },
+        onCancel: () => {},
+      });
+    }
+  };
+
+  // E 鍵分派:modal 開著時交給 modal;否則依「門 > 線索 > 機關」優先序互動
   window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() === 'e' && !exitHandled) {
-      exitHandled = true;
-      if (curExit && !switching) void switchScene(curExit.to, curExit.spawn);
+    if (e.key.toLowerCase() !== 'e' || exitHandled) return;
+    exitHandled = true;
+    if (ui.isModalOpen() || switching) return;
+    if (curExit) {
+      if (curExit.lock) tryOpenLockedExit(curExit);
+      else void switchScene(curExit.to, curExit.spawn);
+    } else if (curClue) {
+      ui.showToast(`${curClue.data.emoji}  ${curClue.data.text}`, 4200);
+      puzzleState.seenClues.add(curClue.data.id);
+    } else if (curDevice) {
+      triggerDevice(curDevice);
     }
   });
   window.addEventListener('keyup', (e) => {
     if (e.key.toLowerCase() === 'e') exitHandled = false;
   });
+
+  // 觸發機關:開關 = toggle flag;踩板由 ticker 自動觸發(這裡也支援按 E 當開關)
+  const triggerDevice = (dev: (typeof built.devices)[number]) => {
+    if (dev.active) return; // 已觸發不重複(單向:觸發後維持)
+    dev.active = true;
+    puzzleState.flags.add(dev.data.setFlag);
+    dev.sprite.text = dev.data.kind === 'switch' ? '🟢' : dev.sprite.text;
+    ui.showToast(dev.data.hint ?? '喀噠——某處起了變化', 2000);
+    // 觸發後可能滿足某扇門的 flag 條件 → 重畫門讓玩家看到變化
+    for (const ex of built.data.exits ?? []) {
+      if (ex.lock && isExitOpen(ex)) puzzleState.unlocked.add(ex.to);
+    }
+    redrawBuiltDoors();
+  };
 
   // 載具:G 上/下車;上車後角色隱身、車帶著人以車速移動
   let riding: (typeof built.vehicles)[number] | null = null;
@@ -378,6 +513,14 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   // 場景切換:換裝狀態跟著 Player 實例保留
   let switching = false;
   const switchScene = async (to: string, spawn: { x: number; y: number }) => {
+    // 破關:最後一關的門通往 'win' → 顯示破關畫面,不載場景
+    if (to === 'win') {
+      ui.showLevelComplete({
+        title: '🎉 全部過關!',
+        body: `你解開了全部 ${LEVELS.length} 道門,成功脫逃!\n感謝遊玩。`,
+      });
+      return;
+    }
     switching = true;
     clearRemotes(); // 舊場景 objectLayer 即將銷毀,先清遠端玩家 sprite
     // 切場景先強制下車(舊場景的車 sprite 會被銷毀,riding 不能懸空)
@@ -402,6 +545,17 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       dbg.__built = built;
       dbg.__editor = editor;
       fit();
+
+      // 進入新關卡:更新解謎狀態、HUD、依已解鎖狀態重畫門、播過關提示
+      puzzleState.curScene = to;
+      const lv = levelOf(to);
+      ui.setLevel(lv ? { name: lv.name, hint: lv.hint } : null);
+      redrawBuiltDoors();
+      if (lv) {
+        const idx = LEVELS.indexOf(lv);
+        ui.showToast(`${lv.name}\n${lv.hint}`, 2600);
+        void idx;
+      }
     } finally {
       switching = false;
     }
@@ -415,20 +569,68 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
     } else {
       player?.update(dt, built.colliders);
     }
-    // 門口偵測:站在出口 zone 內 → 記下該出口、顯示「按 E 離開」提示、E 交給離開不打招呼
-    if (player && !switching && !riding) {
-      let found: { to: string; spawn: { x: number; y: number } } | null = null;
+    // 互動偵測:門口 / 線索 / 機關。優先序 門 > 線索 > 機關(同時靠近時 E 先給門)
+    if (player && !switching && !riding && !ui.isModalOpen()) {
+      // 門
+      let foundExit: typeof curExit = null;
       for (const ex of built.data.exits ?? []) {
         if (aabbOverlap(player.aabb, ex.zone)) {
-          found = { to: ex.to, spawn: ex.spawn };
+          foundExit = ex;
           break;
         }
       }
-      curExit = found;
-      player.atExit = found !== null;
-      ui.setExitPrompt(found ? `按 E 前往「${SCENE_LABEL[found.to] ?? found.to}」` : null);
+      // 線索(距離判定)
+      let foundClue: typeof curClue = null;
+      let clueD = INTERACT_RANGE;
+      for (const c of built.clues) {
+        const d = Math.hypot(c.data.x - player.x, c.data.y - player.y);
+        if (d < clueD) {
+          clueD = d;
+          foundClue = c;
+        }
+      }
+      // 機關:踩板(踩上去自動觸發)vs 開關(靠近按 E)
+      let foundDevice: typeof curDevice = null;
+      let devD = INTERACT_RANGE;
+      for (const dev of built.devices) {
+        const d = Math.hypot(dev.data.x - player.x, dev.data.y - player.y);
+        if (dev.data.kind === 'plate' && d < 60 && !dev.active) {
+          triggerDevice(dev); // 踩板:踏上即觸發,不用按鍵
+        }
+        if (dev.data.kind === 'switch' && d < devD && !dev.active) {
+          devD = d;
+          foundDevice = dev;
+        }
+      }
+
+      curExit = foundExit;
+      curClue = foundExit ? null : foundClue;
+      curDevice = foundExit || foundClue ? null : foundDevice;
+      player.atExit = foundExit !== null || foundClue !== null || foundDevice !== null;
+
+      // 提示浮條:門用金色 exitPrompt,線索/機關用藍色 actionPrompt
+      if (foundExit) {
+        const locked = foundExit.lock && !isExitOpen(foundExit);
+        ui.setExitPrompt(
+          locked
+            ? `🔒 按 E ${foundExit.lock?.code ? '輸入密碼' : '嘗試開門'}`
+            : `按 E 前往「${sceneLabel(foundExit.to)}」`,
+        );
+        ui.setActionPrompt(null);
+      } else {
+        ui.setExitPrompt(null);
+        ui.setActionPrompt(
+          foundClue
+            ? `按 E 查看${foundClue.data.emoji}`
+            : foundDevice
+              ? `按 E 操作${foundDevice.data.emoji}`
+              : null,
+        );
+      }
     } else if (player) {
       curExit = null;
+      curClue = null;
+      curDevice = null;
       player.atExit = false;
     }
     // 多人:廣播自己 + 對帳/渲染其他玩家(切場景中不推,避免場景名跳動)

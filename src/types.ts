@@ -52,12 +52,51 @@ export interface Vehicle {
   speed?: number;
 }
 
-/** 場景出入口:角色踩進 zone 就切到 to 場景、落在 spawn */
+/** 門鎖:出入口被鎖住,要滿足條件才能通過(解謎核心) */
+export interface DoorLock {
+  /** 數字密碼(字串,允許前導 0);玩家靠近門開輸入面板,輸對才解鎖 */
+  code?: string;
+  /** 需要先觸發的機關 flag(device.setFlag);全部為 true 才解鎖 */
+  needFlags?: string[];
+  /** 需要持有的物品 id(撿到即算,不消耗);全部持有才解鎖 */
+  needItems?: string[];
+  /** 鎖住時門上顯示的提示(如「輸入 3 位密碼」「需要鑰匙」) */
+  hint?: string;
+}
+
+/** 場景出入口:角色踩進 zone 就切到 to 場景、落在 spawn。可掛 lock 變成解謎門 */
 export interface SceneExit {
   /** 觸發區(場景座標,中心式 AABB) */
   zone: Aabb;
   to: string;
   spawn: { x: number; y: number };
+  /** 鎖:有 lock 時門是鎖住的,要解開才能按 E 通過(否則只提示、不切場景) */
+  lock?: DoorLock;
+}
+
+/** 線索物件:場景擺放,靠近按 E 顯示提示文字(數字/謎面);不入袋、可重複看 */
+export interface Clue {
+  id: string;
+  /** emoji 圖示:📜 📋 🖼️ 🔢 📖 ... */
+  emoji: string;
+  x: number;
+  y: number;
+  /** 靠近按 E 顯示的內容(密碼線索、謎面提示) */
+  text: string;
+}
+
+/** 機關:踩板(站上觸發)或開關(按 E 切換);觸發後把 setFlag 設 true(供門鎖判定) */
+export interface Device {
+  id: string;
+  kind: 'plate' | 'switch';
+  /** emoji 圖示:🔘(開關) 🟦(踩板) ⬜ 🎚️ ... */
+  emoji: string;
+  x: number;
+  y: number;
+  /** 觸發後設定的 flag 名(門鎖 needFlags 用同名判定) */
+  setFlag: string;
+  /** 觸發時顯示的提示(如「喀噠——某處的門開了」) */
+  hint?: string;
 }
 
 export interface SceneData {
@@ -78,6 +117,10 @@ export interface SceneData {
   pickups?: Pickup[];
   /** 可騎乘載具 */
   vehicles?: Vehicle[];
+  /** 解謎:線索物件(靠近按 E 看提示) */
+  clues?: Clue[];
+  /** 解謎:機關(踩板/開關) */
+  devices?: Device[];
 }
 
 export interface Aabb {
