@@ -196,6 +196,7 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
   // 初始關卡 HUD;若起始場景不是解謎關(如自由 office),不顯示 HUD
   const initLevel = levelOf(built.data.name);
   ui.setLevel(initLevel ? { name: initLevel.name, hint: initLevel.hint } : null);
+  ui.setPuzzleMode(!!initLevel); // 解謎關收面板+開暗角;自由場景展開面板+關暗角
 
   // 背包:撿到的物品計數 + 持有物品 id 集合(跨場景保留;解謎鎖門的 needItems 查它)
   let bagCount = 0;
@@ -578,6 +579,7 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       puzzleState.curScene = to;
       const lv = levelOf(to);
       ui.setLevel(lv ? { name: lv.name, hint: lv.hint } : null);
+      ui.setPuzzleMode(!!lv); // 解謎關收面板+開暗角;自由場景展開+關暗角
       redrawBuiltDoors();
       if (lv) {
         const idx = LEVELS.indexOf(lv);

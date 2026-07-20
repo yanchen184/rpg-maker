@@ -48,19 +48,53 @@ export interface UiHandle {
   isModalOpen: () => boolean;
   /** 過關/破關全螢幕畫面(傳 null 關閉) */
   showLevelComplete: (info: { title: string; body: string; onNext?: () => void } | null) => void;
+  /** 解謎關 vs 自由場景:解謎關收起換裝面板 + 開暗角氛圍;自由場景展開面板 + 關暗角 */
+  setPuzzleMode: (on: boolean) => void;
 }
 
 const BTN_CSS =
   'border:1px solid #4a3a26;border-radius:6px;padding:3px 8px;cursor:pointer;font:12px monospace;background:#2e2418;color:#e8dcc8';
 
 export function buildUi(opts: UiOptions): UiHandle {
+  // 暗角 vignette:四角壓暗,營造密室/解謎氛圍(蓋在 canvas 上、不擋操作)
+  const vignette = document.createElement('div');
+  vignette.style.cssText = [
+    'position:fixed', 'inset:0', 'z-index:8', 'pointer-events:none',
+    'background:radial-gradient(ellipse 78% 78% at 50% 46%, transparent 52%, rgba(6,4,2,.55) 88%, rgba(4,2,1,.82) 100%)',
+    'transition:opacity .6s', 'opacity:1',
+  ].join(';');
+  document.body.appendChild(vignette);
+
   const panel = document.createElement('div');
   panel.style.cssText = [
-    'position:fixed', 'top:12px', 'right:12px', 'z-index:10',
+    'position:fixed', 'top:60px', 'right:12px', 'z-index:10',
     'background:rgba(20,14,8,.88)', 'border:1px solid #4a3a26', 'border-radius:10px',
     'padding:12px 14px', 'color:#e8dcc8', 'font:13px/1.6 monospace', 'user-select:none',
-    'min-width:190px', 'max-height:calc(100vh - 24px)', 'overflow-y:auto',
+    'min-width:190px', 'max-height:calc(100vh - 72px)', 'overflow-y:auto',
+    'transition:transform .28s ease, opacity .28s', 'transform-origin:top right',
   ].join(';');
+
+  // 折疊切鈕(🎨):解謎關預設收起面板,把畫面還給遊戲;點一下展開換裝/編輯
+  const toggleBtn = document.createElement('button');
+  toggleBtn.style.cssText = [
+    'position:fixed', 'top:12px', 'right:12px', 'z-index:11',
+    'width:40px', 'height:40px', 'border:1px solid #4a3a26', 'border-radius:10px',
+    'background:rgba(20,14,8,.9)', 'color:#e0a458', 'cursor:pointer',
+    'font:20px/1 monospace', 'box-shadow:0 2px 10px rgba(0,0,0,.4)',
+  ].join(';');
+  let panelOpen = true;
+  const renderPanel = () => {
+    panel.style.transform = panelOpen ? 'scale(1)' : 'scale(.9)';
+    panel.style.opacity = panelOpen ? '1' : '0';
+    panel.style.pointerEvents = panelOpen ? 'auto' : 'none';
+    toggleBtn.textContent = panelOpen ? '✕' : '🎨';
+    toggleBtn.title = panelOpen ? '收起面板' : '打開換裝/編輯面板';
+  };
+  toggleBtn.onclick = () => {
+    panelOpen = !panelOpen;
+    renderPanel();
+  };
+  document.body.appendChild(toggleBtn);
 
   const title = (t: string, first = false) => {
     const el = document.createElement('div');
@@ -154,6 +188,14 @@ export function buildUi(opts: UiOptions): UiHandle {
   panel.appendChild(hint);
 
   document.body.appendChild(panel);
+  renderPanel();
+
+  // 解謎關 / 自由場景切換:解謎關收面板 + 開暗角,自由場景展開面板 + 關暗角
+  const setPuzzleMode = (on: boolean) => {
+    vignette.style.opacity = on ? '1' : '0';
+    panelOpen = !on; // 解謎關預設收起,自由場景預設展開
+    renderPanel();
+  };
 
   // 門口互動提示:畫面下方置中浮條,靠近出口才顯示
   const exitPrompt = document.createElement('div');
@@ -406,5 +448,6 @@ export function buildUi(opts: UiOptions): UiHandle {
     openPassword,
     isModalOpen,
     showLevelComplete,
+    setPuzzleMode,
   };
 }
