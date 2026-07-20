@@ -253,7 +253,16 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
 
   // 初始關卡 HUD;若起始場景不是解謎關(如自由 office),不顯示 HUD
   const initLevel = levelOf(built.data.name);
-  ui.setLevel(initLevel ? { name: initLevel.name, hint: initLevel.hint } : null);
+  ui.setLevel(
+    initLevel
+      ? {
+          name: initLevel.name,
+          hint: initLevel.hint,
+          step: LEVELS.indexOf(initLevel) + 1,
+          total: LEVELS.length,
+        }
+      : null,
+  );
   ui.setPuzzleMode(!!initLevel); // 解謎關收面板+開暗角;自由場景展開面板+關暗角
 
   // 計時起點:按下「開始逃脫」那刻才啟動(除錯跳關無簡報 → 直接啟動)
@@ -751,7 +760,11 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       // 進入新關卡:更新解謎狀態、HUD、依已解鎖狀態重畫門、播過關提示
       puzzleState.curScene = to;
       const lv = levelOf(to);
-      ui.setLevel(lv ? { name: lv.name, hint: lv.hint } : null);
+      ui.setLevel(
+        lv
+          ? { name: lv.name, hint: lv.hint, step: LEVELS.indexOf(lv) + 1, total: LEVELS.length }
+          : null,
+      );
       ui.setPuzzleMode(!!lv); // 解謎關收面板+開暗角;自由場景展開+關暗角
       ui.setNotebook(false, []); // 換關把筆記本關掉(避免顯示上一關的線索)
       redrawBuiltDoors();

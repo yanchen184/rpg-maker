@@ -41,7 +41,7 @@ export interface UiHandle {
   /** 中央訊息(看線索內容、機關觸發回饋):傳字串顯示數秒後自動淡出,傳 null 立即隱藏 */
   showToast: (text: string, ms?: number) => void;
   /** 關卡 HUD:左上角顯示目前關卡名 + 目標提示 */
-  setLevel: (info: { name: string; hint: string } | null) => void;
+  setLevel: (info: { name: string; hint: string; step?: number; total?: number } | null) => void;
   /** 解謎進度:找到幾條線索 + 門是否解鎖(傳 null 或 cluesTotal=0 則隱藏) */
   setProgress: (p: { cluesSeen: number; cluesTotal: number; unlocked: boolean } | null) => void;
   /** 逃脫計時/步數 HUD(顯示在關卡名上方一排;傳 null 隱藏) */
@@ -315,12 +315,16 @@ export function buildUi(opts: UiOptions): UiHandle {
     'font-size:13px;color:#ffd27a;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid #4a3a26;letter-spacing:.5px;display:none';
   const hudName = document.createElement('div');
   hudName.style.cssText = 'color:#e0a458;font-weight:bold;font-size:15px;margin-bottom:3px';
+  // 逃脫關卡進度:●●○○○,讓玩家知道「還剩幾道門」,有一路推進到出口的手感
+  const hudEscape = document.createElement('div');
+  hudEscape.style.cssText =
+    'font-size:12px;color:#9a8a6c;margin-bottom:4px;letter-spacing:2px;display:none';
   const hudHint = document.createElement('div');
   hudHint.style.cssText = 'color:#c8bca8;font-size:12px';
   const hudProgress = document.createElement('div');
   hudProgress.style.cssText =
     'margin-top:7px;padding-top:7px;border-top:1px solid #4a3a26;font-size:12px;color:#d8cbb2;display:none';
-  hud.append(hudStats, hudName, hudHint, hudProgress);
+  hud.append(hudStats, hudName, hudEscape, hudHint, hudProgress);
   document.body.appendChild(hud);
   const setStats = (s: { elapsedMs: number; steps: number } | null) => {
     if (!s) {
@@ -330,13 +334,28 @@ export function buildUi(opts: UiOptions): UiHandle {
     hudStats.textContent = `⏱ ${fmtTime(s.elapsedMs)}   👣 ${s.steps}`;
     hudStats.style.display = 'block';
   };
-  const setLevel = (info: { name: string; hint: string } | null) => {
+  const setLevel = (
+    info: { name: string; hint: string; step?: number; total?: number } | null,
+  ) => {
     if (!info) {
       hud.style.display = 'none';
       return;
     }
     hudName.textContent = info.name;
     hudHint.textContent = info.hint;
+    // 有 step/total(解謎關才有)→ 顯示逃脫進度點:已破的關實心、當前關高亮、未到的空心
+    if (typeof info.step === 'number' && typeof info.total === 'number' && info.total > 0) {
+      const dots: string[] = [];
+      for (let i = 1; i <= info.total; i++) {
+        if (i < info.step) dots.push('<span style="color:#8ad86e">●</span>');
+        else if (i === info.step) dots.push('<span style="color:#ffd27a">◉</span>');
+        else dots.push('<span style="color:#5a4d38">○</span>');
+      }
+      hudEscape.innerHTML = `逃脫進度 ${dots.join(' ')} ${info.step}/${info.total}`;
+      hudEscape.style.display = 'block';
+    } else {
+      hudEscape.style.display = 'none';
+    }
     hud.style.display = 'block';
   };
   // 解謎進度:找到幾條線索 + 門是否已解鎖,讓玩家有「接近答案」的手感
