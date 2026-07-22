@@ -1,19 +1,15 @@
 {
-  "name": "rpg-maker",
+  "name": "rpg-maker-monorepo",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "firebase": "^12.16.0",
-    "pixi.js": "^8.6.6"
-  },
-  "devDependencies": {
-    "typescript": "~5.7.2",
-    "vite": "^6.0.7"
+    "dev": "npm run dev -w apps/escape-room",
+    "build": "npm run build -w apps/escape-room",
+    "preview": "npm run preview -w apps/escape-room"
   }
 }

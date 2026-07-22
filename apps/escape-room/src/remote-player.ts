@@ -3,8 +3,8 @@
  * 比本地 Player 精簡 —— 不吃鍵盤、不做碰撞、不換裝,只跟著網路狀態插值移動。
  */
 import { AnimatedSprite, Container, Text, Texture } from 'pixi.js';
-import { loadFrames } from './assets';
-import type { Manifest } from './types';
+import { loadFrames } from '@rpg-maker/engine';
+import type { Manifest } from '@rpg-maker/engine';
 import type { PeerState } from './net';
 
 const DIRS = ['down', 'left', 'right', 'up'];

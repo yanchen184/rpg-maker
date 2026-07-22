@@ -1,0 +1,9 @@
+{
+  "name": "@rpg-maker/asset-pipeline",
+  "version": "0.1.0",
+  "description": "codex CLI 生圖素材管線:序列 queue 生 sprite sheet、去背、對齊、程式化換色(髮/衣/褲)、帽子貼位、PNG 壓縮。不綁特定專案,吃 RPG_PROJECT_ROOT 或 cwd 的 assets/{prompts,raw}/ 慣例佈局。",
+  "private": true,
+  "bin": {
+    "rpg-gen-queue": "./tools/gen-queue.sh"
+  }
+}

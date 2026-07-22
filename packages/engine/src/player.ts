@@ -40,11 +40,8 @@ export class Player {
   private actionLeft = 0;
   private actionDur = 0;
   private bubble: Text | null = null;
-  private greetHandled = false;
   private static readonly GREET_SEC = 0.9;
   private static readonly PICKUP_SEC = 0.55;
-  /** 站在出口門口時 = true:此時 E 用來離開(交給 main),不觸發打招呼 */
-  atExit = false;
 
   static async create(manifest: Manifest, layerNames: string[], scale: number): Promise<Player> {
     const p = new Player();
@@ -204,11 +201,7 @@ export class Player {
   }
 
   update(dtSec: number, colliders: Aabb[]) {
-    // 打招呼:E 觸發一次(按住不連發);動作期間定格、不移動
-    // 站門口時 E 改作「離開」由 main 處理,這裡不打招呼
-    const greetKey = this.keys.has('e');
-    if (greetKey && !this.greetHandled && !this.atExit) this.greet();
-    this.greetHandled = greetKey;
+    // 引擎只管移動與動作播放;互動鍵(E/F/G...)的語意由遊戲層決定,要打招呼由遊戲呼叫 greet()
     // 動作進行中(打招呼/撿東西):播程式動畫(彈跳/下蹲),不移動
     if (this.actionKind) {
       this.actionLeft -= dtSec;

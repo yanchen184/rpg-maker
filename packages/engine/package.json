@@ -1,0 +1,19 @@
+{
+  "name": "@rpg-maker/engine",
+  "version": "0.1.0",
+  "description": "2D 房間引擎:場景 JSON 拼裝、紙娃娃分層角色、碰撞、y-sort 遮擋、出入口、撿取物/載具/互動物件、場景編輯器。",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "pixi.js": "^8.0.0"
+  },
+  "devDependencies": {
+    "pixi.js": "^8.6.6",
+    "typescript": "~5.7.2"
+  }
+}

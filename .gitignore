@@ -3,6 +3,6 @@ dist/
 assets/raw/*.codex.log
 assets/raw/queue-status.log
 assets/queue/
-tools/__pycache__/
+__pycache__/
 assets/raw/*.bak
 assets/raw-original/

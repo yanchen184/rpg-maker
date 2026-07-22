@@ -24,7 +24,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-ROOT = Path('/Users/yanchen/workspace/rpg-maker')
+# 專案根:RPG_PROJECT_ROOT 環境變數優先,否則用當前目錄(佇列狀態落在 <專案>/assets/queue/)
+ROOT = Path(os.environ.get('RPG_PROJECT_ROOT', os.getcwd()))
 QDIR = ROOT / 'assets' / 'queue'
 PENDING, RUNNING, DONE, FAILED = (QDIR / s for s in ('pending', 'running', 'done', 'failed'))
 LOG = QDIR / 'queue.log'

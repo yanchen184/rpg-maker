@@ -3,8 +3,19 @@ import type { AssetDef, Manifest } from './types';
 
 const frameCache = new Map<string, Texture[]>();
 
+/** 素材根路徑(結尾含 /)。引擎不綁 Vite:消費端啟動時注入,如 setAssetBase(import.meta.env.BASE_URL) */
+let assetBase = '/';
+
+export function setAssetBase(base: string): void {
+  assetBase = base.endsWith('/') ? base : `${base}/`;
+}
+
+export function getAssetBase(): string {
+  return assetBase;
+}
+
 export async function loadManifest(): Promise<Manifest> {
-  const res = await fetch(`${import.meta.env.BASE_URL}manifest.json?t=${Date.now()}`);
+  const res = await fetch(`${assetBase}manifest.json?t=${Date.now()}`);
   if (!res.ok) throw new Error(`manifest.json 載入失敗: ${res.status}`);
   return res.json();
 }
@@ -14,7 +25,7 @@ export async function loadFrames(name: string, def: AssetDef): Promise<Texture[]
   const cached = frameCache.get(name);
   if (cached) return cached;
 
-  const base: Texture = await Assets.load(`${import.meta.env.BASE_URL}${def.sheet}`);
+  const base: Texture = await Assets.load(`${assetBase}${def.sheet}`);
   base.source.scaleMode = 'nearest';
   const [cols, rows] = def.grid;
   const fw = base.width / cols;
@@ -36,7 +47,7 @@ export async function loadFrames(name: string, def: AssetDef): Promise<Texture[]
  * 所以不能只看 res.ok,要驗 content-type 真的是圖片。 */
 export async function sheetExists(def: AssetDef): Promise<boolean> {
   try {
-    const res = await fetch(`${import.meta.env.BASE_URL}${def.sheet}`, { method: 'HEAD' });
+    const res = await fetch(`${assetBase}${def.sheet}`, { method: 'HEAD' });
     if (!res.ok) return false;
     const type = res.headers.get('content-type') ?? '';
     return type.startsWith('image/');

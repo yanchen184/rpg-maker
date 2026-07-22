@@ -1,13 +1,25 @@
 import { Application, Container, Text } from 'pixi.js';
-import { loadManifest, loadFrames, sheetExists } from './assets';
-import { aabbOverlap, buildScene, loadScene, redrawDoors, type DoorOpening } from './scene';
-import type { Aabb } from './types';
-import { Player } from './player';
-import { SceneEditor } from './editor';
+import {
+  setAssetBase,
+  loadManifest,
+  loadFrames,
+  sheetExists,
+  aabbOverlap,
+  buildScene,
+  loadScene,
+  redrawDoors,
+  Player,
+  SceneEditor,
+  type DoorOpening,
+  type Aabb,
+} from '@rpg-maker/engine';
 import { buildUi, type SlotGroup } from './ui';
 import { AnimatedSprite } from 'pixi.js';
 import { Net } from './net';
 import { RemotePlayer } from './remote-player';
+
+// 引擎不綁 Vite:把素材根路徑(dev=/、GitHub Pages=./)注入給引擎的 fetch/Assets.load 用
+setAssetBase(import.meta.env.BASE_URL);
 
 async function boot() {
   const app = new Application();
@@ -477,6 +489,9 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       refreshProgress();
     } else if (curDevice) {
       triggerDevice(curDevice);
+    } else {
+      // 附近沒有可互動物 → E 當打招呼(引擎已不綁 E 鍵,由遊戲層分派)
+      player?.greet();
     }
   });
   window.addEventListener('keyup', (e) => {
@@ -862,7 +877,6 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       curExit = foundExit;
       curClue = foundExit ? null : foundClue;
       curDevice = foundExit || foundClue ? null : foundDevice;
-      player.atExit = foundExit !== null || foundClue !== null || foundDevice !== null;
 
       // 提示浮條:門用金色 exitPrompt,線索/機關用藍色 actionPrompt
       if (foundExit) {
@@ -887,7 +901,6 @@ async function sceneMode(app: Application, manifest: Awaited<ReturnType<typeof l
       curExit = null;
       curClue = null;
       curDevice = null;
-      player.atExit = false;
     }
     // 多人:廣播自己 + 對帳/渲染其他玩家(切場景中不推,避免場景名跳動)
     if (net && player && !switching) {

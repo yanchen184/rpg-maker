@@ -1,5 +1,5 @@
 import { AnimatedSprite, Container, Graphics, Text, Texture } from 'pixi.js';
-import { loadFrames, sheetExists } from './assets';
+import { getAssetBase, loadFrames, sheetExists } from './assets';
 import type {
   Aabb,
   AssetDef,
@@ -94,7 +94,7 @@ export function makeInteractHalo(x: number, y: number, color: number): Graphics 
 }
 
 export async function loadScene(name: string): Promise<SceneData> {
-  const res = await fetch(`${import.meta.env.BASE_URL}scenes/${name}.json?t=${Date.now()}`);
+  const res = await fetch(`${getAssetBase()}scenes/${name}.json?t=${Date.now()}`);
   if (!res.ok) throw new Error(`場景 ${name} 載入失敗: ${res.status}`);
   return res.json();
 }
