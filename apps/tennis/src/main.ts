@@ -43,6 +43,7 @@ import {
   HIT_H_MAX,
   SWING_WINDOW_MS,
   SWING_COOLDOWN_MS,
+  type ShotAim,
   type ShotKind,
 } from './shots';
 
@@ -350,7 +351,7 @@ async function boot(): Promise<void> {
 
   // ── 出球(人與 AI 共用同一公式) ──
   const COURT_MID = (COURT.top + COURT.bottom) / 2;
-  const shoot = (by: Side, kind: ShotKind, x0: number, y0: number, ownerY: number) => {
+  const shoot = (by: Side, kind: ShotKind, x0: number, y0: number, ownerY: number, aim: ShotAim | null) => {
     // 沒有球在飛 = 這球是發球:必須瞄對角發球區(站位半區的相反 y 半區)
     const serving = !currentShot && !!score;
     const shot = makeShot({
@@ -362,6 +363,7 @@ async function boot(): Promise<void> {
       prevSeq: currentShot?.seq ?? 0,
       t0: net.now(),
       serveBox: serving && score ? otherHalf(serveHalf(by, score)) : null,
+      aim,
     });
     currentShot = shot;
     ball.play(shot);
@@ -369,20 +371,32 @@ async function boot(): Promise<void> {
   };
 
   // ── 鍵盤:揮拍/發球(觀戰模式空白鍵只用來提早再開) ──
+  // 球種各自有鍵:空白 = 普通、J = 平抽、K = 挑高;方向鍵/WASD 在揮拍瞬間兼瞄準。
   const held = new Set<string>();
   window.addEventListener('keydown', (e) => {
-    held.add(e.key.toLowerCase());
-    if (e.key === ' ') onSpace();
+    const k = e.key.toLowerCase();
+    held.add(k);
+    if (e.key === ' ') onSwing('normal');
+    else if (k === 'j') onSwing('drive');
+    else if (k === 'k') onSwing('lob');
   });
   window.addEventListener('keyup', (e) => held.delete(e.key.toLowerCase()));
 
-  /** 球種:按住 ↑(W)= 挑高球、↓(S)= 平抽,沒按 = 普通球 */
-  const humanKind = (): ShotKind =>
-    held.has('w') || held.has('arrowup')
-      ? 'lob'
-      : held.has('s') || held.has('arrowdown')
-        ? 'drive'
-        : 'normal';
+  /** 瞄準:揮拍瞬間按住的方向 = 指哪打哪(世界座標,←→ 控深淺、↑↓ 控上下路);沒按 = 不瞄 */
+  const humanAim = (): ShotAim | null => {
+    const up = held.has('w') || held.has('arrowup');
+    const dn = held.has('s') || held.has('arrowdown');
+    const lf = held.has('a') || held.has('arrowleft');
+    const rt = held.has('d') || held.has('arrowright');
+    const aim: ShotAim = {};
+    if (up && !dn) aim.y = 275;
+    else if (dn && !up) aim.y = 725;
+    const xLo = side === 'left' ? 855 : 215; // 對方半場的世界左端/右端(往內縮一點)
+    const xHi = side === 'left' ? 1285 : 645;
+    if (lf && !rt) aim.x = xLo;
+    else if (rt && !lf) aim.x = xHi;
+    return aim.x == null && aim.y == null ? null : aim;
+  };
 
   /** 球在拍子可及範圍內(距離 + 高度都要夠) */
   const ballHittable = (): boolean =>
@@ -395,12 +409,14 @@ async function boot(): Promise<void> {
 
   let swingUntil = 0; // 揮拍判定窗截止時刻(performance.now ms);0 = 沒在揮
   let nextSwingAt = 0; // 冷卻結束時刻
+  let pendingKind: ShotKind = 'normal'; // 這次揮拍要打的球種(揮拍鍵決定)
 
   /** 判定窗內每幀試打:球真的碰到拍子(可及範圍)才出手 */
   const trySwingHit = (): boolean => {
     if (!player || !ballHittable()) return false;
     swingUntil = 0;
-    shoot(side, humanKind(), ball.gx, ball.gy, player.y); // 從實際觸拍點出手 → dy 影響回球方向
+    // 從實際觸拍點出手;瞄準讀「擊中那幀」還按著的方向鍵
+    shoot(side, pendingKind, ball.gx, ball.gy, player.y, humanAim());
     return true;
   };
 
@@ -412,13 +428,13 @@ async function boot(): Promise<void> {
     net.sendScore(initialScore(otherSide(score.winner)));
   };
 
-  const onSpace = (): boolean => {
+  const onSwing = (kind: ShotKind): boolean => {
     if (!score || !opponent) return false;
     if (score.winner) {
       restartMatch();
       return true;
     }
-    if (!player || !racket) return false; // 觀戰模式:比賽中空白鍵無作用
+    if (!player || !racket) return false; // 觀戰模式:比賽中揮拍鍵無作用
     if (!currentShot && score.server === side) {
       // 發球:必須站在正確半區(deuce/ad 依局內分數奇偶),站錯不揮拍只提示
       const half = serveHalf(side, score);
@@ -431,12 +447,13 @@ async function boot(): Promise<void> {
       if (nowMs < nextSwingAt) return false; // 冷卻中
       nextSwingAt = nowMs + SWING_COOLDOWN_MS;
       racket.swing();
-      shoot(side, humanKind(), player.x, player.y - 20, player.y); // 發球:拋球直接出手
+      shoot(side, kind, player.x, player.y - 20, player.y, null); // 發球:拋球直接出手(落點歸發球散布)
       return true;
     }
     const nowMs = performance.now();
     if (nowMs < nextSwingAt) return false; // 冷卻中
     nextSwingAt = nowMs + SWING_COOLDOWN_MS;
+    pendingKind = kind;
     racket.swing();
     // 回擊:開判定窗,球進拍子範圍才算打到(揮空就是空)
     swingUntil = nowMs + SWING_WINDOW_MS;
@@ -489,7 +506,7 @@ async function boot(): Promise<void> {
       if (performance.now() <= swingUntil) trySwingHit();
       else swingUntil = 0;
     }
-    if (player && racket) racket.update(dt, player.x, player.y);
+    if (player && racket) racket.update(dt, player.x, player.y, player.dir);
     if (remoteRacket) {
       remoteRacket.view.visible = !!remote;
       if (remote) remoteRacket.update(dt, remote.view.x, remote.view.y);
@@ -519,6 +536,8 @@ async function boot(): Promise<void> {
 
     // AI:感知 → 移動 → 出手(發球/回擊走跟人同一套 shoot)。放在裁定後,新球下一幀才進裁定。
     for (const ai of ais) {
+      // 對手位置(瞄空檔用):ai 模式是玩家,watch 模式是另一隻 AI
+      const foe = player ?? ais.find((a) => a.ctl.side !== ai.ctl.side)?.ctl;
       const intent = ai.ctl.tick(dt, {
         shot: currentShot,
         ballX: ball.gx,
@@ -527,14 +546,16 @@ async function boot(): Promise<void> {
         ballPhase: ball.phase,
         score,
         now: nowSrv,
+        oppoX: foe?.x ?? 750,
+        oppoY: foe?.y ?? 500,
       });
       ai.body.onUpdate({ id: `ai-${ai.ctl.side}`, x: ai.ctl.x, y: ai.ctl.y, dir: ai.ctl.dir, ts: nowSrv });
       ai.body.update(dt);
-      ai.racket.update(dt, ai.body.view.x, ai.body.view.y);
+      ai.racket.update(dt, ai.body.view.x, ai.body.view.y, ai.ctl.dir);
       if (intent) {
         ai.racket.swing();
-        if (intent.type === 'serve') shoot(ai.ctl.side, intent.kind, ai.ctl.x, ai.ctl.y - 20, ai.ctl.y);
-        else shoot(ai.ctl.side, intent.kind, intent.x0, intent.y0, ai.ctl.y);
+        if (intent.type === 'serve') shoot(ai.ctl.side, intent.kind, ai.ctl.x, ai.ctl.y - 20, ai.ctl.y, null);
+        else shoot(ai.ctl.side, intent.kind, intent.x0, intent.y0, ai.ctl.y, intent.aim);
       }
     }
 
@@ -556,12 +577,13 @@ async function boot(): Promise<void> {
         const okPos = half === 'top' ? player.y < COURT_MID : player.y > COURT_MID;
         const nth = (score.faults ?? 0) > 0 ? '第二發' : '第一發';
         hint = okPos
-          ? `${nth}:按空白鍵發球,要落進對角發球區(按住 ↑ 挑高球.↓ 平抽)`
+          ? `${nth}:空白鍵發球(J 平抽發.K 挑高發),要落進對角發球區`
           : `${nth}:先移動到${half === 'top' ? '上' : '下'}半區才能發球`;
       } else if (currentShot && currentShot.by !== side && ball.phase !== 'dead') {
         const d = Math.hypot(ball.gx - player.x, ball.gy - player.y);
         if (d <= RACKET_REACH * 1.6) {
-          hint = ball.h > HIT_H_MAX ? '球太高了!等它降下來再揮' : '按空白鍵揮拍!';
+          hint =
+            ball.h > HIT_H_MAX ? '球太高了!等它降下來再揮' : '空白揮拍!J 平抽.K 挑高|按住方向鍵瞄準';
         }
       }
     }
@@ -591,7 +613,9 @@ async function boot(): Promise<void> {
         player.y = y;
       }
     },
-    swing: () => onSpace(),
+    swing: (kind: ShotKind = 'normal') => onSwing(kind),
+    /** 測試用:模擬按住方向鍵(下次 humanAim 讀得到) */
+    holdKey: (k: string, down: boolean) => (down ? held.add(k) : held.delete(k)),
     /** 測試用:指定落點直接發一顆球(繞過散布,驗發球區裁定/雙誤用) */
     debugServe: (x1: number, y1: number) => {
       if (!score || currentShot || !player || score.server !== side) return null;

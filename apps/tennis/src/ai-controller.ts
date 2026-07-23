@@ -6,7 +6,7 @@
  */
 import type { Shot } from './ball';
 import { serveHalf, type Score, type Side } from './scoring';
-import { RACKET_REACH, HIT_H_MAX, SWING_COOLDOWN_MS, type ShotKind } from './shots';
+import { RACKET_REACH, HIT_H_MAX, SWING_COOLDOWN_MS, type ShotAim, type ShotKind } from './shots';
 
 /** AI 每幀感知(座標同球場世界座標) */
 export interface AiSense {
@@ -18,11 +18,14 @@ export interface AiSense {
   score: Score | null;
   /** server 時間 ms(跟球軌跡同一時間軸) */
   now: number;
+  /** 對手位置(瞄空檔用;拿不到給場中) */
+  oppoX: number;
+  oppoY: number;
 }
 
 export type AiIntent =
   | { type: 'serve'; kind: ShotKind }
-  | { type: 'hit'; kind: ShotKind; x0: number; y0: number };
+  | { type: 'hit'; kind: ShotKind; x0: number; y0: number; aim: ShotAim | null };
 
 interface AiOpts {
   /** 腳程 px/s(玩家是 220) */
@@ -142,9 +145,19 @@ export class AiController {
       s.now >= this.nextSwingAt
     ) {
       this.nextSwingAt = s.now + SWING_COOLDOWN_MS;
-      return { type: 'hit', kind: pickKind(), x0: s.ballX, y0: s.ballY };
+      return { type: 'hit', kind: pickKind(), x0: s.ballX, y0: s.ballY, aim: this.pickAim(s) };
     }
     return null;
+  }
+
+  /** 回擊瞄準:七成打對手站位的相反縱側(調動對手),偶爾補一拍深球;三成不瞄(隨機回) */
+  private pickAim(s: AiSense): ShotAim | null {
+    if (Math.random() >= 0.7) return null;
+    const aim: ShotAim = { y: s.oppoY <= 500 ? rand(650, 780) : rand(220, 350) };
+    if (Math.random() < 0.35) {
+      aim.x = this.side === 'left' ? rand(1180, 1310) : rand(190, 320); // 壓底線深球
+    }
+    return aim;
   }
 
   private moveToward(t: { x: number; y: number }, dtSec: number): void {

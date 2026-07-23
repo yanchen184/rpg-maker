@@ -18,6 +18,12 @@ export const SWING_COOLDOWN_MS = 350;
 /** 球種:挑高球/平抽/普通球 */
 export type ShotKind = 'lob' | 'drive' | 'normal';
 
+/** 瞄準:目標落點(世界座標)。有瞄散布收窄、沒瞄走大範圍隨機 —— 控制權換給打者 */
+export interface ShotAim {
+  x?: number;
+  y?: number;
+}
+
 // 各球種參數:弧頂高度(px)/球速(px/s)/飛行時長 clamp。
 // 網高 NET_H=46:drive 弧頂只有 48~62,過網點離弧頂稍遠就真的掛網 —— 風險換速度。
 export const KIND = {
@@ -41,6 +47,8 @@ export interface MakeShotOpts {
   t0: number;
   /** 發球才帶:必須落進的對角發球區;一般對打省略 */
   serveBox?: CourtHalf | null;
+  /** 對打瞄準(發球分支忽略,發球落點由 serveBox 散布決定) */
+  aim?: ShotAim | null;
 }
 
 /** 發球區深度:發球線在 netX ± 這個距離 */
@@ -77,16 +85,29 @@ export function makeShot(o: MakeShotOpts): Shot {
         : rand(netX - SERVICE_LINE_DIST + 8 - deep, netX - 40);
     y1 = o.serveBox === 'top' ? rand(top + 30 - wide, midY - 20 + wide) : rand(midY + 20 - wide, bottom - 30 + wide);
   } else {
+    // 對打:有瞄準 → 目標點 + 小散布(drive 快但散布大,風險換速度);
+    // 沒瞄 → 原本的大範圍隨機(等於「隨便回一拍」)
+    const spread = o.kind === 'drive' ? 80 : 55;
     const dy = o.y0 - o.ownerY;
-    y1 = Math.max(200, Math.min(800, (COURT.top + COURT.bottom) / 2 + dy * 4 + rand(-90, 90)));
-    x1 =
-      o.by === 'left'
-        ? o.kind === 'drive'
-          ? rand(1020, 1300)
-          : rand(840, 1250)
-        : o.kind === 'drive'
-          ? rand(200, 480)
-          : rand(250, 660);
+    if (o.aim?.y != null) {
+      y1 = Math.max(190, Math.min(810, o.aim.y + rand(-spread, spread)));
+    } else {
+      y1 = Math.max(200, Math.min(800, (COURT.top + COURT.bottom) / 2 + dy * 4 + rand(-90, 90)));
+    }
+    const xLo = o.by === 'left' ? COURT.netX + 70 : COURT.left + 25;
+    const xHi = o.by === 'left' ? COURT.right - 25 : COURT.netX - 70;
+    if (o.aim?.x != null) {
+      x1 = Math.max(xLo, Math.min(xHi, o.aim.x + rand(-spread, spread)));
+    } else {
+      x1 =
+        o.by === 'left'
+          ? o.kind === 'drive'
+            ? rand(1020, 1300)
+            : rand(840, 1250)
+          : o.kind === 'drive'
+            ? rand(200, 480)
+            : rand(250, 660);
+    }
   }
   const dist = Math.hypot(x1 - o.x0, y1 - o.y0);
   const flightMs = Math.max(k.minMs, Math.min(k.maxMs, (dist / k.speed) * 1000));

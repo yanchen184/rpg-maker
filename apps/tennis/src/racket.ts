@@ -31,9 +31,9 @@ export class Racket {
   }
 
   private restRotation(): number {
-    // 預備姿勢:拍頭朝上前方(掉到正值會像拍子拖地)。
+    // 預備姿勢:拍頭接近豎直朝上(選手持拍待球),微微前傾。
     // scale.x 鏡像後同一 rotation 對右方是點對稱不是鏡像,角度要乘 facing 才左右對稱。
-    return this.facing * -0.55;
+    return this.facing * -1.15;
   }
 
   swing(): void {
@@ -44,11 +44,14 @@ export class Racket {
     return this.swingT >= 0;
   }
 
-  /** 每幀跟隨主人位置 + 推進揮拍動畫 */
-  update(dtSec: number, ownerX: number, ownerY: number): void {
-    this.view.x = ownerX + this.facing * 13;
-    this.view.y = ownerY - 24;
-    this.view.zIndex = ownerY + 1;
+  /** 每幀跟隨主人位置 + 推進揮拍動畫(dir = 主人面向,拍子跟手不跟身體中線) */
+  update(dtSec: number, ownerX: number, ownerY: number, dir: string = 'down'): void {
+    // 握在身側手的高度(貼身,不是漂在腿邊);側面時手在身體前緣,拍子放低靠前
+    const sideOn = dir === 'left' || dir === 'right';
+    this.view.x = ownerX + this.facing * (sideOn ? 12 : 9);
+    this.view.y = ownerY - (sideOn ? 25 : 30);
+    // 背對鏡頭時持拍手被身體擋住,拍子畫在身後才不會像浮在胸前
+    this.view.zIndex = dir === 'up' ? ownerY - 1 : ownerY + 1;
     if (this.swingT < 0) return;
     this.swingT += dtSec;
     const p = this.swingT / (SWING_MS / 1000);
