@@ -35,7 +35,7 @@ import {
 import { TennisNet, type PlayerState } from './net-tennis';
 import { LocalNet, type MatchNet } from './local-net';
 import { RemotePlayer } from './remote-player';
-import { AiController } from './ai-controller';
+import { AI_PRESETS, AiController, type AiLevel } from './ai-controller';
 import {
   makeShot,
   serveLandsIn,
@@ -64,6 +64,14 @@ function parseMode(): Mode {
   const m = new URL(location.href).searchParams.get('mode');
   return m === 'ai' ? 'ai' : m === 'watch' ? 'watch' : 'online';
 }
+
+/** AI 難度(?level=):easy / normal / hard,遊戲中 1/2/3 可再切 */
+function parseLevel(): AiLevel {
+  const l = new URL(location.href).searchParams.get('level');
+  return l === 'easy' || l === 'hard' ? l : 'normal';
+}
+
+const LEVEL_NAME: Record<AiLevel, string> = { easy: '簡單', normal: '普通', hard: '困難' };
 
 /** 房間代碼:?room= 沒帶就生一個並寫回網址列(分享連結即對戰邀請) */
 function ensureRoom(): string {
@@ -121,10 +129,12 @@ async function boot(): Promise<void> {
 
   const mode = parseMode();
   // 大廳的模式切換鈕(等人等膩了可改跟 AI 打/看 AI 對打)
-  const gotoMode = (m: Mode) => {
-    location.href = `${location.pathname}?mode=${m}`;
+  const gotoMode = (m: Mode, level?: AiLevel) => {
+    location.href = `${location.pathname}?mode=${m}${level ? `&level=${level}` : ''}`;
   };
+  document.getElementById('mode-ai-easy')?.addEventListener('click', () => gotoMode('ai', 'easy'));
   document.getElementById('mode-ai')?.addEventListener('click', () => gotoMode('ai'));
+  document.getElementById('mode-ai-hard')?.addEventListener('click', () => gotoMode('ai', 'hard'));
   document.getElementById('mode-watch')?.addEventListener('click', () => gotoMode('watch'));
 
   const room = mode === 'online' ? ensureRoom() : `local-${mode}`;
@@ -198,8 +208,10 @@ async function boot(): Promise<void> {
     racket: Racket;
   }
   const ais: AiEntity[] = [];
+  let aiLevel = parseLevel();
   for (const s of aiSides) {
-    const ctl = new AiController(s);
+    // ai 模式吃難度預設;watch 模式固定普通(兩隻同強度才有來回)
+    const ctl = new AiController(s, AI_PRESETS[mode === 'ai' ? aiLevel : 'normal']);
     const name = mode === 'ai' ? 'AI' : s === 'left' ? 'AI·左' : 'AI·右';
     const body = await RemotePlayer.create(
       manifest,
@@ -255,6 +267,17 @@ async function boot(): Promise<void> {
   };
 
   const sideName = (s: Side): string => (s === 'left' ? '左' : '右');
+
+  /** ai 模式:切 AI 難度(即時生效,同步寫回網址列讓重整保留) */
+  const setAiLevel = (l: AiLevel) => {
+    if (mode !== 'ai' || l === aiLevel) return;
+    aiLevel = l;
+    for (const ai of ais) ai.ctl.configure(AI_PRESETS[l]);
+    const url = new URL(location.href);
+    url.searchParams.set('level', l);
+    history.replaceState(null, '', url.toString());
+    flash(`🤖 AI 難度:${LEVEL_NAME[l]}`);
+  };
 
   // ── 角色動作與表情(揮拍帶身/得分跳/失分垂頭/失誤聳肩 + emoji 泡泡) ──
   const viewFor = (s: Side) => {
@@ -443,8 +466,12 @@ async function boot(): Promise<void> {
     if (e.key === ' ') onSwing('normal');
     else if (k === 'j') onSwing('drive');
     else if (k === 'k') onSwing('lob');
+    else if (k === '1') setAiLevel('easy');
+    else if (k === '2') setAiLevel('normal');
+    else if (k === '3') setAiLevel('hard');
   });
   window.addEventListener('keyup', (e) => held.delete(e.key.toLowerCase()));
+  if (mode === 'ai') flash(`🤖 AI 難度:${LEVEL_NAME[aiLevel]}(按 1 簡單.2 普通.3 困難)`);
 
   /** 瞄準:揮拍瞬間按住的方向 = 指哪打哪(世界座標,←→ 控深淺、↑↓ 控上下路);沒按 = 不瞄 */
   const humanAim = (): ShotAim | null => {
@@ -691,6 +718,9 @@ async function boot(): Promise<void> {
     hasOpponent: () => !!opponent,
     sfxReady: () => sfx.ready,
     fxCount: () => fx.count,
+    aiLevel: () => aiLevel,
+    setAiLevel: (l: AiLevel) => setAiLevel(l),
+    aiAtNet: () => ais.map((a) => ({ side: a.ctl.side, atNet: a.ctl.atNet })),
     emoteTest: (s: Side) => {
       anim[s].pose('celebrate', facingOf(s));
       anim[s].say('😆', 1.5);

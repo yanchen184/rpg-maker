@@ -27,22 +27,29 @@ export type AiIntent =
   | { type: 'serve'; kind: ShotKind }
   | { type: 'hit'; kind: ShotKind; x0: number; y0: number; aim: ShotAim | null };
 
-interface AiOpts {
+export interface AiOpts {
   /** 腳程 px/s(玩家是 220) */
   speed?: number;
   /** 對手擊球後的反應延遲 ms */
   reactMs?: number;
   /** 落點預估誤差半徑 px */
   errPx?: number;
+  /** 回擊瞄空檔的機率(其餘隨機回) */
+  aimProb?: number;
+  /** 打出深平抽後上網搶截的意願(0 = 從不上網) */
+  netAggro?: number;
 }
+
+export type AiLevel = 'easy' | 'normal' | 'hard';
+
+/** 難度預設:easy 腳慢眼慢誤差大不上網;hard 反應快誤差小、愛瞄空檔也愛上網壓迫 */
+export const AI_PRESETS: Record<AiLevel, Required<AiOpts>> = {
+  easy: { speed: 185, reactMs: 400, errPx: 62, aimProb: 0.3, netAggro: 0 },
+  normal: { speed: 240, reactMs: 240, errPx: 34, aimProb: 0.7, netAggro: 0.35 },
+  hard: { speed: 290, reactMs: 140, errPx: 14, aimProb: 0.9, netAggro: 0.7 },
+};
 
 const rand = (a: number, b: number): number => a + Math.random() * (b - a);
-
-/** 回擊選球種:普通為主,偶爾冒險平抽或吊高 */
-function pickKind(): ShotKind {
-  const r = Math.random();
-  return r < 0.2 ? 'lob' : r < 0.38 ? 'drive' : 'normal';
-}
 
 /** 發球選球種:一發敢冒險平抽搶攻,二發(已有失誤)改保守確保進區 */
 function pickServeKind(faults: number): ShotKind {
@@ -57,9 +64,11 @@ export class AiController {
   dir = 'down';
 
   private readonly home: { x: number; y: number };
-  private readonly speed: number;
-  private readonly reactMs: number;
-  private readonly errPx: number;
+  private speed: number;
+  private reactMs: number;
+  private errPx: number;
+  private aimProb: number;
+  private netAggro: number;
   private readonly xMin: number;
   private readonly xMax: number;
 
@@ -68,6 +77,8 @@ export class AiController {
   private seenShotKey = ''; // 已反應過的來球(換球才重骰延遲/誤差)
   private reactUntil = 0;
   private err = { x: 0, y: 0 };
+  private ownShotKey = ''; // 自己出手的球(每球骰一次要不要上網)
+  private approaching = false; // 上網中:自己的球在飛時往網前壓,搶下一拍截擊
 
   constructor(
     readonly side: Side,
@@ -79,9 +90,25 @@ export class AiController {
     this.speed = opts.speed ?? 240;
     this.reactMs = opts.reactMs ?? 240;
     this.errPx = opts.errPx ?? 34;
+    this.aimProb = opts.aimProb ?? 0.7;
+    this.netAggro = opts.netAggro ?? 0.35;
     // 活動範圍鎖自己半場(網前 710/790、場端與上下邊線)
     this.xMin = side === 'left' ? 75 : 795;
     this.xMax = side === 'left' ? 705 : 1425;
+  }
+
+  /** 即時改難度(遊戲中 1/2/3 切換;只覆蓋有給的欄位) */
+  configure(opts: AiOpts): void {
+    if (opts.speed !== undefined) this.speed = opts.speed;
+    if (opts.reactMs !== undefined) this.reactMs = opts.reactMs;
+    if (opts.errPx !== undefined) this.errPx = opts.errPx;
+    if (opts.aimProb !== undefined) this.aimProb = opts.aimProb;
+    if (opts.netAggro !== undefined) this.netAggro = opts.netAggro;
+  }
+
+  /** 在網前(截擊距離)? */
+  get atNet(): boolean {
+    return Math.abs(this.x - 750) < 160;
   }
 
   /** 每幀:推進位置,回傳出手意圖(揮拍那幀非 null) */
@@ -93,6 +120,7 @@ export class AiController {
 
     const sh = s.shot;
     if (!sh) {
+      this.approaching = false; // 這分結束/還沒開始:收掉上網狀態
       // 空場:輪到自己發球 → 先走到正確站位半區(deuce/ad 依局內分數奇偶),
       // 到位才排發球時刻(裝作思考);否則回位等接發
       if (s.score.server === this.side) {
@@ -117,9 +145,36 @@ export class AiController {
 
     this.serveAt = 0;
     if (sh.by === this.side) {
-      // 自己剛打的球在飛:退回中位站位
-      this.moveToward(this.home, dtSec);
+      // 自己剛打的球在飛:網前戰術 — 打了夠深的平抽就有機會上網壓迫,搶下一拍截擊;
+      // 否則退回中位站位。每球只骰一次(整段飛行內決定不變)。
+      const key = `${sh.seq}-${sh.t0}`;
+      if (key !== this.ownShotKey) {
+        this.ownShotKey = key;
+        const deep = this.side === 'left' ? sh.x1 >= 1120 : sh.x1 <= 380;
+        if (!sh.serveBox && sh.apexH <= 75 && deep && Math.random() < this.netAggro) {
+          this.approaching = true;
+        }
+      }
+      if (this.approaching) {
+        // 網前站位:貼近網但留揮拍空間,y 稍偏自己球的落點側封直線
+        const spot = {
+          x: this.side === 'left' ? 645 : 855,
+          y: Math.max(340, Math.min(660, 500 + (sh.y1 - 500) * 0.3)),
+        };
+        this.moveToward(spot, dtSec);
+      } else {
+        this.moveToward(this.home, dtSec);
+      }
       return null;
+    }
+
+    // 對手回的是挑高球(被過頂)、或球已經穿過自己身後 → 收掉上網狀態趕快退防(追落點)
+    if (
+      this.approaching &&
+      (sh.apexH >= 180 ||
+        (this.side === 'left' ? s.ballX < this.x - 45 : s.ballX > this.x + 45))
+    ) {
+      this.approaching = false;
     }
 
     // 來球:第一次看到才骰反應延遲與落點誤差(整段飛行內固定,免抖動)
@@ -131,10 +186,17 @@ export class AiController {
     }
     if (s.now < this.reactUntil) return null;
 
-    const target = {
-      x: Math.max(this.xMin, Math.min(this.xMax, sh.x1 + this.err.x)),
-      y: Math.max(95, Math.min(905, sh.y1 - 12 + this.err.y)),
-    };
+    // 上網中且來球不是挑高 → 守在網前橫移攔截(截擊:球到落點前就出拍);
+    // 否則追預測落點(含誤差)
+    const target = this.approaching
+      ? {
+          x: this.side === 'left' ? 645 : 855,
+          y: Math.max(95, Math.min(905, s.ballY + this.err.y * 0.5)),
+        }
+      : {
+          x: Math.max(this.xMin, Math.min(this.xMax, sh.x1 + this.err.x)),
+          y: Math.max(95, Math.min(905, sh.y1 - 12 + this.err.y)),
+        };
     this.moveToward(target, dtSec);
 
     // 出手判定:跟人類同規則(拍距 + 球高 + 冷卻),球死了就追不回
@@ -145,14 +207,21 @@ export class AiController {
       s.now >= this.nextSwingAt
     ) {
       this.nextSwingAt = s.now + SWING_COOLDOWN_MS;
-      return { type: 'hit', kind: pickKind(), x0: s.ballX, y0: s.ballY, aim: this.pickAim(s) };
+      return { type: 'hit', kind: this.pickKind(), x0: s.ballX, y0: s.ballY, aim: this.pickAim(s) };
     }
     return null;
   }
 
-  /** 回擊瞄準:七成打對手站位的相反縱側(調動對手),偶爾補一拍深球;三成不瞄(隨機回) */
+  /** 回擊選球種:網前截擊快拍壓制(不吊高);底線普通為主,偶爾冒險平抽或吊高 */
+  private pickKind(): ShotKind {
+    const r = Math.random();
+    if (this.atNet) return r < 0.55 ? 'drive' : 'normal';
+    return r < 0.2 ? 'lob' : r < 0.38 ? 'drive' : 'normal';
+  }
+
+  /** 回擊瞄準:依難度機率打對手站位的相反縱側(調動對手),偶爾補一拍深球;其餘不瞄(隨機回) */
   private pickAim(s: AiSense): ShotAim | null {
-    if (Math.random() >= 0.7) return null;
+    if (Math.random() >= this.aimProb) return null;
     const aim: ShotAim = { y: s.oppoY <= 500 ? rand(650, 780) : rand(220, 350) };
     if (Math.random() < 0.35) {
       aim.x = this.side === 'left' ? rand(1180, 1310) : rand(190, 320); // 壓底線深球
