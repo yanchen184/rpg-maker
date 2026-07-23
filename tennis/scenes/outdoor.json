@@ -1,0 +1,156 @@
+{
+  "name": "outdoor",
+  "size": {
+    "w": 1800,
+    "h": 1100
+  },
+  "wallHeight": 60,
+  "floorTile": 300,
+  "floor": "grass-tile",
+  "spawn": {
+    "x": 900,
+    "y": 620
+  },
+  "objects": [
+    {
+      "asset": "house-exterior",
+      "x": 900,
+      "y": 500
+    },
+    {
+      "asset": "house-exterior",
+      "x": 350,
+      "y": 500
+    },
+    {
+      "asset": "house-exterior",
+      "x": 1450,
+      "y": 500
+    },
+    {
+      "asset": "stone-path",
+      "x": 900,
+      "y": 620
+    },
+    {
+      "asset": "stone-path",
+      "x": 900,
+      "y": 900
+    },
+    {
+      "asset": "stone-path",
+      "x": 350,
+      "y": 620
+    },
+    {
+      "asset": "stone-path",
+      "x": 1450,
+      "y": 620
+    },
+    {
+      "asset": "tree-large",
+      "x": 180,
+      "y": 320
+    },
+    {
+      "asset": "tree-large",
+      "x": 640,
+      "y": 180
+    },
+    {
+      "asset": "tree-large",
+      "x": 1180,
+      "y": 220
+    },
+    {
+      "asset": "tree-large",
+      "x": 1720,
+      "y": 720
+    },
+    {
+      "asset": "tree-large",
+      "x": 240,
+      "y": 950
+    },
+    {
+      "asset": "tree-large",
+      "x": 1580,
+      "y": 1000
+    },
+    {
+      "asset": "bush-flower",
+      "x": 600,
+      "y": 420
+    },
+    {
+      "asset": "bush-flower",
+      "x": 1250,
+      "y": 700
+    },
+    {
+      "asset": "bush-flower",
+      "x": 430,
+      "y": 1020
+    },
+    {
+      "asset": "bush-flower",
+      "x": 1380,
+      "y": 1060
+    },
+    {
+      "asset": "bush-flower",
+      "x": 1100,
+      "y": 780
+    }
+  ],
+  "exits": [
+    {
+      "zone": {
+        "x": 900,
+        "y": 525,
+        "w": 90,
+        "h": 30
+      },
+      "to": "office",
+      "spawn": {
+        "x": 750,
+        "y": 820
+      }
+    },
+    {
+      "zone": {
+        "x": 350,
+        "y": 525,
+        "w": 90,
+        "h": 30
+      },
+      "to": "cabin",
+      "spawn": {
+        "x": 450,
+        "y": 500
+      }
+    },
+    {
+      "zone": {
+        "x": 1450,
+        "y": 525,
+        "w": 90,
+        "h": 30
+      },
+      "to": "storage",
+      "spawn": {
+        "x": 400,
+        "y": 460
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "id": "car1",
+      "emoji": "🚗",
+      "x": 900,
+      "y": 750,
+      "speed": 380
+    }
+  ]
+}

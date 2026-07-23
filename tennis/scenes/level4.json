@@ -1,0 +1,184 @@
+{
+  "name": "level4",
+  "size": {
+    "w": 1400,
+    "h": 850
+  },
+  "wallHeight": 130,
+  "floorTile": 300,
+  "floor": "floor-wood",
+  "wall": "wall-top",
+  "spawn": {
+    "x": 700,
+    "y": 200
+  },
+  "objects": [
+    {
+      "asset": "whiteboard",
+      "x": 400,
+      "y": -60
+    },
+    {
+      "asset": "whiteboard",
+      "x": 1000,
+      "y": -60
+    },
+    {
+      "asset": "wall-lamp",
+      "x": 400,
+      "y": -95
+    },
+    {
+      "asset": "wall-lamp",
+      "x": 700,
+      "y": -95
+    },
+    {
+      "asset": "wall-lamp",
+      "x": 1000,
+      "y": -95
+    },
+    {
+      "asset": "window-side",
+      "x": 560,
+      "y": 40
+    },
+    {
+      "asset": "window-side",
+      "x": 840,
+      "y": 40
+    },
+    {
+      "asset": "desk-computer",
+      "x": 250,
+      "y": 300
+    },
+    {
+      "asset": "office-chair",
+      "x": 250,
+      "y": 350
+    },
+    {
+      "asset": "desk-computer",
+      "x": 1150,
+      "y": 300
+    },
+    {
+      "asset": "office-chair",
+      "x": 1150,
+      "y": 350
+    },
+    {
+      "asset": "bookshelf",
+      "x": 130,
+      "y": 560
+    },
+    {
+      "asset": "kitchen-counter",
+      "x": 1180,
+      "y": 560
+    },
+    {
+      "asset": "trash-bin",
+      "x": 250,
+      "y": 640
+    },
+    {
+      "asset": "trash-bin",
+      "x": 1120,
+      "y": 660
+    },
+    {
+      "asset": "plant-small",
+      "x": 470,
+      "y": 640
+    },
+    {
+      "asset": "plant-small",
+      "x": 930,
+      "y": 640
+    },
+    {
+      "asset": "plant-large",
+      "x": 60,
+      "y": 780
+    },
+    {
+      "asset": "plant-large",
+      "x": 1340,
+      "y": 780
+    },
+    {
+      "asset": "rug-red",
+      "x": 700,
+      "y": 690
+    }
+  ],
+  "exits": [
+    {
+      "zone": {
+        "x": 700,
+        "y": 830,
+        "w": 160,
+        "h": 40
+      },
+      "to": "level5",
+      "spawn": {
+        "x": 700,
+        "y": 200
+      },
+      "lock": {
+        "code": "96",
+        "needFlags": [
+          "l4-fuse-a",
+          "l4-fuse-b"
+        ],
+        "hint": "雙保險絲都合上才會通電——踩下左右兩塊踏板,再輸入算出的密碼"
+      }
+    }
+  ],
+  "devices": [
+    {
+      "id": "l4-plate-a",
+      "kind": "plate",
+      "emoji": "🟥",
+      "x": 430,
+      "y": 470,
+      "setFlag": "l4-fuse-a",
+      "hint": "🔌 保險絲 A 合上!還差另一塊踏板。"
+    },
+    {
+      "id": "l4-plate-b",
+      "kind": "plate",
+      "emoji": "🟩",
+      "x": 970,
+      "y": 470,
+      "setFlag": "l4-fuse-b",
+      "hint": "🔌 保險絲 B 合上!電源全接通,可以輸入密碼了。"
+    }
+  ],
+  "clues": [
+    {
+      "id": "l4-val-a",
+      "emoji": "🔢",
+      "x": 250,
+      "y": 410,
+      "text": "左側儀表:保險絲 A = 12。"
+    },
+    {
+      "id": "l4-val-b",
+      "emoji": "🔢",
+      "x": 1130,
+      "y": 410,
+      "text": "右側儀表:保險絲 B = 8。"
+    },
+    {
+      "id": "l4-hint",
+      "emoji": "📌",
+      "x": 700,
+      "y": 620,
+      "text": "第 4 關:踩下左右兩塊踏板合上雙保險絲,再把兩個儀表值相乘(12 × 8)當密碼。"
+    }
+  ],
+  "floorTint": 10145972
+}

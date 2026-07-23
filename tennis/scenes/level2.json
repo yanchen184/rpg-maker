@@ -1,0 +1,94 @@
+{
+  "name": "level2",
+  "size": {
+    "w": 1400,
+    "h": 850
+  },
+  "wallHeight": 130,
+  "floorTile": 300,
+  "floor": "floor-wood",
+  "wall": "wall-top",
+  "spawn": {
+    "x": 700,
+    "y": 200
+  },
+  "objects": [
+    { "asset": "wall-lamp", "x": 250, "y": -95 },
+    { "asset": "wall-lamp", "x": 550, "y": -95 },
+    { "asset": "wall-lamp", "x": 850, "y": -95 },
+    { "asset": "wall-lamp", "x": 1150, "y": -95 },
+    { "asset": "window-side", "x": 700, "y": 40 },
+
+    { "asset": "bookshelf", "x": 130, "y": 95 },
+    { "asset": "bookshelf", "x": 260, "y": 95 },
+    { "asset": "bookshelf", "x": 130, "y": 240 },
+    { "asset": "bookshelf", "x": 260, "y": 240 },
+
+    { "asset": "bookshelf", "x": 1140, "y": 95 },
+    { "asset": "bookshelf", "x": 1270, "y": 95 },
+    { "asset": "bookshelf", "x": 1140, "y": 240 },
+    { "asset": "bookshelf", "x": 1270, "y": 240 },
+
+    { "asset": "kitchen-counter", "x": 240, "y": 470 },
+    { "asset": "kitchen-counter", "x": 1160, "y": 470 },
+
+    { "asset": "bookshelf", "x": 470, "y": 210 },
+    { "asset": "bookshelf", "x": 930, "y": 210 },
+
+    { "asset": "trash-bin", "x": 130, "y": 620 },
+    { "asset": "trash-bin", "x": 1270, "y": 620 },
+    { "asset": "trash-bin", "x": 1000, "y": 520 },
+
+    { "asset": "rug-red", "x": 700, "y": 600 },
+
+    { "asset": "plant-large", "x": 60, "y": 800 },
+    { "asset": "plant-large", "x": 1340, "y": 800 },
+    { "asset": "plant-small", "x": 470, "y": 700 },
+    { "asset": "plant-small", "x": 940, "y": 700 },
+    { "asset": "plant-small", "x": 340, "y": 640 },
+    { "asset": "plant-small", "x": 1060, "y": 640 }
+  ],
+  "exits": [
+    {
+      "zone": {
+        "x": 700,
+        "y": 830,
+        "w": 160,
+        "h": 40
+      },
+      "to": "level3",
+      "spawn": {
+        "x": 700,
+        "y": 200
+      },
+      "lock": {
+        "code": "1963",
+        "hint": "兩張紙條各藏一半,4 位密碼"
+      }
+    }
+  ],
+  "clues": [
+    {
+      "id": "l2-note-a",
+      "emoji": "📜",
+      "x": 240,
+      "y": 360,
+      "text": "撕破的紙條(左半):密碼的前兩位是 19。"
+    },
+    {
+      "id": "l2-note-b",
+      "emoji": "📃",
+      "x": 1180,
+      "y": 360,
+      "text": "撕破的紙條(右半):密碼的後兩位是 63。"
+    },
+    {
+      "id": "l2-hint",
+      "emoji": "📌",
+      "x": 700,
+      "y": 470,
+      "text": "第 2 關:密碼被拆成兩半藏在房間兩側,合起來就是完整密碼。"
+    }
+  ],
+  "floorTint": 14203016
+}

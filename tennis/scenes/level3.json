@@ -1,0 +1,111 @@
+{
+  "name": "level3",
+  "size": {
+    "w": 1400,
+    "h": 850
+  },
+  "wallHeight": 130,
+  "floorTile": 300,
+  "floor": "floor-wood",
+  "wall": "wall-top",
+  "spawn": {
+    "x": 700,
+    "y": 200
+  },
+  "objects": [
+    { "asset": "whiteboard", "x": 400, "y": -60 },
+    { "asset": "whiteboard", "x": 1000, "y": -60 },
+    { "asset": "wall-lamp", "x": 400, "y": -95 },
+    { "asset": "wall-lamp", "x": 700, "y": -95 },
+    { "asset": "wall-lamp", "x": 1000, "y": -95 },
+
+    { "asset": "desk-computer", "x": 250, "y": 300 },
+    { "asset": "office-chair", "x": 250, "y": 350 },
+    { "asset": "desk-computer", "x": 1150, "y": 300 },
+    { "asset": "office-chair", "x": 1150, "y": 350 },
+
+    { "asset": "bookshelf", "x": 130, "y": 560 },
+    { "asset": "bookshelf", "x": 260, "y": 560 },
+    { "asset": "bookshelf", "x": 130, "y": 700 },
+    { "asset": "bookshelf", "x": 260, "y": 700 },
+
+    { "asset": "bookshelf", "x": 1140, "y": 560 },
+    { "asset": "bookshelf", "x": 1270, "y": 560 },
+    { "asset": "bookshelf", "x": 1140, "y": 700 },
+    { "asset": "bookshelf", "x": 1270, "y": 700 },
+
+    { "asset": "kitchen-counter", "x": 430, "y": 700 },
+    { "asset": "kitchen-counter", "x": 970, "y": 700 },
+
+    { "asset": "trash-bin", "x": 250, "y": 640 },
+    { "asset": "trash-bin", "x": 1150, "y": 640 },
+    { "asset": "trash-bin", "x": 560, "y": 560 },
+    { "asset": "trash-bin", "x": 840, "y": 560 },
+
+    { "asset": "plant-large", "x": 60, "y": 800 },
+    { "asset": "plant-large", "x": 1340, "y": 800 },
+    { "asset": "plant-small", "x": 470, "y": 620 },
+    { "asset": "plant-small", "x": 930, "y": 620 },
+    { "asset": "plant-small", "x": 360, "y": 790 },
+    { "asset": "plant-small", "x": 1040, "y": 790 },
+
+    { "asset": "rug-red", "x": 700, "y": 690 }
+  ],
+  "exits": [
+    {
+      "zone": {
+        "x": 700,
+        "y": 830,
+        "w": 160,
+        "h": 40
+      },
+      "to": "level4",
+      "spawn": {
+        "x": 700,
+        "y": 200
+      },
+      "lock": {
+        "code": "58",
+        "needFlags": [
+          "l3-power"
+        ],
+        "hint": "鎖芯沒電——先接通電源(踩板),再輸入算出的密碼"
+      }
+    }
+  ],
+  "devices": [
+    {
+      "id": "l3-plate",
+      "kind": "plate",
+      "emoji": "🟦",
+      "x": 700,
+      "y": 470,
+      "setFlag": "l3-power",
+      "hint": "⚡ 電源接通!門的鎖芯亮了,現在可以輸入密碼。"
+    }
+  ],
+  "clues": [
+    {
+      "id": "l3-base",
+      "emoji": "🔢",
+      "x": 250,
+      "y": 410,
+      "text": "牆上的數字:基數 = 15。"
+    },
+    {
+      "id": "l3-formula",
+      "emoji": "📐",
+      "x": 1130,
+      "y": 410,
+      "text": "算式便條:密碼 = 基數 × 4 − 2。"
+    },
+    {
+      "id": "l3-hint",
+      "emoji": "📌",
+      "x": 700,
+      "y": 620,
+      "text": "第 3 關:先踩中央踏板接通電源,再用兩張線索算出密碼(15 × 4 − 2)。"
+    }
+  ],
+  "floorTint": 9349336
+}

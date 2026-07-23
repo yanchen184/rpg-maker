@@ -1,0 +1,18 @@
+{
+  "name": "tennis-court",
+  "size": { "w": 1000, "h": 1500 },
+  "wallHeight": 0,
+  "floorTile": 250,
+  "floor": "grass-tile",
+  "objects": [
+    { "asset": "tree-large", "x": 70, "y": 260 },
+    { "asset": "tree-large", "x": 935, "y": 260, "flip": true },
+    { "asset": "tree-large", "x": 70, "y": 1310 },
+    { "asset": "tree-large", "x": 935, "y": 1310, "flip": true },
+    { "asset": "bush-flower", "x": 62, "y": 700 },
+    { "asset": "bush-flower", "x": 940, "y": 700, "flip": true },
+    { "asset": "bush-flower", "x": 62, "y": 900 },
+    { "asset": "bush-flower", "x": 940, "y": 900, "flip": true }
+  ],
+  "spawn": { "x": 500, "y": 1200 }
+}
