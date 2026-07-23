@@ -31,10 +31,13 @@ jobs:
         run: npm run build
 
       # 網球對戰掛在 /rpg-maker/tennis/ 子路徑(vite base './' 相對路徑,搬進子資料夾即可跑)。
-      # publicDir 會整包拷 assets/,先剪掉素材管線中間產物(raw/generated 等 ~44MB),遊戲只吃 sprites+scenes+manifest。
+      # publicDir 會整包拷 assets/,剪掉素材管線中間產物(raw-original/generated 等 ~30MB)。
+      # 注意:manifest 的正式 sheet 就住在 raw/*_sheet.png(角色、草地都是),raw/ 整包剪會把遊戲素材剪掉,
+      # 只能剪 raw/ 內非 _sheet.png 的雜檔(strip 中間圖、codex log)。
       - name: Bundle tennis under /tennis/
         run: |
-          rm -rf apps/tennis/dist/{raw,raw-original,generated,queue,prompts}
+          rm -rf apps/tennis/dist/{raw-original,generated,queue,prompts}
+          find apps/tennis/dist/raw -type f ! -name '*_sheet.png' -delete
           cp -r apps/tennis/dist apps/escape-room/dist/tennis
 
       - name: Deploy to gh-pages
