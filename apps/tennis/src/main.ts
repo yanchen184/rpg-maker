@@ -46,6 +46,7 @@ import {
   type ShotAim,
   type ShotKind,
 } from './shots';
+import { CharAnim } from './char-anim';
 import { Sfx } from './sfx';
 import { FxLayer } from './fx';
 
@@ -255,6 +256,28 @@ async function boot(): Promise<void> {
 
   const sideName = (s: Side): string => (s === 'left' ? '左' : '右');
 
+  // ── 角色動作與表情(揮拍帶身/得分跳/失分垂頭/失誤聳肩 + emoji 泡泡) ──
+  const viewFor = (s: Side) => {
+    if (player && s === side) return player.view;
+    const ai = ais.find((a) => a.ctl.side === s);
+    if (ai) return ai.body.view;
+    if (remote && s === oppo) return remote.view;
+    return null;
+  };
+  const anim: Record<Side, CharAnim> = {
+    left: new CharAnim(() => viewFor('left')),
+    right: new CharAnim(() => viewFor('right')),
+  };
+  const facingOf = (s: Side): number => (s === 'left' ? 1 : -1);
+  /** 得分方慶祝、失分方垂頭(整場結束用 🏆/😭 加長版) */
+  const reactPoint = (winner: Side, matchOver: boolean) => {
+    anim[winner].pose('celebrate', facingOf(winner));
+    anim[winner].say(matchOver ? '🏆' : '😆', matchOver ? 2 : 1.1);
+    const loser = otherSide(winner);
+    anim[loser].pose('droop', facingOf(loser));
+    anim[loser].say(matchOver ? '😭' : '😫', matchOver ? 2 : 1.1);
+  };
+
   const updateHud = () => {
     if (!score) return;
     sb.style.display = 'block';
@@ -334,6 +357,8 @@ async function boot(): Promise<void> {
       // 對手擊球回饋:Shot 事件沒帶球種(線上兼容),從 apexH 反推
       const kind: ShotKind = shot.apexH <= 62 ? 'drive' : shot.apexH >= 225 ? 'lob' : 'normal';
       fxHit(kind, shot.x0, shot.y0);
+      anim[shot.by].pose('swing', facingOf(shot.by));
+      if (kind === 'drive') anim[shot.by].say('😤', 0.7);
     }
   };
 
@@ -368,6 +393,7 @@ async function boot(): Promise<void> {
         flash(`${mine ? '🎾 你得分!' : `${mode === 'ai' ? 'AI' : '對手'}得分`}${isDeuce(s) ? ' — Deuce' : ''}`);
         sfx.point(mine);
       }
+      reactPoint(s.winner ?? s.lastPointTo, !!s.winner);
     } else if (s.seq > 0 && s.seq > lastFlashSeq && !s.lastPointTo && (s.faults ?? 0) === 1) {
       // 一發失誤(fault 更新沒有得分者):兩端都跳失誤快報
       lastFlashSeq = s.seq;
@@ -375,6 +401,8 @@ async function boot(): Promise<void> {
         mode === 'watch' ? `${sideName(s.server)}方 AI` : s.server === side ? '你' : mode === 'ai' ? 'AI' : '對手';
       flash(`⚠️ ${who}一發失誤,還有第二發`);
       sfx.fault();
+      anim[s.server].pose('shrug', facingOf(s.server));
+      anim[s.server].say('😅', 0.9);
     }
   };
 
@@ -401,6 +429,8 @@ async function boot(): Promise<void> {
     ball.play(shot);
     net.sendShot(shot);
     fxHit(kind, x0, y0);
+    anim[by].pose('swing', facingOf(by));
+    if (kind === 'drive') anim[by].say('😤', 0.7);
   };
 
   // ── 鍵盤:揮拍/發球(觀戰模式空白鍵只用來提早再開) ──
@@ -543,6 +573,8 @@ async function boot(): Promise<void> {
       fx.puff(ball.gx, ball.gy);
     }
     fx.update(dt);
+    anim.left.update(dt);
+    anim.right.update(dt);
     // 畫面震動:在鏡頭基準位置上加抖動,指數衰減
     if (shake > 0.4) {
       built.root.x = rootBase.x + (Math.random() * 2 - 1) * shake;
@@ -659,6 +691,11 @@ async function boot(): Promise<void> {
     hasOpponent: () => !!opponent,
     sfxReady: () => sfx.ready,
     fxCount: () => fx.count,
+    emoteTest: (s: Side) => {
+      anim[s].pose('celebrate', facingOf(s));
+      anim[s].say('😆', 1.5);
+    },
+    talking: (s: Side) => anim[s].talking,
     pos: () => (player ? { x: Math.round(player.x), y: Math.round(player.y) } : null),
     ais: () => ais.map((a) => ({ side: a.ctl.side, x: Math.round(a.ctl.x), y: Math.round(a.ctl.y) })),
     teleport: (x: number, y: number) => {
