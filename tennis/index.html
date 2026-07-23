@@ -71,8 +71,11 @@
       }
       #lobby button:hover { background: #35502a; }
       #lobby .tip { color: #93a878; font-size: 12px; }
+      #lobby .modes { display: flex; gap: 12px; margin-top: 6px; }
+      #lobby .modes button { background: #1e2f3d; border-color: #38566a; }
+      #lobby .modes button:hover { background: #2a4050; }
     </style>
-    <script type="module" crossorigin src="./assets/index-pF8yRmkv.js"></script>
+    <script type="module" crossorigin src="./assets/index-Bqta0V5q.js"></script>
   </head>
   <body>
     <div id="app"></div>
@@ -85,6 +88,11 @@
       <input id="lobby-link" readonly value="" />
       <button id="lobby-copy">複製對戰連結</button>
       <div class="tip">把連結傳給對手,兩人連上就開打。移動:WASD / 方向鍵;發球與揮拍:空白鍵。</div>
+      <div class="modes">
+        <button id="mode-ai">🤖 跟 AI 對戰</button>
+        <button id="mode-watch">👀 觀戰:AI 對打 AI</button>
+      </div>
+      <div class="tip">不想等人?跟 AI 打一場,或直接看兩隻 AI 對轟。</div>
     </div>
     <div id="loading">
       <div class="logo">🎾 Tennis</div>
