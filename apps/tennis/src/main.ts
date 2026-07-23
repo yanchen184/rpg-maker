@@ -46,6 +46,8 @@ import {
   type ShotAim,
   type ShotKind,
 } from './shots';
+import { Sfx } from './sfx';
+import { FxLayer } from './fx';
 
 setAssetBase(import.meta.env.BASE_URL);
 
@@ -173,6 +175,20 @@ async function boot(): Promise<void> {
   const ball = new Ball();
   built.objectLayer.addChild(ball.view);
 
+  // ── 打擊手感:音效(WebAudio 合成)+ 衝擊圈/塵土 + 畫面震動 ──
+  const sfx = new Sfx();
+  window.addEventListener('pointerdown', () => sfx.unlock());
+  const fx = new FxLayer();
+  fx.view.zIndex = 9000; // 特效永遠蓋在人與球上面
+  built.objectLayer.addChild(fx.view);
+  let shake = 0; // 畫面震動幅度(px),drive 擊球觸發、指數衰減
+  /** 擊球回饋(本地與遠端共用):音效 + 衝擊圈,平抽加震動 */
+  const fxHit = (kind: ShotKind, x: number, y: number) => {
+    sfx.hit(kind);
+    fx.ring(x, y - 20, kind === 'drive' ? 0xffd24a : 0xffffff);
+    if (kind === 'drive') shake = 6;
+  };
+
   // ── AI 球員(ai 模式:右側一隻;watch 模式:左右各一隻) ──
   const aiSides: Side[] = mode === 'ai' ? ['right'] : mode === 'watch' ? ['left', 'right'] : [];
   interface AiEntity {
@@ -203,13 +219,16 @@ async function boot(): Promise<void> {
     built.objectLayer.addChild(remoteRacket.view);
   }
 
-  // 鏡頭:整個球場置中縮放
+  // 鏡頭:整個球場置中縮放(基準位置另存,畫面震動時在基準上加抖動)
+  const rootBase = { x: 0, y: 0 };
   const fit = () => {
     const d = built.data;
     const s = Math.min(app.screen.width / d.size.w, app.screen.height / d.size.h) * 0.98;
     built.root.scale.set(s);
-    built.root.x = (app.screen.width - d.size.w * s) / 2;
-    built.root.y = (app.screen.height - d.size.h * s) / 2;
+    rootBase.x = (app.screen.width - d.size.w * s) / 2;
+    rootBase.y = (app.screen.height - d.size.h * s) / 2;
+    built.root.x = rootBase.x;
+    built.root.y = rootBase.y;
   };
   fit();
   window.addEventListener('resize', fit);
@@ -310,7 +329,12 @@ async function boot(): Promise<void> {
     const isNew = !currentShot || currentShot.seq !== shot.seq || currentShot.t0 !== shot.t0;
     currentShot = shot;
     ball.play(shot);
-    if (isNew && shot.by !== side) remoteRacket?.swing();
+    if (isNew && shot.by !== side) {
+      remoteRacket?.swing();
+      // 對手擊球回饋:Shot 事件沒帶球種(線上兼容),從 apexH 反推
+      const kind: ShotKind = shot.apexH <= 62 ? 'drive' : shot.apexH >= 225 ? 'lob' : 'normal';
+      fxHit(kind, shot.x0, shot.y0);
+    }
   };
 
   net.onScore = (s) => {
@@ -329,13 +353,20 @@ async function boot(): Promise<void> {
     if (s.seq > 0 && s.seq > lastFlashSeq && s.lastPointTo) {
       lastFlashSeq = s.seq;
       if (mode === 'watch') {
-        if (s.winner) flash(`🏆 ${sideName(s.winner)}方 AI 獲勝!`);
-        else flash(`${sideName(s.lastPointTo)}方得分${isDeuce(s) ? ' — Deuce' : ''}`);
+        if (s.winner) {
+          flash(`🏆 ${sideName(s.winner)}方 AI 獲勝!`);
+          sfx.match(null);
+        } else {
+          flash(`${sideName(s.lastPointTo)}方得分${isDeuce(s) ? ' — Deuce' : ''}`);
+          sfx.point(null);
+        }
       } else if (s.winner) {
         flash(s.winner === side ? '🏆 你贏了整場!' : `😢 ${mode === 'ai' ? 'AI' : '對手'}獲勝`);
+        sfx.match(s.winner === side);
       } else {
         const mine = s.lastPointTo === side;
         flash(`${mine ? '🎾 你得分!' : `${mode === 'ai' ? 'AI' : '對手'}得分`}${isDeuce(s) ? ' — Deuce' : ''}`);
+        sfx.point(mine);
       }
     } else if (s.seq > 0 && s.seq > lastFlashSeq && !s.lastPointTo && (s.faults ?? 0) === 1) {
       // 一發失誤(fault 更新沒有得分者):兩端都跳失誤快報
@@ -343,6 +374,7 @@ async function boot(): Promise<void> {
       const who =
         mode === 'watch' ? `${sideName(s.server)}方 AI` : s.server === side ? '你' : mode === 'ai' ? 'AI' : '對手';
       flash(`⚠️ ${who}一發失誤,還有第二發`);
+      sfx.fault();
     }
   };
 
@@ -368,12 +400,14 @@ async function boot(): Promise<void> {
     currentShot = shot;
     ball.play(shot);
     net.sendShot(shot);
+    fxHit(kind, x0, y0);
   };
 
   // ── 鍵盤:揮拍/發球(觀戰模式空白鍵只用來提早再開) ──
   // 球種各自有鍵:空白 = 普通、J = 平抽、K = 挑高;方向鍵/WASD 在揮拍瞬間兼瞄準。
   const held = new Set<string>();
   window.addEventListener('keydown', (e) => {
+    sfx.unlock();
     const k = e.key.toLowerCase();
     held.add(k);
     if (e.key === ' ') onSwing('normal');
@@ -454,6 +488,7 @@ async function boot(): Promise<void> {
     if (nowMs < nextSwingAt) return false; // 冷卻中
     nextSwingAt = nowMs + SWING_COOLDOWN_MS;
     pendingKind = kind;
+    sfx.swing(); // 風聲:揮空也有回饋,打到再疊擊球聲
     racket.swing();
     // 回擊:開判定窗,球進拍子範圍才算打到(揮空就是空)
     swingUntil = nowMs + SWING_WINDOW_MS;
@@ -500,7 +535,24 @@ async function boot(): Promise<void> {
     }
     remote?.update(dt);
 
+    const prevPhase = ball.phase;
     const phase = ball.update(nowSrv);
+    // 落地回饋:flying → bounce 的那幀(掛網墜地同樣走這條,悶響也合)
+    if (prevPhase === 'flying' && phase === 'bounce') {
+      sfx.bounce();
+      fx.puff(ball.gx, ball.gy);
+    }
+    fx.update(dt);
+    // 畫面震動:在鏡頭基準位置上加抖動,指數衰減
+    if (shake > 0.4) {
+      built.root.x = rootBase.x + (Math.random() * 2 - 1) * shake;
+      built.root.y = rootBase.y + (Math.random() * 2 - 1) * shake;
+      shake *= Math.exp(-dt * 14);
+    } else if (shake !== 0) {
+      shake = 0;
+      built.root.x = rootBase.x;
+      built.root.y = rootBase.y;
+    }
     // 揮拍判定窗:窗內每幀試打(球飛進拍子範圍的那幀出手)
     if (swingUntil > 0) {
       if (performance.now() <= swingUntil) trySwingHit();
@@ -605,6 +657,8 @@ async function boot(): Promise<void> {
       phase: ball.phase,
     }),
     hasOpponent: () => !!opponent,
+    sfxReady: () => sfx.ready,
+    fxCount: () => fx.count,
     pos: () => (player ? { x: Math.round(player.x), y: Math.round(player.y) } : null),
     ais: () => ais.map((a) => ({ side: a.ctl.side, x: Math.round(a.ctl.x), y: Math.round(a.ctl.y) })),
     teleport: (x: number, y: number) => {
