@@ -6,7 +6,7 @@
  */
 import { Container, Text } from 'pixi.js';
 
-export type PoseKind = 'swing' | 'celebrate' | 'droop' | 'shrug';
+export type PoseKind = 'swing' | 'celebrate' | 'droop' | 'shrug' | 'splitstep';
 
 interface PoseState {
   kind: PoseKind;
@@ -15,7 +15,7 @@ interface PoseState {
   facing: number;
 }
 
-const POSE_DUR: Record<PoseKind, number> = { swing: 0.22, celebrate: 0.9, droop: 0.8, shrug: 0.45 };
+const POSE_DUR: Record<PoseKind, number> = { swing: 0.22, celebrate: 0.9, droop: 0.8, shrug: 0.45, splitstep: 0.28 };
 
 export class CharAnim {
   private poseState: PoseState | null = null;
@@ -65,10 +65,16 @@ export class CharAnim {
       const p = Math.min(1, ps.t / ps.dur);
       let lift = 0;
       let rot = 0;
+      let lunge = 0;
       if (ps.kind === 'swing') {
-        // 揮拍帶身:快速往擊球側傾再回正,腳下小蹬
-        rot = Math.sin(p * Math.PI) * 0.22 * ps.facing;
-        lift = Math.sin(p * Math.PI) * 6;
+        // 揮拍帶身:重心撲向擊球側(傾身 + 前撲位移),腳下蹬地,尾段回正
+        const s = Math.sin(p * Math.PI);
+        rot = s * 0.3 * ps.facing;
+        lift = s * 8;
+        lunge = s * 10 * ps.facing;
+      } else if (ps.kind === 'splitstep') {
+        // 對手出手瞬間的預備小彈跳(split-step):輕跳落地壓低重心
+        lift = p < 0.6 ? Math.sin((p / 0.6) * Math.PI) * 10 : -Math.sin(((p - 0.6) / 0.4) * Math.PI) * 3;
       } else if (ps.kind === 'celebrate') {
         // 得分開心跳兩下,幅度漸收
         lift = Math.abs(Math.sin(p * Math.PI * 2)) * 22 * (1 - p * 0.3);
@@ -83,10 +89,12 @@ export class CharAnim {
         lift = -Math.sin(p * Math.PI) * 6;
       }
       view.pivot.y = lift;
+      view.pivot.x = -lunge; // pivot 正值往反向移,取負讓身體撲向 facing 側
       view.rotation = rot;
       if (p >= 1) {
         this.poseState = null;
         view.pivot.y = 0;
+        view.pivot.x = 0;
         view.rotation = 0;
       }
     }

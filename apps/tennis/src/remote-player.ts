@@ -80,7 +80,7 @@ export class RemotePlayer {
     const row = Math.max(0, DIRS.indexOf(dir));
     const src = moving ? this.walk : this.idle;
     this.sprite.textures = src.slice(row * 4, row * 4 + 4);
-    this.sprite.animationSpeed = (moving ? 8 : 4) / 60;
+    this.sprite.animationSpeed = (moving ? 14 : 4) / 60; // 球場上的步頻是跑不是走
     this.sprite.play();
   }
 

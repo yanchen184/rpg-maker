@@ -46,7 +46,7 @@ import {
   type ShotAim,
   type ShotKind,
 } from './shots';
-import { CharAnim } from './char-anim';
+import { CharAnim, type PoseKind } from './char-anim';
 import { Sfx } from './sfx';
 import { FxLayer } from './fx';
 
@@ -172,6 +172,8 @@ async function boot(): Promise<void> {
   let colliders: Aabb[] = [];
   if (mode !== 'watch') {
     player = await Player.create(manifest, ['char-body'], PLAYER_SCALE);
+    player.speed = 280; // 球場上是跑不是走
+    player.walkFps = 14; // 步頻拉高才有跑步感(引擎預設 8 是散步)
     await player.setOverlay(manifest, 'hair', side === 'left' ? 'char-hair-blonde' : 'char-hair-pink');
     await player.setOverlay(manifest, 'shirt', side === 'left' ? 'char-shirt-red' : 'char-shirt-blue');
     const spawn = spawnFor(side);
@@ -382,6 +384,7 @@ async function boot(): Promise<void> {
       fxHit(kind, shot.x0, shot.y0);
       anim[shot.by].pose('swing', facingOf(shot.by));
       if (kind === 'drive') anim[shot.by].say('😤', 0.7);
+      anim[otherSide(shot.by)].pose('splitstep', facingOf(otherSide(shot.by)));
     }
   };
 
@@ -454,6 +457,7 @@ async function boot(): Promise<void> {
     fxHit(kind, x0, y0);
     anim[by].pose('swing', facingOf(by));
     if (kind === 'drive') anim[by].say('😤', 0.7);
+    anim[otherSide(by)].pose('splitstep', facingOf(otherSide(by)));
   };
 
   // ── 鍵盤:揮拍/發球(觀戰模式空白鍵只用來提早再開) ──
@@ -725,6 +729,7 @@ async function boot(): Promise<void> {
       anim[s].pose('celebrate', facingOf(s));
       anim[s].say('😆', 1.5);
     },
+    poseTest: (s: Side, kind: PoseKind) => anim[s].pose(kind, facingOf(s)),
     talking: (s: Side) => anim[s].talking,
     pos: () => (player ? { x: Math.round(player.x), y: Math.round(player.y) } : null),
     ais: () => ais.map((a) => ({ side: a.ctl.side, x: Math.round(a.ctl.x), y: Math.round(a.ctl.y) })),

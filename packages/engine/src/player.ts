@@ -22,6 +22,9 @@ export class Player {
   x = 0;
   y = 0;
   speed = 220;
+  /** 走路/站立動畫幀率(fps);快節奏遊戲可調高 walkFps 做出跑步感 */
+  walkFps = 8;
+  idleFps = 4;
   dir: Dir = 'down';
   moving = false;
   /** 腳底碰撞框 */
@@ -70,7 +73,7 @@ export class Player {
     const sp = new AnimatedSprite(src.slice(row * 4, row * 4 + 4));
     sp.anchor.set(0.5, 1);
     sp.scale.set(this.scale);
-    sp.animationSpeed = (this.moving ? 8 : 4) / 60;
+    sp.animationSpeed = (this.moving ? this.walkFps : this.idleFps) / 60;
     sp.play();
     return { sprite: sp, walk, idle };
   }
@@ -110,7 +113,7 @@ export class Player {
     const row = DIRS.indexOf(dir);
     for (const l of this.layers) {
       const src = moving ? l.walk : l.idle;
-      const fps = moving ? 8 : 4;
+      const fps = moving ? this.walkFps : this.idleFps;
       l.sprite.textures = src.slice(row * 4, row * 4 + 4);
       l.sprite.animationSpeed = fps / 60;
       if (turning) {
