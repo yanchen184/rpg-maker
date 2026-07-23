@@ -1,0 +1,24 @@
+[     0s] goto           http://localhost:5174/?room=recdemo1
+[   3.2s] waitText       等待對手加入
+[   3.8s] note           P1(左)已進房,顯示等待對手 lobby
+[   6.7s] waitText       你發球
+[   7.8s] note           配對完成:P1=left(發球方),P2=right
+[   9.6s] note           分 1:左發球,右方漏接
+[   9.6s] waitFn         () => !window.__tennis.shot() && window.__tennis.score()?.server === 'left'
+[  10.3s] waitFn         (window.__tennis.score()?.seq ?? -1) >= 1
+[  14.1s] note           分 2:右方回擊成功,左方漏接
+[  14.1s] waitFn         () => !window.__tennis.shot() && window.__tennis.score()?.server === 'left'
+[  15.6s] waitFn         (window.__tennis.score()?.seq ?? -1) >= 2
+[  19.2s] note           分 3:三拍來回,左方回擊得分
+[  19.2s] waitFn         () => !window.__tennis.shot() && window.__tennis.score()?.server === 'left'
+[  21.2s] waitFn         (window.__tennis.score()?.seq ?? -1) >= 3
+[  24.5s] note           分 4:左發球得分,40-15
+[  24.5s] waitFn         () => !window.__tennis.shot() && window.__tennis.score()?.server === 'left'
+[  25.1s] waitFn         (window.__tennis.score()?.seq ?? -1) >= 4
+[  28.7s] note           分 5:左方拿下第一局
+[  28.7s] waitFn         () => !window.__tennis.shot() && window.__tennis.score()?.server === 'left'
+[  29.3s] waitFn         (window.__tennis.score()?.seq ?? -1) >= 5
+[  31.4s] waitText       局數 1 - 0
+[    32s] note           HUD 顯示局數 1 - 0,一局完成
+
+FRICTION: 無 — 全程語意化定位成功、無慢轉場。

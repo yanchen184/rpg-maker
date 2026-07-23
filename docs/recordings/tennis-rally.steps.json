@@ -1,0 +1,115 @@
+{
+  "steps": [
+    {
+      "t": 0,
+      "action": "goto",
+      "detail": "http://localhost:5174/?room=recdemo1"
+    },
+    {
+      "t": 3.2,
+      "action": "waitText",
+      "detail": "等待對手加入"
+    },
+    {
+      "t": 3.8,
+      "action": "note",
+      "detail": "P1(左)已進房,顯示等待對手 lobby"
+    },
+    {
+      "t": 6.7,
+      "action": "waitText",
+      "detail": "你發球"
+    },
+    {
+      "t": 7.8,
+      "action": "note",
+      "detail": "配對完成:P1=left(發球方),P2=right"
+    },
+    {
+      "t": 9.6,
+      "action": "note",
+      "detail": "分 1:左發球,右方漏接"
+    },
+    {
+      "t": 9.6,
+      "action": "waitFn",
+      "detail": "() => !window.__tennis.shot() && window.__tennis.score()?.server === 'left'"
+    },
+    {
+      "t": 10.3,
+      "action": "waitFn",
+      "detail": "(window.__tennis.score()?.seq ?? -1) >= 1"
+    },
+    {
+      "t": 14.1,
+      "action": "note",
+      "detail": "分 2:右方回擊成功,左方漏接"
+    },
+    {
+      "t": 14.1,
+      "action": "waitFn",
+      "detail": "() => !window.__tennis.shot() && window.__tennis.score()?.server === 'left'"
+    },
+    {
+      "t": 15.6,
+      "action": "waitFn",
+      "detail": "(window.__tennis.score()?.seq ?? -1) >= 2"
+    },
+    {
+      "t": 19.2,
+      "action": "note",
+      "detail": "分 3:三拍來回,左方回擊得分"
+    },
+    {
+      "t": 19.2,
+      "action": "waitFn",
+      "detail": "() => !window.__tennis.shot() && window.__tennis.score()?.server === 'left'"
+    },
+    {
+      "t": 21.2,
+      "action": "waitFn",
+      "detail": "(window.__tennis.score()?.seq ?? -1) >= 3"
+    },
+    {
+      "t": 24.5,
+      "action": "note",
+      "detail": "分 4:左發球得分,40-15"
+    },
+    {
+      "t": 24.5,
+      "action": "waitFn",
+      "detail": "() => !window.__tennis.shot() && window.__tennis.score()?.server === 'left'"
+    },
+    {
+      "t": 25.1,
+      "action": "waitFn",
+      "detail": "(window.__tennis.score()?.seq ?? -1) >= 4"
+    },
+    {
+      "t": 28.7,
+      "action": "note",
+      "detail": "分 5:左方拿下第一局"
+    },
+    {
+      "t": 28.7,
+      "action": "waitFn",
+      "detail": "() => !window.__tennis.shot() && window.__tennis.score()?.server === 'left'"
+    },
+    {
+      "t": 29.3,
+      "action": "waitFn",
+      "detail": "(window.__tennis.score()?.seq ?? -1) >= 5"
+    },
+    {
+      "t": 31.4,
+      "action": "waitText",
+      "detail": "局數 1 - 0"
+    },
+    {
+      "t": 32,
+      "action": "note",
+      "detail": "HUD 顯示局數 1 - 0,一局完成"
+    }
+  ],
+  "frictions": []
+}

@@ -15,7 +15,8 @@ import {
   type Aabb,
 } from '@rpg-maker/engine';
 import { buildCourt, COURT } from './court';
-import { Ball, type Shot } from './ball';
+import { Ball, shotHitsNet, type Shot } from './ball';
+import { Racket } from './racket';
 import {
   initialScore,
   pointWon,
@@ -31,12 +32,14 @@ import { RemotePlayer } from './remote-player';
 setAssetBase(import.meta.env.BASE_URL);
 
 const PLAYER_SCALE = 0.55;
-/** 球(地面投影)離玩家多近才揮得到 */
-const REACH = 110;
-/** 球速 px/s(換算 flightMs 用),再 clamp 出手感 */
-const SHOT_SPEED = 700;
-const FLIGHT_MIN_MS = 700;
-const FLIGHT_MAX_MS = 1200;
+/** 拍子可及半徑:球(地面投影)離玩家多近才打得到 */
+const RACKET_REACH = 95;
+/** 球高超過這個就搆不到(挑高球過頂要退後等它降) */
+const HIT_H_MAX = 150;
+/** 揮拍判定窗:揮下去後這段時間內球進可及範圍就算擊中 */
+const SWING_WINDOW_MS = 150;
+/** 揮拍冷卻:亂揮會空窗 */
+const SWING_COOLDOWN_MS = 350;
 /** 加入房間時,雲上殘留的舊 shot 超過這年紀就當垃圾清掉 */
 const STALE_SHOT_MS = 15_000;
 
@@ -138,6 +141,13 @@ async function boot(): Promise<void> {
   const ball = new Ball();
   built.objectLayer.addChild(ball.view);
 
+  // 球拍:自己一支、對手一支(對手那支收到對方 shot 時播揮拍)
+  const racket = new Racket(side === 'left' ? 1 : -1);
+  built.objectLayer.addChild(racket.view);
+  const remoteRacket = new Racket(side === 'left' ? -1 : 1);
+  remoteRacket.view.visible = false;
+  built.objectLayer.addChild(remoteRacket.view);
+
   // 鏡頭:整個球場置中縮放
   const fit = () => {
     const d = built.data;
@@ -225,7 +235,7 @@ async function boot(): Promise<void> {
     const isNew = !currentShot || currentShot.seq !== shot.seq || currentShot.t0 !== shot.t0;
     currentShot = shot;
     ball.play(shot);
-    if (isNew && shot.by !== side) remote?.emote('🎾', 0.5);
+    if (isNew && shot.by !== side) remoteRacket.swing();
   };
 
   net.onScore = (s) => {
@@ -260,41 +270,73 @@ async function boot(): Promise<void> {
   });
   window.addEventListener('keyup', (e) => held.delete(e.key.toLowerCase()));
 
-  /** 落點:瞄準對手半場;按住上/下(W/S/方向鍵)偏打,沒按就隨機 */
-  const aimTarget = (): { x: number; y: number } => {
-    const aimU = held.has('w') || held.has('arrowup');
-    const aimD = held.has('s') || held.has('arrowdown');
-    const y = aimU ? rand(200, 430) : aimD ? rand(570, 800) : rand(220, 780);
-    const x = side === 'left' ? rand(840, 1250) : rand(250, 660);
-    return { x, y };
-  };
+  /** 球種:按住 ↑(W)= 挑高球、↓(S)= 平抽,沒按 = 普通球 */
+  type ShotKind = 'lob' | 'drive' | 'normal';
+  const shotKind = (): ShotKind =>
+    held.has('w') || held.has('arrowup')
+      ? 'lob'
+      : held.has('s') || held.has('arrowdown')
+        ? 'drive'
+        : 'normal';
+
+  // 各球種參數:弧頂高度(px)/球速(px/s)/飛行時長 clamp。
+  // 網高 NET_H=46:drive 弧頂只有 48~62,過網點離弧頂稍遠就真的掛網 —— 風險換速度。
+  const KIND = {
+    lob: { apex: [225, 270], speed: 500, minMs: 1150, maxMs: 1800 },
+    normal: { apex: [110, 150], speed: 700, minMs: 700, maxMs: 1200 },
+    drive: { apex: [48, 62], speed: 950, minMs: 450, maxMs: 750 },
+  } as const;
 
   const shoot = (x0: number, y0: number) => {
-    const aim = aimTarget();
-    const dist = Math.hypot(aim.x - x0, aim.y - y0);
-    const flightMs = Math.max(FLIGHT_MIN_MS, Math.min(FLIGHT_MAX_MS, (dist / SHOT_SPEED) * 1000));
+    const kind = shotKind();
+    const k = KIND[kind];
+    // 拍球相對關係決定回球方向:擊球點偏玩家上/下方 → 回球往對面上/下帶
+    const dy = y0 - player.y;
+    const y1 = Math.max(200, Math.min(800, (COURT.top + COURT.bottom) / 2 + dy * 4 + rand(-90, 90)));
+    const x1 =
+      side === 'left'
+        ? kind === 'drive'
+          ? rand(1020, 1300)
+          : rand(840, 1250)
+        : kind === 'drive'
+          ? rand(200, 480)
+          : rand(250, 660);
+    const dist = Math.hypot(x1 - x0, y1 - y0);
+    const flightMs = Math.max(k.minMs, Math.min(k.maxMs, (dist / k.speed) * 1000));
     const shot: Shot = {
       seq: (currentShot?.seq ?? 0) + 1,
       by: side,
       x0,
       y0,
-      x1: aim.x,
-      y1: aim.y,
+      x1,
+      y1,
       t0: net.now(),
       flightMs,
+      apexH: rand(k.apex[0], k.apex[1]),
     };
     currentShot = shot;
     ball.play(shot);
     net.sendShot(shot);
-    player.emote('🎾', 0.45, 'bounce');
   };
 
-  /** 球是不是正朝我來、且揮得到 */
-  const canReturn = (): boolean =>
+  /** 球在拍子可及範圍內(距離 + 高度都要夠) */
+  const ballHittable = (): boolean =>
     !!currentShot &&
     currentShot.by !== side &&
     ball.phase !== 'dead' &&
-    Math.hypot(ball.gx - player.x, ball.gy - player.y) < REACH;
+    ball.h <= HIT_H_MAX &&
+    Math.hypot(ball.gx - player.x, ball.gy - player.y) <= RACKET_REACH;
+
+  let swingUntil = 0; // 揮拍判定窗截止時刻(performance.now ms);0 = 沒在揮
+  let nextSwingAt = 0; // 冷卻結束時刻
+
+  /** 判定窗內每幀試打:球真的碰到拍子(可及範圍)才出手 */
+  const trySwingHit = (): boolean => {
+    if (!ballHittable()) return false;
+    swingUntil = 0;
+    shoot(ball.gx, ball.gy); // 從實際觸拍點出手 → dy 影響回球方向
+    return true;
+  };
 
   const onSpace = (): boolean => {
     if (!score || !opponent) return false;
@@ -304,15 +346,17 @@ async function boot(): Promise<void> {
       net.sendScore(initialScore(otherSide(score.winner)));
       return true;
     }
+    const nowMs = performance.now();
+    if (nowMs < nextSwingAt) return false; // 冷卻中
+    nextSwingAt = nowMs + SWING_COOLDOWN_MS;
+    racket.swing();
     if (!currentShot && score.server === side) {
-      shoot(player.x, player.y - 20); // 發球:從自己站位出手
+      shoot(player.x, player.y - 20); // 發球:拋球直接出手
       return true;
     }
-    if (canReturn()) {
-      shoot(ball.gx, ball.gy); // 回擊:從球當前位置續打
-      return true;
-    }
-    return false;
+    // 回擊:開判定窗,球進拍子範圍才算打到(揮空就是空)
+    swingUntil = nowMs + SWING_WINDOW_MS;
+    return trySwingHit();
   };
 
   /** 對手這球的落點是否為好球(落在我方半場界內) */
@@ -321,6 +365,9 @@ async function boot(): Promise<void> {
     if (shot.x1 < left || shot.x1 > right || shot.y1 < top || shot.y1 > bottom) return false;
     return shot.by === 'left' ? shot.x1 > netX : shot.x1 < netX;
   };
+
+  /** 好球 = 落點界內且過網時高度夠(掛網 = 壞球,打者失分) */
+  const goodShot = (shot: Shot): boolean => shotLandsIn(shot) && !shotHitsNet(shot);
 
   /** 一分結束:接球方裁定,整包寫分 + 清球 */
   const settlePoint = (to: Side) => {
@@ -340,13 +387,22 @@ async function boot(): Promise<void> {
     net.push({ x: player.x, y: player.y, dir: player.dir });
 
     const phase = ball.update(net.now());
+    // 揮拍判定窗:窗內每幀試打(球飛進拍子範圍的那幀出手)
+    if (swingUntil > 0) {
+      if (performance.now() <= swingUntil) trySwingHit();
+      else swingUntil = 0;
+    }
+    racket.update(dt, player.x, player.y);
+    remoteRacket.view.visible = !!remote;
+    if (remote) remoteRacket.update(dt, remote.view.x, remote.view.y);
+
     // 失分裁定(只有接球方判,單一寫入者)
     if (currentShot && currentShot.by !== side && score && !score.winner && opponent) {
       const key = `${currentShot.seq}-${currentShot.t0}`;
       if (key !== judgedKey) {
-        if (phase !== 'flying' && !shotLandsIn(currentShot)) {
+        if (phase !== 'flying' && !goodShot(currentShot)) {
           judgedKey = key;
-          settlePoint(side); // 對手打出界 → 我得分
+          settlePoint(side); // 對手打出界或掛網 → 我得分
         } else if (phase === 'dead') {
           judgedKey = key;
           settlePoint(currentShot.by); // 兩跳沒接到 → 對手得分
@@ -358,8 +414,14 @@ async function boot(): Promise<void> {
     let hint = '';
     if (opponent && score) {
       if (score.winner) hint = '按空白鍵再來一場';
-      else if (!currentShot && score.server === side) hint = '按空白鍵發球(按住 ↑/↓ 可瞄準)';
-      else if (canReturn()) hint = '按空白鍵回擊!';
+      else if (!currentShot && score.server === side) {
+        hint = '按空白鍵發球(按住 ↑ 挑高球.↓ 平抽)';
+      } else if (currentShot && currentShot.by !== side && ball.phase !== 'dead') {
+        const d = Math.hypot(ball.gx - player.x, ball.gy - player.y);
+        if (d <= RACKET_REACH * 1.6) {
+          hint = ball.h > HIT_H_MAX ? '球太高了!等它降下來再揮' : '按空白鍵揮拍!';
+        }
+      }
     }
     hintEl.textContent = hint;
     hintEl.style.display = hint ? 'block' : 'none';
@@ -371,7 +433,12 @@ async function boot(): Promise<void> {
     side: () => side,
     score: () => score,
     shot: () => currentShot,
-    ballState: () => ({ x: Math.round(ball.gx), y: Math.round(ball.gy), phase: ball.phase }),
+    ballState: () => ({
+      x: Math.round(ball.gx),
+      y: Math.round(ball.gy),
+      h: Math.round(ball.h),
+      phase: ball.phase,
+    }),
     hasOpponent: () => !!opponent,
     pos: () => ({ x: Math.round(player.x), y: Math.round(player.y) }),
     teleport: (x: number, y: number) => {
