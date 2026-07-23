@@ -30,6 +30,13 @@ jobs:
       - name: Build (tsc + vite)
         run: npm run build
 
+      # 網球對戰掛在 /rpg-maker/tennis/ 子路徑(vite base './' 相對路徑,搬進子資料夾即可跑)。
+      # publicDir 會整包拷 assets/,先剪掉素材管線中間產物(raw/generated 等 ~44MB),遊戲只吃 sprites+scenes+manifest。
+      - name: Bundle tennis under /tennis/
+        run: |
+          rm -rf apps/tennis/dist/{raw,raw-original,generated,queue,prompts}
+          cp -r apps/tennis/dist apps/escape-room/dist/tennis
+
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:

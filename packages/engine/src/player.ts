@@ -133,6 +133,11 @@ export class Player {
     this.startAction('pickup', Player.PICKUP_SEC, '✨', 40);
   }
 
+  /** 通用動作:自訂 emoji 泡泡 + 姿勢(bounce=彈跳 / crouch=下蹲),遊戲層做揮拍等自訂動作用 */
+  emote(emoji: string, durSec = 0.6, pose: 'bounce' | 'crouch' = 'bounce') {
+    this.startAction(pose === 'bounce' ? 'greet' : 'pickup', durSec, emoji, 44);
+  }
+
   /** 動作是否進行中(main 撿取邏輯要在動作尾端才真的入袋) */
   get inAction(): boolean {
     return this.actionKind !== null;

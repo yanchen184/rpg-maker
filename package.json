@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "dev": "npm run dev -w apps/escape-room",
-    "build": "npm run build -w apps/escape-room",
+    "build": "npm run build -w apps/escape-room && npm run build -w tennis",
     "preview": "npm run preview -w apps/escape-room"
   }
 }
