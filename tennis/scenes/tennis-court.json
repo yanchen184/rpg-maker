@@ -1,18 +1,18 @@
 {
   "name": "tennis-court",
-  "size": { "w": 1000, "h": 1500 },
+  "size": { "w": 1500, "h": 1000 },
   "wallHeight": 0,
   "floorTile": 250,
   "floor": "grass-tile",
   "objects": [
-    { "asset": "tree-large", "x": 70, "y": 260 },
-    { "asset": "tree-large", "x": 935, "y": 260, "flip": true },
-    { "asset": "tree-large", "x": 70, "y": 1310 },
-    { "asset": "tree-large", "x": 935, "y": 1310, "flip": true },
-    { "asset": "bush-flower", "x": 62, "y": 700 },
-    { "asset": "bush-flower", "x": 940, "y": 700, "flip": true },
-    { "asset": "bush-flower", "x": 62, "y": 900 },
-    { "asset": "bush-flower", "x": 940, "y": 900, "flip": true }
+    { "asset": "tree-large", "x": 90, "y": 250 },
+    { "asset": "tree-large", "x": 1410, "y": 250, "flip": true },
+    { "asset": "tree-large", "x": 90, "y": 975 },
+    { "asset": "tree-large", "x": 1410, "y": 975, "flip": true },
+    { "asset": "bush-flower", "x": 700, "y": 82 },
+    { "asset": "bush-flower", "x": 900, "y": 82, "flip": true },
+    { "asset": "bush-flower", "x": 700, "y": 990 },
+    { "asset": "bush-flower", "x": 900, "y": 990, "flip": true }
   ],
-  "spawn": { "x": 500, "y": 1200 }
+  "spawn": { "x": 1200, "y": 500 }
 }
