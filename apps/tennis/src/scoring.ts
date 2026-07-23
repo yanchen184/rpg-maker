@@ -2,7 +2,7 @@
  * 正統網球計分(純函數,不碰網路/渲染):0/15/30/40 → Deuce/Adv → 局;先拿 MATCH_GAMES 局者勝。
  * Score 物件不可變 —— pointWon 回傳新物件,方便直接整包寫進 RTDB 同步。
  */
-export type Side = 'bottom' | 'top';
+export type Side = 'left' | 'right';
 
 /** 先拿幾局贏得整場 */
 export const MATCH_GAMES = 3;
@@ -23,13 +23,13 @@ export interface Score {
 }
 
 export function otherSide(s: Side): Side {
-  return s === 'bottom' ? 'top' : 'bottom';
+  return s === 'left' ? 'right' : 'left';
 }
 
 export function initialScore(server: Side): Score {
   return {
-    pts: { bottom: 0, top: 0 },
-    games: { bottom: 0, top: 0 },
+    pts: { left: 0, right: 0 },
+    games: { left: 0, right: 0 },
     server,
     winner: null,
     seq: 0,
@@ -47,7 +47,7 @@ export function pointWon(s: Score, to: Side): Score {
   if (p >= 4 && p - q >= 2) {
     const games = { ...s.games, [to]: s.games[to] + 1 };
     return {
-      pts: { bottom: 0, top: 0 },
+      pts: { left: 0, right: 0 },
       games,
       server: otherSide(s.server),
       winner: games[to] >= MATCH_GAMES ? to : null,
@@ -68,5 +68,5 @@ export function ptText(s: Score, side: Side): string {
 }
 
 export function isDeuce(s: Score): boolean {
-  return s.pts.bottom >= 3 && s.pts.bottom === s.pts.top;
+  return s.pts.left >= 3 && s.pts.left === s.pts.right;
 }

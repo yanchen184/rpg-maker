@@ -56,24 +56,24 @@ function ensureRoom(): string {
 
 /** 半場圍欄:限制玩家只能在自己半場活動(中心式 AABB) */
 function halfWalls(side: Side): Aabb[] {
-  if (side === 'bottom') {
+  if (side === 'left') {
     return [
-      { x: 500, y: 770, w: 1200, h: 40 }, // 網前(y 750-790)
-      { x: 500, y: 1490, w: 1200, h: 60 }, // 場底
-      { x: 15, y: 1125, w: 70, h: 900 },
-      { x: 985, y: 1125, w: 70, h: 900 },
+      { x: 730, y: 500, w: 40, h: 1200 }, // 網前(x 710-750)
+      { x: 10, y: 500, w: 60, h: 1200 }, // 場左端
+      { x: 375, y: 15, w: 900, h: 70 },
+      { x: 375, y: 985, w: 900, h: 70 },
     ];
   }
   return [
-    { x: 500, y: 730, w: 1200, h: 40 }, // 網前(y 710-750)
-    { x: 500, y: 170, w: 1200, h: 60 }, // 場頂
-    { x: 15, y: 455, w: 70, h: 700 },
-    { x: 985, y: 455, w: 70, h: 700 },
+    { x: 770, y: 500, w: 40, h: 1200 }, // 網前(x 750-790)
+    { x: 1490, y: 500, w: 60, h: 1200 }, // 場右端
+    { x: 1125, y: 15, w: 900, h: 70 },
+    { x: 1125, y: 985, w: 900, h: 70 },
   ];
 }
 
 function spawnFor(side: Side): { x: number; y: number } {
-  return side === 'bottom' ? { x: 500, y: 1150 } : { x: 500, y: 350 };
+  return side === 'left' ? { x: 350, y: 500 } : { x: 1150, y: 500 };
 }
 
 function hideLoading(): void {
@@ -125,10 +125,10 @@ async function boot(): Promise<void> {
   court.zIndex = -10000; // 標線永遠貼地
   built.objectLayer.addChild(court);
 
-  // ── 本地玩家(上下半場穿不同色好辨識) ──
+  // ── 本地玩家(左右半場穿不同色好辨識) ──
   const player = await Player.create(manifest, ['char-body'], PLAYER_SCALE);
-  await player.setOverlay(manifest, 'hair', side === 'bottom' ? 'char-hair-blonde' : 'char-hair-pink');
-  await player.setOverlay(manifest, 'shirt', side === 'bottom' ? 'char-shirt-red' : 'char-shirt-blue');
+  await player.setOverlay(manifest, 'hair', side === 'left' ? 'char-hair-blonde' : 'char-hair-pink');
+  await player.setOverlay(manifest, 'shirt', side === 'left' ? 'char-shirt-red' : 'char-shirt-blue');
   const spawn = spawnFor(side);
   player.x = spawn.x;
   player.y = spawn.y;
@@ -176,7 +176,7 @@ async function boot(): Promise<void> {
         ? '🎾 你發球'
         : '對手發球';
     sb.innerHTML =
-      `<div class="games">局數 ${score.games[side]} - ${score.games[oppo]} · 你在${side === 'bottom' ? '下' : '上'}半場(先拿 3 局)</div>` +
+      `<div class="games">局數 ${score.games[side]} - ${score.games[oppo]} · 你在${side === 'left' ? '左' : '右'}半場(先拿 3 局)</div>` +
       `<div class="pts">${pts}</div>` +
       `<div class="serve">${serveTxt}</div>`;
   };
@@ -230,8 +230,8 @@ async function boot(): Promise<void> {
 
   net.onScore = (s) => {
     if (!s) {
-      // 房主(bottom)負責開局寫初始比分
-      if (side === 'bottom') net.sendScore(initialScore('bottom'));
+      // 房主(left)負責開局寫初始比分
+      if (side === 'left') net.sendScore(initialScore('left'));
       return;
     }
     if (score && s.seq <= score.seq && s.seq !== 0) {
@@ -260,12 +260,12 @@ async function boot(): Promise<void> {
   });
   window.addEventListener('keyup', (e) => held.delete(e.key.toLowerCase()));
 
-  /** 落點:瞄準對手半場;按住左/右(A/D/方向鍵)偏打,沒按就隨機 */
+  /** 落點:瞄準對手半場;按住上/下(W/S/方向鍵)偏打,沒按就隨機 */
   const aimTarget = (): { x: number; y: number } => {
-    const aimL = held.has('a') || held.has('arrowleft');
-    const aimR = held.has('d') || held.has('arrowright');
-    const x = aimL ? rand(200, 430) : aimR ? rand(570, 800) : rand(220, 780);
-    const y = side === 'bottom' ? rand(250, 660) : rand(840, 1250);
+    const aimU = held.has('w') || held.has('arrowup');
+    const aimD = held.has('s') || held.has('arrowdown');
+    const y = aimU ? rand(200, 430) : aimD ? rand(570, 800) : rand(220, 780);
+    const x = side === 'left' ? rand(840, 1250) : rand(250, 660);
     return { x, y };
   };
 
@@ -317,9 +317,9 @@ async function boot(): Promise<void> {
 
   /** 對手這球的落點是否為好球(落在我方半場界內) */
   const shotLandsIn = (shot: Shot): boolean => {
-    const { left, right, top, bottom, netY } = COURT;
+    const { left, right, top, bottom, netX } = COURT;
     if (shot.x1 < left || shot.x1 > right || shot.y1 < top || shot.y1 > bottom) return false;
-    return shot.by === 'bottom' ? shot.y1 < netY : shot.y1 > netY;
+    return shot.by === 'left' ? shot.x1 > netX : shot.x1 < netX;
   };
 
   /** 一分結束:接球方裁定,整包寫分 + 清球 */
@@ -358,7 +358,7 @@ async function boot(): Promise<void> {
     let hint = '';
     if (opponent && score) {
       if (score.winner) hint = '按空白鍵再來一場';
-      else if (!currentShot && score.server === side) hint = '按空白鍵發球(按住 ←/→ 可瞄準)';
+      else if (!currentShot && score.server === side) hint = '按空白鍵發球(按住 ↑/↓ 可瞄準)';
       else if (canReturn()) hint = '按空白鍵回擊!';
     }
     hintEl.textContent = hint;

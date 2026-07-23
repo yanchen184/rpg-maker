@@ -2,7 +2,7 @@
  * 網球連線層(Firebase RTDB):房間配對 + 三種同步資料。
  *
  * 資料結構:settings/rpg-maker-tennis/<room>/
- *   players/bottom|top = { id, x, y, dir, ts }   位置心跳(節流;onDisconnect 自清)
+ *   players/left|right = { id, x, y, dir, ts }   位置心跳(節流;onDisconnect 自清)
  *   shot               = Shot | null             最新一次擊球事件(確定性軌跡參數)
  *   score              = Score | null            計分快照(得分裁定方整包覆寫)
  *
@@ -99,9 +99,9 @@ export class TennisNet {
     return `${TENNIS_ROOT}/${this.room}`;
   }
 
-  /** 搶槽位:先 bottom 後 top;transaction 防兩人同時搶同槽。都滿 → 丟錯 */
+  /** 搶槽位:先 left 後 right;transaction 防兩人同時搶同槽。都滿 → 丟錯 */
   async join(): Promise<Side> {
-    for (const side of ['bottom', 'top'] as Side[]) {
+    for (const side of ['left', 'right'] as Side[]) {
       const r = ref(this.db, `${this.base}/players/${side}`);
       const res = await runTransaction(r, (cur: PlayerState | null) => {
         // 槽位有人且還活著 → 放棄這槽(回 undefined 中止)
