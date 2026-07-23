@@ -1,9 +1,12 @@
 /**
- * 網球對戰 bootstrap:引擎場景 + 球場標線 + 本地/遠端玩家 + 確定性球軌跡 + Firebase 同步接線。
+ * 網球對戰 bootstrap:引擎場景 + 球場標線 + 玩家/AI + 確定性球軌跡 + 連線層接線。
  *
- * 同步模型(重點):球不逐幀同步 —— 每次擊球送一個 Shot 事件(起點/落點/時刻/時長),
- * 兩端用 server 時間各自代入同一公式模擬,畫面自然一致。失分裁定由「接球方」單邊判定
- * (漏接/對手出界都是接球方視角最清楚),裁定後整包 Score 覆寫上雲,雙方照抄。
+ * 三種模式(?mode=):
+ *   online(預設) 兩人 Firebase 連線對戰 —— 球不逐幀同步,每次擊球送一個 Shot 事件
+ *                 (起點/落點/時刻/時長),兩端用 server 時間各自代入同一公式模擬。
+ *                 失分裁定由「接球方」單邊判定,裁定後整包 Score 覆寫上雲,雙方照抄。
+ *   ai            跟 AI 對戰:你在左、AI 在右,連線層換成本機迴音壁(LocalNet),規則同一套。
+ *   watch         觀戰:左右都是 AI,自動開球、打完整場自動再開,人只看。
  */
 import { Application } from 'pixi.js';
 import {
@@ -27,23 +30,32 @@ import {
   type Side,
 } from './scoring';
 import { TennisNet, type PlayerState } from './net-tennis';
+import { LocalNet, type MatchNet } from './local-net';
 import { RemotePlayer } from './remote-player';
+import { AiController } from './ai-controller';
+import {
+  makeShot,
+  RACKET_REACH,
+  HIT_H_MAX,
+  SWING_WINDOW_MS,
+  SWING_COOLDOWN_MS,
+  type ShotKind,
+} from './shots';
 
 setAssetBase(import.meta.env.BASE_URL);
 
 const PLAYER_SCALE = 0.55;
-/** 拍子可及半徑:球(地面投影)離玩家多近才打得到 */
-const RACKET_REACH = 95;
-/** 球高超過這個就搆不到(挑高球過頂要退後等它降) */
-const HIT_H_MAX = 150;
-/** 揮拍判定窗:揮下去後這段時間內球進可及範圍就算擊中 */
-const SWING_WINDOW_MS = 150;
-/** 揮拍冷卻:亂揮會空窗 */
-const SWING_COOLDOWN_MS = 350;
 /** 加入房間時,雲上殘留的舊 shot 超過這年紀就當垃圾清掉 */
 const STALE_SHOT_MS = 15_000;
+/** 觀戰模式:整場打完後幾 ms 自動再開一場 */
+const WATCH_RESTART_MS = 3200;
 
-const rand = (a: number, b: number): number => a + Math.random() * (b - a);
+type Mode = 'online' | 'ai' | 'watch';
+
+function parseMode(): Mode {
+  const m = new URL(location.href).searchParams.get('mode');
+  return m === 'ai' ? 'ai' : m === 'watch' ? 'watch' : 'online';
+}
 
 /** 房間代碼:?room= 沒帶就生一個並寫回網址列(分享連結即對戰邀請) */
 function ensureRoom(): string {
@@ -99,7 +111,15 @@ async function boot(): Promise<void> {
   const hintEl = document.getElementById('hint')!;
   const flashEl = document.getElementById('flash')!;
 
-  const room = ensureRoom();
+  const mode = parseMode();
+  // 大廳的模式切換鈕(等人等膩了可改跟 AI 打/看 AI 對打)
+  const gotoMode = (m: Mode) => {
+    location.href = `${location.pathname}?mode=${m}`;
+  };
+  document.getElementById('mode-ai')?.addEventListener('click', () => gotoMode('ai'));
+  document.getElementById('mode-watch')?.addEventListener('click', () => gotoMode('watch'));
+
+  const room = mode === 'online' ? ensureRoom() : `local-${mode}`;
   lobbyLink.value = location.href;
   lobbyCopy.addEventListener('click', () => {
     void navigator.clipboard.writeText(lobbyLink.value).then(() => {
@@ -108,8 +128,8 @@ async function boot(): Promise<void> {
     });
   });
 
-  const net = new TennisNet(room);
-  let side: Side;
+  const net: MatchNet = mode === 'online' ? new TennisNet(room) : new LocalNet();
+  let side: Side; // 本地視角方(watch 模式無人操作,取 left 當 HUD 基準)
   try {
     side = await net.join();
   } catch {
@@ -128,25 +148,55 @@ async function boot(): Promise<void> {
   court.zIndex = -10000; // 標線永遠貼地
   built.objectLayer.addChild(court);
 
-  // ── 本地玩家(左右半場穿不同色好辨識) ──
-  const player = await Player.create(manifest, ['char-body'], PLAYER_SCALE);
-  await player.setOverlay(manifest, 'hair', side === 'left' ? 'char-hair-blonde' : 'char-hair-pink');
-  await player.setOverlay(manifest, 'shirt', side === 'left' ? 'char-shirt-red' : 'char-shirt-blue');
-  const spawn = spawnFor(side);
-  player.x = spawn.x;
-  player.y = spawn.y;
-  built.objectLayer.addChild(player.view);
-  const colliders: Aabb[] = [...built.colliders, ...halfWalls(side)];
+  // ── 本地玩家(觀戰模式沒有;左右半場穿不同色好辨識) ──
+  let player: Player | null = null;
+  let racket: Racket | null = null;
+  let colliders: Aabb[] = [];
+  if (mode !== 'watch') {
+    player = await Player.create(manifest, ['char-body'], PLAYER_SCALE);
+    await player.setOverlay(manifest, 'hair', side === 'left' ? 'char-hair-blonde' : 'char-hair-pink');
+    await player.setOverlay(manifest, 'shirt', side === 'left' ? 'char-shirt-red' : 'char-shirt-blue');
+    const spawn = spawnFor(side);
+    player.x = spawn.x;
+    player.y = spawn.y;
+    built.objectLayer.addChild(player.view);
+    colliders = [...built.colliders, ...halfWalls(side)];
+    racket = new Racket(side === 'left' ? 1 : -1);
+    built.objectLayer.addChild(racket.view);
+  }
 
   const ball = new Ball();
   built.objectLayer.addChild(ball.view);
 
-  // 球拍:自己一支、對手一支(對手那支收到對方 shot 時播揮拍)
-  const racket = new Racket(side === 'left' ? 1 : -1);
-  built.objectLayer.addChild(racket.view);
-  const remoteRacket = new Racket(side === 'left' ? -1 : 1);
-  remoteRacket.view.visible = false;
-  built.objectLayer.addChild(remoteRacket.view);
+  // ── AI 球員(ai 模式:右側一隻;watch 模式:左右各一隻) ──
+  const aiSides: Side[] = mode === 'ai' ? ['right'] : mode === 'watch' ? ['left', 'right'] : [];
+  interface AiEntity {
+    ctl: AiController;
+    body: RemotePlayer;
+    racket: Racket;
+  }
+  const ais: AiEntity[] = [];
+  for (const s of aiSides) {
+    const ctl = new AiController(s);
+    const name = mode === 'ai' ? 'AI' : s === 'left' ? 'AI·左' : 'AI·右';
+    const body = await RemotePlayer.create(
+      manifest,
+      PLAYER_SCALE,
+      { id: `ai-${s}`, x: ctl.x, y: ctl.y, dir: 'down', ts: 0 },
+      name,
+    );
+    built.objectLayer.addChild(body.view);
+    const rk = new Racket(s === 'left' ? 1 : -1);
+    built.objectLayer.addChild(rk.view);
+    ais.push({ ctl, body, racket: rk });
+  }
+
+  // 線上模式:對手球拍(收到對方 shot 時播揮拍)
+  const remoteRacket = mode === 'online' ? new Racket(side === 'left' ? -1 : 1) : null;
+  if (remoteRacket) {
+    remoteRacket.view.visible = false;
+    built.objectLayer.addChild(remoteRacket.view);
+  }
 
   // 鏡頭:整個球場置中縮放
   const fit = () => {
@@ -164,10 +214,13 @@ async function boot(): Promise<void> {
   let currentShot: Shot | null = null;
   let judgedKey = ''; // 已裁定過的 shot(seq-t0),防重複計分
   let lastFlashSeq = -1;
-  let opponent: PlayerState | null = null;
+  // 本機模式沒有真人對手,直接視為「對手在場」讓開球/提示邏輯通行
+  let opponent: PlayerState | null =
+    mode === 'online' ? null : { id: 'ai', x: 0, y: 0, dir: 'down', ts: 0 };
   let remote: RemotePlayer | null = null;
   let remoteBuilding = false;
   let flashTimer = 0;
+  let watchRestartAt = 0; // 觀戰模式自動再開的時刻(performance.now ms)
 
   const flash = (text: string) => {
     flashEl.textContent = text;
@@ -176,50 +229,66 @@ async function boot(): Promise<void> {
     flashTimer = window.setTimeout(() => (flashEl.style.display = 'none'), 1500);
   };
 
+  const sideName = (s: Side): string => (s === 'left' ? '左' : '右');
+
   const updateHud = () => {
     if (!score) return;
     sb.style.display = 'block';
+    if (mode === 'watch') {
+      const pts = isDeuce(score) ? 'Deuce' : `${ptText(score, 'left')} : ${ptText(score, 'right')}`;
+      const serveTxt = score.winner
+        ? `${sideName(score.winner)}方 AI 獲勝!稍後自動再開一場(空白鍵立刻開)`
+        : `${sideName(score.server)}方 AI 發球`;
+      sb.innerHTML =
+        `<div class="games">局數 ${score.games.left} - ${score.games.right} · 👀 AI 對打觀戰中(先拿 3 局)</div>` +
+        `<div class="pts">${pts}</div>` +
+        `<div class="serve">${serveTxt}</div>`;
+      return;
+    }
     const pts = isDeuce(score) ? 'Deuce' : `${ptText(score, side)} : ${ptText(score, oppo)}`;
+    const oppoName = mode === 'ai' ? 'AI' : '對手';
     const serveTxt = score.winner
       ? '按空白鍵再來一場'
       : score.server === side
         ? '🎾 你發球'
-        : '對手發球';
+        : `${oppoName}發球`;
     sb.innerHTML =
-      `<div class="games">局數 ${score.games[side]} - ${score.games[oppo]} · 你在${side === 'left' ? '左' : '右'}半場(先拿 3 局)</div>` +
+      `<div class="games">局數 ${score.games[side]} - ${score.games[oppo]} · 你在${sideName(side)}半場${mode === 'ai' ? ' · 對手是 AI' : ''}(先拿 3 局)</div>` +
       `<div class="pts">${pts}</div>` +
       `<div class="serve">${serveTxt}</div>`;
   };
 
-  // ── 網路事件接線 ──
-  net.onPeer = (st) => {
-    opponent = st;
-    if (st) {
-      lobby.style.display = 'none';
-      if (remote) {
-        remote.onUpdate(st);
-      } else if (!remoteBuilding) {
-        remoteBuilding = true;
-        void RemotePlayer.create(manifest, PLAYER_SCALE, st, '對手').then((rp) => {
-          remoteBuilding = false;
-          if (!opponent) {
-            rp.destroy();
-            return;
-          }
-          remote = rp;
-          built.objectLayer.addChild(rp.view);
-        });
+  // ── 連線層事件接線(線上=Firebase;本機=迴音壁) ──
+  if (mode === 'online') {
+    net.onPeer = (st) => {
+      opponent = st;
+      if (st) {
+        lobby.style.display = 'none';
+        if (remote) {
+          remote.onUpdate(st);
+        } else if (!remoteBuilding) {
+          remoteBuilding = true;
+          void RemotePlayer.create(manifest, PLAYER_SCALE, st, '對手').then((rp) => {
+            remoteBuilding = false;
+            if (!opponent) {
+              rp.destroy();
+              return;
+            }
+            remote = rp;
+            built.objectLayer.addChild(rp.view);
+          });
+        }
+      } else {
+        if (remote) {
+          built.objectLayer.removeChild(remote.view);
+          remote.destroy();
+          remote = null;
+        }
+        lobbyMsg.textContent = '等待對手加入…(把下面連結傳給對手)';
+        lobby.style.display = 'flex';
       }
-    } else {
-      if (remote) {
-        built.objectLayer.removeChild(remote.view);
-        remote.destroy();
-        remote = null;
-      }
-      lobbyMsg.textContent = '等待對手加入…(把下面連結傳給對手)';
-      lobby.style.display = 'flex';
-    }
-  };
+    };
+  }
 
   net.onShot = (shot) => {
     if (!shot) {
@@ -235,13 +304,13 @@ async function boot(): Promise<void> {
     const isNew = !currentShot || currentShot.seq !== shot.seq || currentShot.t0 !== shot.t0;
     currentShot = shot;
     ball.play(shot);
-    if (isNew && shot.by !== side) remoteRacket.swing();
+    if (isNew && shot.by !== side) remoteRacket?.swing();
   };
 
   net.onScore = (s) => {
     if (!s) {
-      // 房主(left)負責開局寫初始比分
-      if (side === 'left') net.sendScore(initialScore('left'));
+      // 房主(left)負責開局寫初始比分(本機模式在下面直接寫,不走這條)
+      if (mode === 'online' && side === 'left') net.sendScore(initialScore('left'));
       return;
     }
     if (score && s.seq <= score.seq && s.seq !== 0) {
@@ -253,16 +322,38 @@ async function boot(): Promise<void> {
     updateHud();
     if (s.seq > 0 && s.seq > lastFlashSeq && s.lastPointTo) {
       lastFlashSeq = s.seq;
-      if (s.winner) {
-        flash(s.winner === side ? '🏆 你贏了整場!' : '😢 對手獲勝');
+      if (mode === 'watch') {
+        if (s.winner) flash(`🏆 ${sideName(s.winner)}方 AI 獲勝!`);
+        else flash(`${sideName(s.lastPointTo)}方得分${isDeuce(s) ? ' — Deuce' : ''}`);
+      } else if (s.winner) {
+        flash(s.winner === side ? '🏆 你贏了整場!' : `😢 ${mode === 'ai' ? 'AI' : '對手'}獲勝`);
       } else {
         const mine = s.lastPointTo === side;
-        flash(`${mine ? '🎾 你得分!' : '對手得分'}${isDeuce(s) ? ' — Deuce' : ''}`);
+        flash(`${mine ? '🎾 你得分!' : `${mode === 'ai' ? 'AI' : '對手'}得分`}${isDeuce(s) ? ' — Deuce' : ''}`);
       }
     }
   };
 
-  // ── 揮拍/發球 ──
+  // 本機模式:直接開局(不用等雲端 null 快照)
+  if (mode !== 'online') net.sendScore(initialScore('left'));
+
+  // ── 出球(人與 AI 共用同一公式) ──
+  const shoot = (by: Side, kind: ShotKind, x0: number, y0: number, ownerY: number) => {
+    const shot = makeShot({
+      by,
+      kind,
+      x0,
+      y0,
+      ownerY,
+      prevSeq: currentShot?.seq ?? 0,
+      t0: net.now(),
+    });
+    currentShot = shot;
+    ball.play(shot);
+    net.sendShot(shot);
+  };
+
+  // ── 鍵盤:揮拍/發球(觀戰模式空白鍵只用來提早再開) ──
   const held = new Set<string>();
   window.addEventListener('keydown', (e) => {
     held.add(e.key.toLowerCase());
@@ -271,56 +362,16 @@ async function boot(): Promise<void> {
   window.addEventListener('keyup', (e) => held.delete(e.key.toLowerCase()));
 
   /** 球種:按住 ↑(W)= 挑高球、↓(S)= 平抽,沒按 = 普通球 */
-  type ShotKind = 'lob' | 'drive' | 'normal';
-  const shotKind = (): ShotKind =>
+  const humanKind = (): ShotKind =>
     held.has('w') || held.has('arrowup')
       ? 'lob'
       : held.has('s') || held.has('arrowdown')
         ? 'drive'
         : 'normal';
 
-  // 各球種參數:弧頂高度(px)/球速(px/s)/飛行時長 clamp。
-  // 網高 NET_H=46:drive 弧頂只有 48~62,過網點離弧頂稍遠就真的掛網 —— 風險換速度。
-  const KIND = {
-    lob: { apex: [225, 270], speed: 500, minMs: 1150, maxMs: 1800 },
-    normal: { apex: [110, 150], speed: 700, minMs: 700, maxMs: 1200 },
-    drive: { apex: [48, 62], speed: 950, minMs: 450, maxMs: 750 },
-  } as const;
-
-  const shoot = (x0: number, y0: number) => {
-    const kind = shotKind();
-    const k = KIND[kind];
-    // 拍球相對關係決定回球方向:擊球點偏玩家上/下方 → 回球往對面上/下帶
-    const dy = y0 - player.y;
-    const y1 = Math.max(200, Math.min(800, (COURT.top + COURT.bottom) / 2 + dy * 4 + rand(-90, 90)));
-    const x1 =
-      side === 'left'
-        ? kind === 'drive'
-          ? rand(1020, 1300)
-          : rand(840, 1250)
-        : kind === 'drive'
-          ? rand(200, 480)
-          : rand(250, 660);
-    const dist = Math.hypot(x1 - x0, y1 - y0);
-    const flightMs = Math.max(k.minMs, Math.min(k.maxMs, (dist / k.speed) * 1000));
-    const shot: Shot = {
-      seq: (currentShot?.seq ?? 0) + 1,
-      by: side,
-      x0,
-      y0,
-      x1,
-      y1,
-      t0: net.now(),
-      flightMs,
-      apexH: rand(k.apex[0], k.apex[1]),
-    };
-    currentShot = shot;
-    ball.play(shot);
-    net.sendShot(shot);
-  };
-
   /** 球在拍子可及範圍內(距離 + 高度都要夠) */
   const ballHittable = (): boolean =>
+    !!player &&
     !!currentShot &&
     currentShot.by !== side &&
     ball.phase !== 'dead' &&
@@ -332,26 +383,33 @@ async function boot(): Promise<void> {
 
   /** 判定窗內每幀試打:球真的碰到拍子(可及範圍)才出手 */
   const trySwingHit = (): boolean => {
-    if (!ballHittable()) return false;
+    if (!player || !ballHittable()) return false;
     swingUntil = 0;
-    shoot(ball.gx, ball.gy); // 從實際觸拍點出手 → dy 影響回球方向
+    shoot(side, humanKind(), ball.gx, ball.gy, player.y); // 從實際觸拍點出手 → dy 影響回球方向
     return true;
+  };
+
+  /** 再開一場:輸家先發 */
+  const restartMatch = () => {
+    if (!score?.winner) return;
+    watchRestartAt = 0;
+    net.clearShot();
+    net.sendScore(initialScore(otherSide(score.winner)));
   };
 
   const onSpace = (): boolean => {
     if (!score || !opponent) return false;
     if (score.winner) {
-      // 再來一場:輸家先發
-      net.clearShot();
-      net.sendScore(initialScore(otherSide(score.winner)));
+      restartMatch();
       return true;
     }
+    if (!player || !racket) return false; // 觀戰模式:比賽中空白鍵無作用
     const nowMs = performance.now();
     if (nowMs < nextSwingAt) return false; // 冷卻中
     nextSwingAt = nowMs + SWING_COOLDOWN_MS;
     racket.swing();
     if (!currentShot && score.server === side) {
-      shoot(player.x, player.y - 20); // 發球:拋球直接出手
+      shoot(side, humanKind(), player.x, player.y - 20, player.y); // 發球:拋球直接出手
       return true;
     }
     // 回擊:開判定窗,球進拍子範圍才算打到(揮空就是空)
@@ -359,7 +417,7 @@ async function boot(): Promise<void> {
     return trySwingHit();
   };
 
-  /** 對手這球的落點是否為好球(落在我方半場界內) */
+  /** 這球的落點是否為好球(落在接球方半場界內) */
   const shotLandsIn = (shot: Shot): boolean => {
     const { left, right, top, bottom, netX } = COURT;
     if (shot.x1 < left || shot.x1 > right || shot.y1 < top || shot.y1 > bottom) return false;
@@ -369,7 +427,7 @@ async function boot(): Promise<void> {
   /** 好球 = 落點界內且過網時高度夠(掛網 = 壞球,打者失分) */
   const goodShot = (shot: Shot): boolean => shotLandsIn(shot) && !shotHitsNet(shot);
 
-  /** 一分結束:接球方裁定,整包寫分 + 清球 */
+  /** 一分結束:整包寫分 + 清球 */
   const settlePoint = (to: Side) => {
     if (!score) return;
     const ns = pointWon(score, to);
@@ -382,37 +440,77 @@ async function boot(): Promise<void> {
   // ── 主迴圈 ──
   app.ticker.add((t) => {
     const dt = t.deltaMS / 1000;
-    player.update(dt, colliders);
+    const nowSrv = net.now();
+    if (player) {
+      player.update(dt, colliders);
+      net.push({ x: player.x, y: player.y, dir: player.dir });
+    }
     remote?.update(dt);
-    net.push({ x: player.x, y: player.y, dir: player.dir });
 
-    const phase = ball.update(net.now());
+    const phase = ball.update(nowSrv);
     // 揮拍判定窗:窗內每幀試打(球飛進拍子範圍的那幀出手)
     if (swingUntil > 0) {
       if (performance.now() <= swingUntil) trySwingHit();
       else swingUntil = 0;
     }
-    racket.update(dt, player.x, player.y);
-    remoteRacket.view.visible = !!remote;
-    if (remote) remoteRacket.update(dt, remote.view.x, remote.view.y);
+    if (player && racket) racket.update(dt, player.x, player.y);
+    if (remoteRacket) {
+      remoteRacket.view.visible = !!remote;
+      if (remote) remoteRacket.update(dt, remote.view.x, remote.view.y);
+    }
 
-    // 失分裁定(只有接球方判,單一寫入者)
-    if (currentShot && currentShot.by !== side && score && !score.winner && opponent) {
-      const key = `${currentShot.seq}-${currentShot.t0}`;
-      if (key !== judgedKey) {
-        if (phase !== 'flying' && !goodShot(currentShot)) {
-          judgedKey = key;
-          settlePoint(side); // 對手打出界或掛網 → 我得分
-        } else if (phase === 'dead') {
-          judgedKey = key;
-          settlePoint(currentShot.by); // 兩跳沒接到 → 對手得分
+    // 失分裁定:線上由接球方單邊判(單一寫入者);本機模式整場都在本頁,直接判。
+    // 注意:必須在 AI 出手「之前」裁定 —— phase 是這幀開頭算的,若 AI 先在同幀出新球,
+    // 會拿上一顆球殘留的 dead phase 誤判新球、發球瞬間就被結算。
+    if (currentShot && score && !score.winner) {
+      const receiver = otherSide(currentShot.by);
+      const canJudge = mode !== 'online' ? true : currentShot.by !== side && !!opponent;
+      if (canJudge) {
+        const key = `${currentShot.seq}-${currentShot.t0}`;
+        if (key !== judgedKey) {
+          if (phase !== 'flying' && !goodShot(currentShot)) {
+            judgedKey = key;
+            settlePoint(receiver); // 打者出界或掛網 → 接球方得分
+          } else if (phase === 'dead') {
+            judgedKey = key;
+            settlePoint(currentShot.by); // 兩跳沒接到 → 打者得分
+          }
         }
       }
     }
 
-    // 底部提示
+    // AI:感知 → 移動 → 出手(發球/回擊走跟人同一套 shoot)。放在裁定後,新球下一幀才進裁定。
+    for (const ai of ais) {
+      const intent = ai.ctl.tick(dt, {
+        shot: currentShot,
+        ballX: ball.gx,
+        ballY: ball.gy,
+        ballH: ball.h,
+        ballPhase: ball.phase,
+        score,
+        now: nowSrv,
+      });
+      ai.body.onUpdate({ id: `ai-${ai.ctl.side}`, x: ai.ctl.x, y: ai.ctl.y, dir: ai.ctl.dir, ts: nowSrv });
+      ai.body.update(dt);
+      ai.racket.update(dt, ai.body.view.x, ai.body.view.y);
+      if (intent) {
+        ai.racket.swing();
+        if (intent.type === 'serve') shoot(ai.ctl.side, intent.kind, ai.ctl.x, ai.ctl.y - 20, ai.ctl.y);
+        else shoot(ai.ctl.side, intent.kind, intent.x0, intent.y0, ai.ctl.y);
+      }
+    }
+
+    // 觀戰模式:整場結束後自動再開
+    if (mode === 'watch' && score?.winner) {
+      if (!watchRestartAt) watchRestartAt = performance.now() + WATCH_RESTART_MS;
+      else if (performance.now() >= watchRestartAt) restartMatch();
+    } else {
+      watchRestartAt = 0;
+    }
+
+    // 底部提示(觀戰模式不提示操作)
     let hint = '';
-    if (opponent && score) {
+    if (player && opponent && score) {
       if (score.winner) hint = '按空白鍵再來一場';
       else if (!currentShot && score.server === side) {
         hint = '按空白鍵發球(按住 ↑ 挑高球.↓ 平抽)';
@@ -430,6 +528,7 @@ async function boot(): Promise<void> {
   // 驗收/除錯 hook(agent-browser eval 用)
   (window as unknown as Record<string, unknown>).__tennis = {
     room,
+    mode,
     side: () => side,
     score: () => score,
     shot: () => currentShot,
@@ -440,10 +539,13 @@ async function boot(): Promise<void> {
       phase: ball.phase,
     }),
     hasOpponent: () => !!opponent,
-    pos: () => ({ x: Math.round(player.x), y: Math.round(player.y) }),
+    pos: () => (player ? { x: Math.round(player.x), y: Math.round(player.y) } : null),
+    ais: () => ais.map((a) => ({ side: a.ctl.side, x: Math.round(a.ctl.x), y: Math.round(a.ctl.y) })),
     teleport: (x: number, y: number) => {
-      player.x = x;
-      player.y = y;
+      if (player) {
+        player.x = x;
+        player.y = y;
+      }
     },
     swing: () => onSpace(),
   };
