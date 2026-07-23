@@ -4,7 +4,7 @@
  */
 import { COURT } from './court';
 import type { Shot } from './ball';
-import type { Side } from './scoring';
+import type { CourtHalf, Side } from './scoring';
 
 /** 拍子可及半徑:球(地面投影)離玩家多近才打得到 */
 export const RACKET_REACH = 95;
@@ -39,21 +39,55 @@ export interface MakeShotOpts {
   prevSeq: number;
   /** 擊球時刻(server 時間 ms) */
   t0: number;
+  /** 發球才帶:必須落進的對角發球區;一般對打省略 */
+  serveBox?: CourtHalf | null;
+}
+
+/** 發球區深度:發球線在 netX ± 這個距離 */
+export const SERVICE_LINE_DIST = 300;
+
+/** 發球落點是否進對角發球區(非發球一律 true;裁定與測試共用的純函數) */
+export function serveLandsIn(shot: Shot): boolean {
+  if (!shot.serveBox) return true;
+  const { netX, top, bottom } = COURT;
+  const midY = (top + bottom) / 2;
+  const xOk =
+    shot.by === 'left'
+      ? shot.x1 >= netX && shot.x1 <= netX + SERVICE_LINE_DIST
+      : shot.x1 >= netX - SERVICE_LINE_DIST && shot.x1 <= netX;
+  const yOk = shot.serveBox === 'top' ? shot.y1 >= top && shot.y1 <= midY : shot.y1 > midY && shot.y1 <= bottom;
+  return xOk && yOk;
 }
 
 /** 出球:落點帶隨機散布,球種決定弧頂/球速;回傳確定性軌跡參數 */
 export function makeShot(o: MakeShotOpts): Shot {
   const k = KIND[o.kind];
-  const dy = o.y0 - o.ownerY;
-  const y1 = Math.max(200, Math.min(800, (COURT.top + COURT.bottom) / 2 + dy * 4 + rand(-90, 90)));
-  const x1 =
-    o.by === 'left'
-      ? o.kind === 'drive'
-        ? rand(1020, 1300)
-        : rand(840, 1250)
-      : o.kind === 'drive'
-        ? rand(200, 480)
-        : rand(250, 660);
+  let x1: number;
+  let y1: number;
+  if (o.serveBox) {
+    // 發球:瞄對角發球區(網到發球線 × 上/下半區)。散布刻意略超框 ——
+    // 貼線冒險,偏出去就是真的一發失誤;drive 發球快但超框量最大。
+    const { netX, top, bottom } = COURT;
+    const midY = (top + bottom) / 2;
+    const deep = o.kind === 'drive' ? 70 : 25; // 深度超框量(過發球線 = 長失誤)
+    const wide = o.kind === 'drive' ? 40 : 15; // 縱向超框量(越中線/邊線 = 寬失誤)
+    x1 =
+      o.by === 'left'
+        ? rand(netX + 40, netX + SERVICE_LINE_DIST - 8 + deep)
+        : rand(netX - SERVICE_LINE_DIST + 8 - deep, netX - 40);
+    y1 = o.serveBox === 'top' ? rand(top + 30 - wide, midY - 20 + wide) : rand(midY + 20 - wide, bottom - 30 + wide);
+  } else {
+    const dy = o.y0 - o.ownerY;
+    y1 = Math.max(200, Math.min(800, (COURT.top + COURT.bottom) / 2 + dy * 4 + rand(-90, 90)));
+    x1 =
+      o.by === 'left'
+        ? o.kind === 'drive'
+          ? rand(1020, 1300)
+          : rand(840, 1250)
+        : o.kind === 'drive'
+          ? rand(200, 480)
+          : rand(250, 660);
+  }
   const dist = Math.hypot(x1 - o.x0, y1 - o.y0);
   const flightMs = Math.max(k.minMs, Math.min(k.maxMs, (dist / k.speed) * 1000));
   return {
@@ -66,5 +100,6 @@ export function makeShot(o: MakeShotOpts): Shot {
     t0: o.t0,
     flightMs,
     apexH: rand(k.apex[0], k.apex[1]),
+    serveBox: o.serveBox ?? null,
   };
 }

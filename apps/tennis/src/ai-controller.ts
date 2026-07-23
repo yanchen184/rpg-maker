@@ -5,7 +5,7 @@
  * 失誤來源是自然的:反應延遲 + 落點預估誤差 + 腳程追不上快球,不靠作弊骰失誤。
  */
 import type { Shot } from './ball';
-import type { Score, Side } from './scoring';
+import { serveHalf, type Score, type Side } from './scoring';
 import { RACKET_REACH, HIT_H_MAX, SWING_COOLDOWN_MS, type ShotKind } from './shots';
 
 /** AI 每幀感知(座標同球場世界座標) */
@@ -35,10 +35,17 @@ interface AiOpts {
 
 const rand = (a: number, b: number): number => a + Math.random() * (b - a);
 
-/** 發球/回擊選球種:普通為主,偶爾冒險平抽或吊高 */
+/** 回擊選球種:普通為主,偶爾冒險平抽或吊高 */
 function pickKind(): ShotKind {
   const r = Math.random();
   return r < 0.2 ? 'lob' : r < 0.38 ? 'drive' : 'normal';
+}
+
+/** 發球選球種:一發敢冒險平抽搶攻,二發(已有失誤)改保守確保進區 */
+function pickServeKind(faults: number): ShotKind {
+  const r = Math.random();
+  if (faults > 0) return r < 0.15 ? 'lob' : 'normal';
+  return r < 0.1 ? 'lob' : r < 0.45 ? 'drive' : 'normal';
 }
 
 export class AiController {
@@ -83,17 +90,25 @@ export class AiController {
 
     const sh = s.shot;
     if (!sh) {
-      // 空場:輪到自己就排一個發球時刻(裝作思考),否則回位等接發
+      // 空場:輪到自己發球 → 先走到正確站位半區(deuce/ad 依局內分數奇偶),
+      // 到位才排發球時刻(裝作思考);否則回位等接發
       if (s.score.server === this.side) {
-        if (!this.serveAt) this.serveAt = s.now + rand(900, 1700);
-        if (s.now >= this.serveAt) {
+        const half = serveHalf(this.side, s.score);
+        const spot = { x: this.home.x, y: half === 'top' ? 330 : 670 };
+        this.moveToward(spot, dtSec);
+        if (Math.abs(this.y - spot.y) < 40 && Math.abs(this.x - spot.x) < 60) {
+          if (!this.serveAt) this.serveAt = s.now + rand(900, 1700);
+          if (s.now >= this.serveAt) {
+            this.serveAt = 0;
+            return { type: 'serve', kind: pickServeKind(s.score.faults ?? 0) };
+          }
+        } else {
           this.serveAt = 0;
-          return { type: 'serve', kind: pickKind() };
         }
       } else {
         this.serveAt = 0;
+        this.moveToward(this.home, dtSec);
       }
-      this.moveToward(this.home, dtSec);
       return null;
     }
 

@@ -23,6 +23,9 @@ import { Racket } from './racket';
 import {
   initialScore,
   pointWon,
+  faultCommitted,
+  serveHalf,
+  otherHalf,
   ptText,
   isDeuce,
   otherSide,
@@ -35,6 +38,7 @@ import { RemotePlayer } from './remote-player';
 import { AiController } from './ai-controller';
 import {
   makeShot,
+  serveLandsIn,
   RACKET_REACH,
   HIT_H_MAX,
   SWING_WINDOW_MS,
@@ -238,7 +242,7 @@ async function boot(): Promise<void> {
       const pts = isDeuce(score) ? 'Deuce' : `${ptText(score, 'left')} : ${ptText(score, 'right')}`;
       const serveTxt = score.winner
         ? `${sideName(score.winner)}方 AI 獲勝!稍後自動再開一場(空白鍵立刻開)`
-        : `${sideName(score.server)}方 AI 發球`;
+        : `${sideName(score.server)}方 AI 發球${(score.faults ?? 0) > 0 ? '(第二發)' : ''}`;
       sb.innerHTML =
         `<div class="games">局數 ${score.games.left} - ${score.games.right} · 👀 AI 對打觀戰中(先拿 3 局)</div>` +
         `<div class="pts">${pts}</div>` +
@@ -247,11 +251,12 @@ async function boot(): Promise<void> {
     }
     const pts = isDeuce(score) ? 'Deuce' : `${ptText(score, side)} : ${ptText(score, oppo)}`;
     const oppoName = mode === 'ai' ? 'AI' : '對手';
+    const secondServe = (score.faults ?? 0) > 0 ? '(第二發)' : '';
     const serveTxt = score.winner
       ? '按空白鍵再來一場'
       : score.server === side
-        ? '🎾 你發球'
-        : `${oppoName}發球`;
+        ? `🎾 你發球${secondServe}`
+        : `${oppoName}發球${secondServe}`;
     sb.innerHTML =
       `<div class="games">局數 ${score.games[side]} - ${score.games[oppo]} · 你在${sideName(side)}半場${mode === 'ai' ? ' · 對手是 AI' : ''}(先拿 3 局)</div>` +
       `<div class="pts">${pts}</div>` +
@@ -331,6 +336,12 @@ async function boot(): Promise<void> {
         const mine = s.lastPointTo === side;
         flash(`${mine ? '🎾 你得分!' : `${mode === 'ai' ? 'AI' : '對手'}得分`}${isDeuce(s) ? ' — Deuce' : ''}`);
       }
+    } else if (s.seq > 0 && s.seq > lastFlashSeq && !s.lastPointTo && (s.faults ?? 0) === 1) {
+      // 一發失誤(fault 更新沒有得分者):兩端都跳失誤快報
+      lastFlashSeq = s.seq;
+      const who =
+        mode === 'watch' ? `${sideName(s.server)}方 AI` : s.server === side ? '你' : mode === 'ai' ? 'AI' : '對手';
+      flash(`⚠️ ${who}一發失誤,還有第二發`);
     }
   };
 
@@ -338,7 +349,10 @@ async function boot(): Promise<void> {
   if (mode !== 'online') net.sendScore(initialScore('left'));
 
   // ── 出球(人與 AI 共用同一公式) ──
+  const COURT_MID = (COURT.top + COURT.bottom) / 2;
   const shoot = (by: Side, kind: ShotKind, x0: number, y0: number, ownerY: number) => {
+    // 沒有球在飛 = 這球是發球:必須瞄對角發球區(站位半區的相反 y 半區)
+    const serving = !currentShot && !!score;
     const shot = makeShot({
       by,
       kind,
@@ -347,6 +361,7 @@ async function boot(): Promise<void> {
       ownerY,
       prevSeq: currentShot?.seq ?? 0,
       t0: net.now(),
+      serveBox: serving && score ? otherHalf(serveHalf(by, score)) : null,
     });
     currentShot = shot;
     ball.play(shot);
@@ -404,14 +419,25 @@ async function boot(): Promise<void> {
       return true;
     }
     if (!player || !racket) return false; // 觀戰模式:比賽中空白鍵無作用
+    if (!currentShot && score.server === side) {
+      // 發球:必須站在正確半區(deuce/ad 依局內分數奇偶),站錯不揮拍只提示
+      const half = serveHalf(side, score);
+      const okPos = half === 'top' ? player.y < COURT_MID : player.y > COURT_MID;
+      if (!okPos) {
+        flash(`發球要站在${half === 'top' ? '上' : '下'}半區(往${half === 'top' ? '上' : '下'}移動)`);
+        return false;
+      }
+      const nowMs = performance.now();
+      if (nowMs < nextSwingAt) return false; // 冷卻中
+      nextSwingAt = nowMs + SWING_COOLDOWN_MS;
+      racket.swing();
+      shoot(side, humanKind(), player.x, player.y - 20, player.y); // 發球:拋球直接出手
+      return true;
+    }
     const nowMs = performance.now();
     if (nowMs < nextSwingAt) return false; // 冷卻中
     nextSwingAt = nowMs + SWING_COOLDOWN_MS;
     racket.swing();
-    if (!currentShot && score.server === side) {
-      shoot(side, humanKind(), player.x, player.y - 20, player.y); // 發球:拋球直接出手
-      return true;
-    }
     // 回擊:開判定窗,球進拍子範圍才算打到(揮空就是空)
     swingUntil = nowMs + SWING_WINDOW_MS;
     return trySwingHit();
@@ -424,13 +450,23 @@ async function boot(): Promise<void> {
     return shot.by === 'left' ? shot.x1 > netX : shot.x1 < netX;
   };
 
-  /** 好球 = 落點界內且過網時高度夠(掛網 = 壞球,打者失分) */
-  const goodShot = (shot: Shot): boolean => shotLandsIn(shot) && !shotHitsNet(shot);
+  /** 好球 = 落點界內且過網時高度夠(掛網 = 壞球,打者失分);發球另須落進對角發球區 */
+  const goodShot = (shot: Shot): boolean => shotLandsIn(shot) && serveLandsIn(shot) && !shotHitsNet(shot);
 
   /** 一分結束:整包寫分 + 清球 */
   const settlePoint = (to: Side) => {
     if (!score) return;
     const ns = pointWon(score, to);
+    net.sendScore(ns);
+    net.clearShot();
+    currentShot = null;
+    ball.clear();
+  };
+
+  /** 發球失敗一次:一發失誤 → 記 fault 重發;雙誤 → 接球方得分 */
+  const settleFault = (receiver: Side) => {
+    if (!score) return;
+    const ns = faultCommitted(score, receiver);
     net.sendScore(ns);
     net.clearShot();
     currentShot = null;
@@ -470,7 +506,9 @@ async function boot(): Promise<void> {
         if (key !== judgedKey) {
           if (phase !== 'flying' && !goodShot(currentShot)) {
             judgedKey = key;
-            settlePoint(receiver); // 打者出界或掛網 → 接球方得分
+            // 發球失敗(沒進發球區/掛網)走一二發規則;對打壞球直接失分
+            if (currentShot.serveBox) settleFault(receiver);
+            else settlePoint(receiver); // 打者出界或掛網 → 接球方得分
           } else if (phase === 'dead') {
             judgedKey = key;
             settlePoint(currentShot.by); // 兩跳沒接到 → 打者得分
@@ -513,7 +551,13 @@ async function boot(): Promise<void> {
     if (player && opponent && score) {
       if (score.winner) hint = '按空白鍵再來一場';
       else if (!currentShot && score.server === side) {
-        hint = '按空白鍵發球(按住 ↑ 挑高球.↓ 平抽)';
+        // 發球提示:含站位半區與第幾發(站錯先引導移動)
+        const half = serveHalf(side, score);
+        const okPos = half === 'top' ? player.y < COURT_MID : player.y > COURT_MID;
+        const nth = (score.faults ?? 0) > 0 ? '第二發' : '第一發';
+        hint = okPos
+          ? `${nth}:按空白鍵發球,要落進對角發球區(按住 ↑ 挑高球.↓ 平抽)`
+          : `${nth}:先移動到${half === 'top' ? '上' : '下'}半區才能發球`;
       } else if (currentShot && currentShot.by !== side && ball.phase !== 'dead') {
         const d = Math.hypot(ball.gx - player.x, ball.gy - player.y);
         if (d <= RACKET_REACH * 1.6) {
@@ -548,6 +592,27 @@ async function boot(): Promise<void> {
       }
     },
     swing: () => onSpace(),
+    /** 測試用:指定落點直接發一顆球(繞過散布,驗發球區裁定/雙誤用) */
+    debugServe: (x1: number, y1: number) => {
+      if (!score || currentShot || !player || score.server !== side) return null;
+      const box = otherHalf(serveHalf(side, score));
+      const shot: Shot = {
+        seq: 1,
+        by: side,
+        x0: player.x,
+        y0: player.y - 20,
+        x1,
+        y1,
+        t0: net.now(),
+        flightMs: 450,
+        apexH: 56,
+        serveBox: box,
+      };
+      currentShot = shot;
+      ball.play(shot);
+      net.sendShot(shot);
+      return box;
+    },
   };
 
   hideLoading();

@@ -16,10 +16,39 @@ export interface Score {
   server: Side;
   /** 整場勝者;null = 進行中 */
   winner: Side | null;
-  /** 每得一分 +1(接收端去重/判新用) */
+  /** 每得一分 +1(接收端去重/判新用;發球失誤也 +1 讓兩端同步失誤狀態) */
   seq: number;
-  /** 上一分得主(顯示快報用) */
+  /** 上一分得主(顯示快報用;發球失誤更新時為 null) */
   lastPointTo: Side | null;
+  /** 本分已失誤的發球數(0 = 第一發,1 = 第二發;二發再失誤 = 雙誤失分) */
+  faults: number;
+}
+
+/** 球場上/下半區(發球站位與對角發球區用) */
+export type CourtHalf = 'top' | 'bottom';
+
+export function otherHalf(h: CourtHalf): CourtHalf {
+  return h === 'top' ? 'bottom' : 'top';
+}
+
+/**
+ * 發球站位半區:依局內總分奇偶輪替(正統 deuce/ad court)。
+ * 左方面向 +x,右手邊是畫面下方;右方面向 -x,右手邊是畫面上方 —— 偶數分都站自己的右半區。
+ */
+export function serveHalf(server: Side, s: Score): CourtHalf {
+  const even = (s.pts.left + s.pts.right) % 2 === 0;
+  return server === 'left' ? (even ? 'bottom' : 'top') : even ? 'top' : 'bottom';
+}
+
+/**
+ * 發球失誤一次:第一發失誤 → 記 fault 換第二發(lastPointTo 置 null,快報顯示失誤而非得分);
+ * 第二發再失誤(雙誤)→ 接球方得分。純函數,方便單測與兩端一致。
+ */
+export function faultCommitted(s: Score, receiver: Side): Score {
+  if (s.winner) return s;
+  const f = (s.faults ?? 0) + 1;
+  if (f >= 2) return pointWon({ ...s, faults: 0 }, receiver);
+  return { ...s, faults: f, seq: s.seq + 1, lastPointTo: null };
 }
 
 export function otherSide(s: Side): Side {
@@ -34,6 +63,7 @@ export function initialScore(server: Side): Score {
     winner: null,
     seq: 0,
     lastPointTo: null,
+    faults: 0,
   };
 }
 
@@ -53,9 +83,10 @@ export function pointWon(s: Score, to: Side): Score {
       winner: games[to] >= MATCH_GAMES ? to : null,
       seq: s.seq + 1,
       lastPointTo: to,
+      faults: 0,
     };
   }
-  return { ...s, pts: { ...s.pts, [to]: p }, seq: s.seq + 1, lastPointTo: to };
+  return { ...s, pts: { ...s.pts, [to]: p }, seq: s.seq + 1, lastPointTo: to, faults: 0 };
 }
 
 /** 該方目前分數的顯示文字(0/15/30/40/Adv) */

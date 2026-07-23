@@ -12,7 +12,7 @@
  *   dead    死球(等接球判定/清場)
  */
 import { Container, Graphics } from 'pixi.js';
-import type { Side } from './scoring';
+import type { CourtHalf, Side } from './scoring';
 import { COURT } from './court';
 
 export interface Shot {
@@ -29,6 +29,8 @@ export interface Shot {
   flightMs: number;
   /** 飛行最高點(px):挑高球大、平抽小 —— 決定過不過得了網 */
   apexH: number;
+  /** 發球才有:必須落進的對角發球區;一般對打為 null(RTDB 不吃 undefined) */
+  serveBox?: CourtHalf | null;
 }
 
 export type BallPhase = 'flying' | 'bounce' | 'dead';

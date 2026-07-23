@@ -31,7 +31,9 @@ export class Racket {
   }
 
   private restRotation(): number {
-    return 0.9; // 垂在身側
+    // 預備姿勢:拍頭朝上前方(掉到正值會像拍子拖地)。
+    // scale.x 鏡像後同一 rotation 對右方是點對稱不是鏡像,角度要乘 facing 才左右對稱。
+    return this.facing * -0.55;
   }
 
   swing(): void {
@@ -55,8 +57,8 @@ export class Racket {
       this.arm.rotation = this.restRotation();
       return;
     }
-    // 由後往前掃:-100° → +80°,前段快後段收(easeOut)
+    // 由後往前掃:-100° → +80°,前段快後段收(easeOut);乘 facing 讓右方鏡像對稱
     const e = 1 - (1 - p) * (1 - p);
-    this.arm.rotation = -1.75 + e * 3.15;
+    this.arm.rotation = this.facing * (-1.75 + e * 3.15);
   }
 }
