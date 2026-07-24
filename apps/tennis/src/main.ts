@@ -551,6 +551,7 @@ async function boot(): Promise<void> {
     pendingKind = kind;
     sfx.swing(); // 風聲:揮空也有回饋,打到再疊擊球聲
     racket.swing();
+    anim[side].pose('swing', facingOf(side)); // 空揮也要帶身,不然角色像雕像只有拍子在飛
     // 回擊:開判定窗,球進拍子範圍才算打到(揮空就是空)
     swingUntil = nowMs + SWING_WINDOW_MS;
     return trySwingHit();
