@@ -55,7 +55,7 @@ export class Racket {
   update(dtSec: number, ownerX: number, ownerY: number, dir: string = 'down'): void {
     if (this.swingT >= 0) {
       // 揮拍中:抬到肩高朝網掃出大弧(-120° → +86°),前段快後段收(easeOut)
-      this.view.x = ownerX + this.facing * 12;
+      this.view.x = ownerX + this.facing * 18;
       this.view.y = ownerY - 58;
       this.view.zIndex = ownerY + 1;
       this.swingT += dtSec;
@@ -67,44 +67,47 @@ export class Racket {
         const vis = (ee: number): number =>
           this.facing === 1 ? -2.1 + ee * 3.6 : Math.PI + 2.1 - ee * 3.6;
         this.trail.clear();
-        this.trail.arc(0, 0, 34, vis(0), vis(e), this.facing === -1).stroke({ color: 0xffffff, width: 9, alpha: 0.3 });
+        this.trail.arc(0, 0, 40, vis(0), vis(e), this.facing === -1).stroke({ color: 0xffffff, width: 12, alpha: 0.4 });
         this.trail
-          .arc(0, 0, 34, vis(Math.max(0, e - 0.35)), vis(e), this.facing === -1)
-          .stroke({ color: 0xffffff, width: 4, alpha: 0.75 });
+          .arc(0, 0, 40, vis(Math.max(0, e - 0.35)), vis(e), this.facing === -1)
+          .stroke({ color: 0xffffff, width: 5, alpha: 0.9 });
         return;
       }
       this.swingT = -1; // 收拍,落回下面的持拍姿勢
       this.trail.clear();
     }
-    // 平時:右手持拍,錨點 = 各方向 idle 圖實測的拳頭位置(相對腳底中心)。
+    // 平時:右手持拍、拍頭朝上的預備姿勢(網球員拿拍樣)。
+    // 錨點 = 各方向 idle 圖實測的拳頭位置(相對玩家錨點);phi = 拍柄指向的視覺角。
     // down 正面右手在畫面左;up 背面在畫面右;面右時右手是近側(畫前),面左時在遠側(藏身後)。
     let hx: number;
     let hy: number;
+    let phi: number;
     let front = true;
     switch (dir) {
-      case 'up':
+      case 'up': // 背面:拳頭在畫面右,拍頭朝右上舉到肩旁
         hx = 18;
         hy = -45;
+        phi = -0.85;
         break;
-      case 'right': // 面朝右:右手近側,拍頭拖在身後(畫面左下)
+      case 'right': // 面朝右:右手近側,拍頭朝行進方向斜上(預備姿)
         hx = -4;
         hy = -46;
+        phi = -0.85;
         break;
-      case 'left': // 面朝左:右手遠側,拍子被身體擋、拍頭從身後探出(畫面右下)
+      case 'left': // 面朝左:右手遠側,拍在身後、拍頭從左肩後探出朝上
         hx = 3;
         hy = -45;
+        phi = -2.3;
         front = false;
         break;
-      default: // 正面(down):右手在畫面左
+      default: // 正面(down):拳頭在畫面左,拍頭朝左上舉到肩旁
         hx = -15;
         hy = -40;
+        phi = -2.3;
     }
     this.view.x = ownerX + hx;
     this.view.y = ownerY + hy;
     this.view.zIndex = front ? ownerY + 1 : ownerY - 1;
-    // 拍頭朝斜下外側(自然垂手持拍);側身立一點且拖在身後
-    const sideOn = dir === 'left' || dir === 'right';
-    const tilt = sideOn ? 1.05 : 0.68;
-    this.arm.rotation = this.rotFromVisual(hx >= 0 ? tilt : Math.PI - tilt);
+    this.arm.rotation = this.rotFromVisual(phi);
   }
 }
