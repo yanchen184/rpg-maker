@@ -54,29 +54,56 @@ export class Racket {
   /** 每幀跟隨主人位置 + 推進揮拍動畫(dir = 主人面向,右手持拍:錨點釘在該方向拳頭的實測像素) */
   update(dtSec: number, ownerX: number, ownerY: number, dir: string = 'down'): void {
     if (this.swingT >= 0) {
-      // 揮拍中:抬到肩高朝網掃出大弧(-120° → +86°),前段快後段收(easeOut)
-      this.view.x = ownerX + this.facing * 18;
-      this.view.y = ownerY - 58;
-      this.view.zIndex = ownerY + 1;
+      // 揮拍中:正手抽球「低到高」U 形弧——身側引拍(166°)沉到身前低點,向前上加速,收在對側肩上方(-57°)。
+      // easeInOut:引拍慢 → 擊球區快 → 收拍減速(easeOut 會把節奏顛倒成引拍最快)。
+      this.view.x = ownerX + this.facing * 6;
+      this.view.y = ownerY - 42;
       this.swingT += dtSec;
       const p = this.swingT / (SWING_MS / 1000);
       if (p < 1) {
-        const e = 1 - (1 - p) * (1 - p);
-        this.arm.rotation = this.facing * (-2.1 + e * 3.6);
-        // 殘影弧:只留跟在拍頭後面的一段(彗星尾),畫全弧會像套在身上的呼拉圈
+        const e = p < 0.5 ? 2 * p * p : 1 - ((-2 * p + 2) * (-2 * p + 2)) / 2;
+        // 引拍段拍藏身後,掄出來才到身前,加一層「從身後帶出」的縱深
+        this.view.zIndex = e < 0.22 ? ownerY - 1 : ownerY + 1;
+        const phi = 2.9 - e * 3.9;
+        this.arm.rotation = this.facing * phi;
         const vis = (ee: number): number =>
-          this.facing === 1 ? -2.1 + ee * 3.6 : Math.PI + 2.1 - ee * 3.6;
+          this.facing === 1 ? 2.9 - ee * 3.9 : Math.PI - 2.9 + ee * 3.9;
+        const v = vis(e);
+        // 拍柄鎖在「伸出去的拳頭」上(離身 12px),不是釘在胸口——
+        // 否則整支拍看起來繞角色公轉,握拍關係讀不出來。
+        const fx = Math.cos(v) * 12;
+        const fy = Math.sin(v) * 12;
+        this.arm.position.set(fx, fy);
         this.trail.clear();
-        this.trail
-          .arc(0, 0, 40, vis(Math.max(0, e - 0.4)), vis(e), this.facing === -1)
-          .stroke({ color: 0xffffff, width: 12, alpha: 0.35 });
-        this.trail
-          .arc(0, 0, 40, vis(Math.max(0, e - 0.15)), vis(e), this.facing === -1)
-          .stroke({ color: 0xffffff, width: 5, alpha: 0.9 });
+        // 殘影:拍頭端亮而實、尾端淡而細的彗星尾(畫全弧會像套在身上的呼拉圈)。
+        // 起訖角相同的退化弧 Pixi 會畫成整圈,起手那幾幀要跳過。
+        const tailLo = Math.max(0, e - 0.45);
+        const tailHi = Math.max(0, e - 0.1);
+        if (tailHi - tailLo > 0.01) {
+          this.trail
+            .arc(0, 0, 45, vis(tailLo), vis(tailHi), this.facing === 1)
+            .stroke({ color: 0xffffff, width: 4, alpha: 0.22 });
+        }
+        if (e - Math.max(0, e - 0.12) > 0.01) {
+          this.trail
+            .arc(0, 0, 45, vis(Math.max(0, e - 0.12)), vis(e), this.facing === 1)
+            .stroke({ color: 0xffffff, width: 9, alpha: 0.9 });
+        }
+        // 手臂 + 拳頭:從胸口伸向拍柄根,讓「拍握在手上」單格可讀
+        this.trail.moveTo(0, -2).lineTo(fx, fy).stroke({ color: 0xf2c398, width: 5 });
+        this.trail.circle(fx, fy, 4).fill(0xf2c398);
+        // 擊球瞬間(弧的最低點通過身前):拍頭閃一圈亮邊,標示接觸時刻
+        if (e > 0.42 && e < 0.62) {
+          const hv = vis(e);
+          this.trail
+            .circle(Math.cos(hv) * 45, Math.sin(hv) * 45, 13)
+            .stroke({ color: 0xffffcc, width: 3, alpha: 0.85 });
+        }
         return;
       }
       this.swingT = -1; // 收拍,落回下面的持拍姿勢
       this.trail.clear();
+      this.arm.position.set(0, 0); // idle 錨點本身就是拳頭位置,拍柄歸位
     }
     // 平時:右手持拍、拍頭朝上的預備姿勢(網球員拿拍樣)。
     // 錨點 = 各方向 idle 圖實測的拳頭位置(相對玩家錨點);phi = 拍柄指向的視覺角。
