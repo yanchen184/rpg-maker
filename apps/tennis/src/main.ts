@@ -587,8 +587,11 @@ async function boot(): Promise<void> {
   };
 
   // ── 主迴圈 ──
+  // 測試用時間縮放(__tennis.slowmo):只縮 dt 驅動的動畫(揮拍/走路),球飛行走伺服器時鐘不受影響
+  let timeScale = 1;
   app.ticker.add((t) => {
-    const dt = t.deltaMS / 1000;
+    const rawDt = t.deltaMS / 1000;
+    const dt = rawDt * timeScale;
     const nowSrv = net.now();
     if (player) {
       player.update(dt, colliders);
@@ -603,7 +606,7 @@ async function boot(): Promise<void> {
       sfx.bounce();
       fx.puff(ball.gx, ball.gy);
     }
-    fx.update(dt);
+    fx.update(rawDt); // 特效走真實時間:slowmo 只慢角色動畫,puff 圈不會被拉長掛在畫面上
     anim.left.update(dt);
     anim.right.update(dt);
     // 畫面震動:在鏡頭基準位置上加抖動,指數衰減
@@ -740,6 +743,9 @@ async function boot(): Promise<void> {
       }
     },
     swing: (kind: ShotKind = 'normal') => onSwing(kind),
+    slowmo: (f: number) => {
+      timeScale = f;
+    },
     /** 測試用:模擬按住方向鍵(下次 humanAim 讀得到) */
     holdKey: (k: string, down: boolean) => (down ? held.add(k) : held.delete(k)),
     /** 測試用:指定落點直接發一顆球(繞過散布,驗發球區裁定/雙誤用) */

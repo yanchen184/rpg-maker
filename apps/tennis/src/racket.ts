@@ -63,13 +63,15 @@ export class Racket {
       if (p < 1) {
         const e = 1 - (1 - p) * (1 - p);
         this.arm.rotation = this.facing * (-2.1 + e * 3.6);
-        // 殘影弧:從起拍角掃到當前拍角,亮尾巴跟在拍頭後面
+        // 殘影弧:只留跟在拍頭後面的一段(彗星尾),畫全弧會像套在身上的呼拉圈
         const vis = (ee: number): number =>
           this.facing === 1 ? -2.1 + ee * 3.6 : Math.PI + 2.1 - ee * 3.6;
         this.trail.clear();
-        this.trail.arc(0, 0, 40, vis(0), vis(e), this.facing === -1).stroke({ color: 0xffffff, width: 12, alpha: 0.4 });
         this.trail
-          .arc(0, 0, 40, vis(Math.max(0, e - 0.35)), vis(e), this.facing === -1)
+          .arc(0, 0, 40, vis(Math.max(0, e - 0.4)), vis(e), this.facing === -1)
+          .stroke({ color: 0xffffff, width: 12, alpha: 0.35 });
+        this.trail
+          .arc(0, 0, 40, vis(Math.max(0, e - 0.15)), vis(e), this.facing === -1)
           .stroke({ color: 0xffffff, width: 5, alpha: 0.9 });
         return;
       }
