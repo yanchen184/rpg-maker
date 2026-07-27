@@ -1,0 +1,18 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a TENNIS BACKHAND SWING sprite sheet: a 4x4 grid of 16 frames showing ONE continuous animation, read order left-to-right, top-to-bottom (frame 1 = top-left, frame 16 = bottom-right).
+- Character: the SAME cute chibi boy as the reference image (short dark brown hair, plain white t-shirt, dark navy pants, brown shoes, about 2.5 heads tall, 16-bit pixel art, Stardew Valley style). Same size in every frame, feet on the same baseline in every cell. Tennis racket held in his RIGHT hand in EVERY frame, clearly gripped.
+
+CRITICAL — the racket head must travel ONE SINGLE SMOOTH ARC that never switches sides abruptly or resets. Think of the racket head as a bead sliding along one curved wire from low-left to high-right; between ANY two neighbouring frames it may only slide a SMALL step along that wire, never jump across the body, never teleport back to an earlier position.
+
+- The swing is aimed to the LEFT of the screen (backhand). Racket-HEAD path across the 16 frames (cell is ~313px):
+  - Frames 1-4 (prep): from a centered ready position the racket head is drawn LEFT and slightly DOWN, ending low behind his left hip. Both hands briefly on the grip (two-handed backhand prep). Focused face.
+  - Frames 5-8 (coil): racket head stays LOW on his LEFT side, drifting a little further back/down each frame — it must NOT rise or cross to the right yet. Torso twisted left, knees bent, weight loading. Determined gritted-teeth face.
+  - Frames 9-12 (forward sweep): the racket head sweeps in ONE continuous rising diagonal from low-left, up across the front of his body, passing the contact point (in front, waist height, ~frame 10-11) and continuing up toward the right. Each frame the head is HIGHER and further RIGHT than the previous — monotonic, no backtracking. Intense wide-eyed face.
+  - Frames 13-16 (follow-through): racket head continues along the SAME arc to finish HIGH on his RIGHT side above his shoulder (13-14), then eases down slightly to a light ready stance (15-16). Chest opens toward viewer. Small satisfied smile.
+- FORBIDDEN: the racket head jumping from one side to the other in a single step; the head on the right in one frame and back on the left in the next; any forward-swing frame lower than an earlier forward-swing frame. The path is strictly low-left -> across -> high-right, exactly once.
+- Keep the racket FRAME (head + strings) a consistent dark navy-grey colour in all 16 frames, never reddish.
+- The arms must read clearly every frame: shoulders, elbows, fists on the grip. Only TWO arms total. Keep at least 6px transparent margin from every cell edge in every frame.
+- Background: fully transparent. NO ball, NO floor, NO shadow, NO motion-blur streaks.
+- No grid lines, no labels, no text.

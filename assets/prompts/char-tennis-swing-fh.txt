@@ -1,0 +1,16 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a TENNIS FOREHAND SWING sprite sheet: a 4x4 grid of 16 frames showing ONE continuous animation, read order left-to-right, top-to-bottom (frame 1 = top-left, frame 16 = bottom-right).
+- Character: the SAME cute chibi boy as the reference image (short dark brown hair, plain white t-shirt, dark navy pants, brown shoes, about 2.5 heads tall, 16-bit pixel art, Stardew Valley style). Same size in every frame, feet on the same baseline in every cell. He holds a tennis racket in his RIGHT hand in EVERY frame - the racket must always be clearly visible and clearly gripped in his fist.
+- The swing is aimed to the RIGHT of the screen. Animation breakdown:
+  - Frames 1-3: ready stance seen from the side (body in profile facing right), knees slightly bent, shoulders and torso twisting back as the racket is drawn behind his body. Focused face.
+  - Frames 4-6: racket reaches the lowest point behind him, knees deeply bent, torso fully coiled, weight loading. Gritted-teeth determined face.
+  - Frames 7-11: forward swing - the racket head advances along ONE continuous rising arc, about 20-25 degrees per frame: frame 7 racket passing his back hip, frame 8 racket beside his thigh, frame 9 contact point in front of his body at waist height with arm extended, frame 10 racket rising past chest height, frame 11 racket at shoulder height crossing his body. Intense face with wide eyes.
+  - Frames 12-13: follow-through - the racket continues up and finishes OVER HIS LEFT SHOULDER at frame 13, torso rotating so his chest turns toward the viewer.
+  - Frames 14-16: recovery - the racket head DESCENDS GRADUALLY along a smooth arc, about 25-35 degrees per frame: frame 14 racket lowering from over-the-shoulder to beside his head, frame 15 racket at chest height in front of him, frame 16 back to the waist-height ready stance. Small satisfied smile.
+- STRICT frame-to-frame continuity: each pose advances only a small amount from the previous frame; the racket head must never teleport - from frame 4 to 13 it travels one smooth arc from low-behind to high-over-the-left-shoulder, then from frame 13 to 16 it descends smoothly back to ready. It must NEVER jump from an overhead position straight back to a low position in one step.
+- This action has NO jump: in every frame both feet stay near the same ground baseline at the same height near the bottom of the cell; identical character scale in all 16 frames; the body anchor stays horizontally centered in each cell; no vertical drift across rows.
+- The swinging ARM must be clearly readable in every frame: shoulder, bent elbow, fist gripping the racket handle. Only TWO arms total - the left arm balances naturally (out for balance during the swing).
+- Background: fully transparent. NO ball, NO floor, NO shadow, NO motion-blur streaks.
+- No grid lines, no labels, no text.

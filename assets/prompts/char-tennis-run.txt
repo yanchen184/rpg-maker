@@ -1,0 +1,14 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a RUNNING-WITH-RACKET sprite sheet: a 4x4 grid, 16 cells. Unlike an action sheet, this one is DIRECTIONAL: each ROW is one facing direction with a 4-frame run cycle (left-to-right within the row).
+  - Row 1 (top): running TOWARD the viewer (front view), 4-frame run cycle.
+  - Row 2: running to the screen LEFT (left profile), 4-frame run cycle.
+  - Row 3: running to the screen RIGHT (right profile), 4-frame run cycle.
+  - Row 4 (bottom): running AWAY from the viewer (back view), 4-frame run cycle.
+- Character: the SAME cute chibi boy as the reference image (short dark brown hair, plain white t-shirt, dark navy pants, brown shoes, about 2.5 heads tall, 16-bit pixel art, Stardew Valley style). Same size in every frame, feet baseline consistent within each row.
+- He carries a tennis racket in his RIGHT hand in EVERY frame while running - arm swinging naturally with the racket, the other arm pumping. Racket clearly visible in all four directions (in the back view it appears on the right side of his body).
+- Run cycle per row: contact - push-off - airborne - opposite contact; legs clearly alternating, slight forward lean, energetic sporty feel. Focused face in front/side views.
+- Only TWO arms total in every frame.
+- Background: fully transparent. NO ball, NO floor, NO shadow, NO motion-blur streaks.
+- No grid lines, no labels, no text.

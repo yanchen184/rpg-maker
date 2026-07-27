@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>網球 sprite 展示廊</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; background: #14331c; color: #eafce9;
+      font-family: system-ui, -apple-system, "PingFang TC", sans-serif;
+    }
+    header {
+      padding: 18px 24px 10px; border-bottom: 1px solid #2c6b3c;
+    }
+    header h1 { margin: 0 0 4px; font-size: 20px; letter-spacing: .5px; }
+    header p { margin: 0; font-size: 13px; opacity: .7; }
+    #hud {
+      position: fixed; top: 10px; right: 12px; font-size: 12px;
+      background: #0009; padding: 6px 10px; border-radius: 6px; z-index: 9;
+    }
+    #grid {
+      display: grid; gap: 14px; padding: 20px 24px;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    }
+    .cell {
+      background: linear-gradient(160deg, #1c4327, #163521);
+      border: 1px solid #2c6b3c; border-radius: 12px;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 10px 8px 12px;
+    }
+    .cell canvas { display: block; border-radius: 8px; background: #0d2413; }
+    .cap { margin-top: 8px; font-size: 13px; font-weight: 600; }
+    .sub { font-size: 11px; opacity: .6; margin-top: 2px; }
+    .err { color: #ff9c9c; font-size: 11px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <div id="hud">載入中…</div>
+  <header>
+    <h1>🎾 網球 sprite 展示廊</h1>
+    <p>11 張 4×4 動作動畫 · 各自循環播放 · 由 rpg-maker 引擎 loadFrames 驅動</p>
+  </header>
+  <div id="grid"></div>
+  <script type="module" src="/src/sprite-gallery.ts"></script>
+</body>
+</html>

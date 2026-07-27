@@ -1,0 +1,21 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a LOSING-A-POINT DEJECTION sprite sheet: a 4x4 grid of 16 frames showing ONE continuous animation, read order left-to-right, top-to-bottom (frame 1 = top-left, frame 16 = bottom-right).
+- Character: the SAME cute chibi boy as the reference image (short dark brown hair, plain white t-shirt, dark navy pants, brown shoes, about 2.5 heads tall, 16-bit pixel art, Stardew Valley style). Same size in every frame, facing the VIEWER (front view) throughout. Tennis racket present in EVERY frame.
+- Animation breakdown:
+  - Frames 1-4: shock - he freezes, eyes wide and mouth open in disbelief, racket arm going limp so the racket dangles from his hand, a big sweat drop by his head. Standing upright.
+  - Frames 5-8: slump - shoulders sag, head drops forward, eyes become sad downturned curves, the racket lowers until its head rests on the ground while he still holds the grip. Torso lowering a little.
+  - Frames 9-12: he crouches down onto one knee, head hanging low, gloomy face with a wobbly frown, racket flat on the ground under his hand, a small dark cloud of gloom above his head. This is the LOWEST posture — clearly kneeling/crouched, body compressed toward the bottom of the cell.
+  - Frames 13-16 (recovery — MUST be a SMOOTH gradual stand-up, NOT a sudden snap upright):
+    - Frame 13: still kneeling but head starts to lift, sighing (small puff of air from mouth).
+    - Frame 14: pushing up off his knee — torso rises about 30-40px from the kneeling pose, hips lifting, one hand on his thigh for support, half-standing crouch.
+    - Frame 15: nearly upright, knees almost straight, picking the racket up to waist height, patting his own cheek with his free hand to psych himself up.
+    - Frame 16: fully standing upright, chest out, determined "next point!" face with furrowed brows, racket held ready.
+    The height must increase MONOTONICALLY across 13->14->15->16 (kneeling -> half -> nearly up -> full stand). No frame in 13-16 may be lower than frame 12, and no two adjacent frames may skip the in-between height — it is a continuous rise.
+- Keep the racket FRAME (head + strings) a consistent DARK NAVY-GREY colour in ALL 16 frames — never reddish, never changing hue between frames.
+- FACIAL EXPRESSIONS are the star: disbelief -> sadness -> gloom -> renewed determination, each phase clearly readable at sprite scale (big clear eye and mouth shapes).
+- Feet baseline consistent for standing frames; crouch/kneel frames compress toward the bottom of the cell. Keep at least 6px transparent margin from every cell edge.
+- Only TWO arms total, racket always attached to his right hand (dangling, resting, or held).
+- Background: fully transparent. NO floor, NO shadow, no text. The sweat drop and gloom cloud are tiny accents attached near the character only.
+- No grid lines, no labels.
