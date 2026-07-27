@@ -1,0 +1,25 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a FACE EXPRESSION sheet: a 4x4 grid of 16 cells. Each cell is a BUST PORTRAIT (head and shoulders, front view) of the SAME character - NOT an animation, 16 different expressions.
+- Character: the SAME cute chibi boy as the reference image (short dark brown hair, plain white t-shirt visible at the shoulders, 16-bit pixel art, Stardew Valley style). Head drawn larger than in the walking sprites so expressions read clearly; same head size and position in every cell.
+- The 16 expressions, in reading order (left-to-right, top-to-bottom):
+  1. neutral calm smile
+  2. focused (slight frown, sharp eyes)
+  3. determined (furrowed brows, tight mouth)
+  4. battle-cry (mouth wide open shouting)
+  5. big happy grin
+  6. laughing (eyes squeezed shut, open mouth)
+  7. smug wink
+  8. victory sparkle (starry eyes, big smile)
+  9. shocked (huge white eyes, tiny mouth)
+  10. panicked (spiral eyes, wavy mouth, sweat drop)
+  11. sad (downturned eyes, wobbly frown)
+  12. crying (comical streams of tears)
+  13. angry (steep brows, puffed cheeks)
+  14. furious (gritted teeth, anger vein mark)
+  15. exhausted (half-closed eyes, drooping mouth, sweat drops)
+  16. embarrassed (blush stripes across cheeks, awkward smile)
+- Each expression must be instantly readable at small scale: big clear eye and mouth shapes, minimal extra detail.
+- Background: fully transparent. Accent marks (sweat drop, anger vein, tears, blush) attach to the face only.
+- No grid lines, no labels, no text.

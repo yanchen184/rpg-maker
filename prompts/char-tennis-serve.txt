@@ -1,0 +1,14 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a TENNIS SERVE sprite sheet: a 4x4 grid of 16 frames showing ONE continuous animation, read order left-to-right, top-to-bottom (frame 1 = top-left, frame 16 = bottom-right).
+- Character: the SAME cute chibi boy as the reference image (short dark brown hair, plain white t-shirt, dark navy pants, brown shoes, about 2.5 heads tall, 16-bit pixel art, Stardew Valley style). Same size in every frame, feet on the same baseline in every cell (except the jump frames which rise slightly). Tennis racket in his RIGHT hand in EVERY frame, clearly gripped.
+- Animation breakdown:
+  - Frames 1-4: standing in profile facing right, calm focused face, a yellow tennis ball in his LEFT hand; he tosses the ball straight UP (ball visibly rising above his head across these frames), left arm extending upward.
+  - Frames 5-8: trophy pose - left arm pointing up at the ball high above, racket arm bent back behind his head, knees bending, back arching, looking up at the ball. Concentrated face.
+  - Frames 9-12: he JUMPS up and smashes - racket sweeps overhead and strikes the ball at the highest point around frame 10-11, arm fully extended above his head, body stretched tall, feet slightly off the baseline. Fierce shouting face.
+  - Frames 13-16: follow-through and landing - the racket swings down across his body to his left hip, he lands with knees bent, then straightens up. Confident small smile.
+- The ball must be visible ONLY in frames 1-11 (toss and contact), gone after contact.
+- The serving ARM must read clearly: shoulder, elbow, fist on the racket handle. Only TWO arms total.
+- Background: fully transparent. NO floor, NO shadow, NO motion-blur streaks.
+- No grid lines, no labels, no text.

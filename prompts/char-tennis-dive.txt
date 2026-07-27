@@ -1,0 +1,11 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a TENNIS DIVING-SAVE sprite sheet: a 4x4 grid, 16 cells, containing TWO 8-frame animations:
+  - Rows 1-2 (top 8 cells, read left-to-right, top row first): DIVE TO THE SCREEN LEFT.
+  - Rows 3-4 (bottom 8 cells): DIVE TO THE SCREEN RIGHT (mirror action, redrawn not flipped).
+- Each 8-frame dive: (1-2) ready stance, eyes darting to the dive side, knees coiling; (3-4) explosive push-off, body launching sideways, racket arm stretching far toward that side; (5-6) fully horizontal in the air, arm and racket at maximum stretch, ball-contact on frame 5-6 at the racket tip, shocked wide-open eyes and gritted teeth; (7-8) landing on his side/tummy with a little bounce, dust puff, dizzy swirl eyes, racket still in hand.
+- Character: the SAME cute chibi boy as the reference image (short dark brown hair, plain white t-shirt, dark navy pants, brown shoes, about 2.5 heads tall, 16-bit pixel art, Stardew Valley style). Same scale in every frame. Tennis racket gripped in his RIGHT hand in EVERY frame.
+- Only TWO arms total in every frame; the free arm trails naturally during the dive.
+- Background: fully transparent. NO ball except the contact frames, NO floor, NO shadow. Dust puff and dizzy swirls are tiny accents attached to the character only.
+- No grid lines, no labels, no text.

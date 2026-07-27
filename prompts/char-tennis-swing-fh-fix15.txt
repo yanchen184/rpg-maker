@@ -1,0 +1,17 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+The attached reference image is a finished 4x4 tennis forehand sprite sheet (16 frames, read left-to-right, top-to-bottom; frame 1 = top-left, frame 16 = bottom-right). REPRODUCE IT AS EXACTLY AS POSSIBLE - same character, same poses, same pixel-art style, same size and position in every cell, transparent background - with ONE SINGLE CHANGE to Frame 15 (4th row, 3rd column).
+
+CONTEXT: this is the racket-recovery part of the swing. Across frames 14 -> 15 -> 16 the racket head must descend smoothly along ONE arc and stay on the SAME side of the body:
+- Frame 14: racket head is HIGH and to the LEFT of his head (up by his left ear).
+- Frame 16: racket head is LOW and to the RIGHT, down at waist height in front of his right hip.
+- Frame 15 must be the exact SPATIAL MIDPOINT between them, NOT higher than frame 14 and NOT off to either outer side.
+
+REDRAW FRAME 15 with this exact geometry (cell is ~313px square; positions are within the cell):
+- The racket head (oval mesh) must be centered at roughly x=190, y=175 within the cell: that is DIRECTLY IN FRONT of his chest, on his right side, at CHEST height (level with the middle of his torso, clearly BELOW his chin, clearly ABOVE his waist).
+- The racket must NOT be up beside his head, and must NOT stick out past his right shoulder to the outer edge. It sits in front of the body.
+- His right arm is bent, forearm angled slightly up-forward, hand gripping the handle in front of his lower chest; the racket head points up-and-forward at about 30-40 degrees.
+- This is halfway between frame 14 (racket up-left by the head) and frame 16 (racket down-right at the waist): the racket head in frame 15 is lower than in 14 and higher than in 16, and horizontally between the two. Three evenly spaced positions along one smooth descending arc.
+- The body keeps the same relaxed forward-facing recovery stance as frames 14 and 16.
+
+Everything else - frames 1-14 and 16, character design (short dark brown hair, white t-shirt, dark navy pants, brown shoes, chibi 2.5 heads tall, 16-bit Stardew Valley pixel art), scale, baseline, transparent background - must stay identical to the reference. Only TWO arms, racket clearly gripped in the right fist in every frame. No grid lines, no labels, no text, no ball, no shadow.

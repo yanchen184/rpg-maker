@@ -500,6 +500,105 @@
         "w": 330,
         "h": 60
       }
+    },
+    "char-tennis-swing-bh": {
+      "sheet": "sheets/char-tennis-swing-bh_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 24,
+      "kind": "character-layer"
+    },
+    "char-tennis-swing-fh": {
+      "sheet": "sheets/char-tennis-swing-fh_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 24,
+      "kind": "character-layer"
+    },
+    "char-tennis-swing-up": {
+      "sheet": "sheets/char-tennis-swing-up_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 24,
+      "kind": "character-layer"
+    },
+    "char-tennis-serve": {
+      "sheet": "sheets/char-tennis-serve_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 20,
+      "kind": "character-layer"
+    },
+    "char-tennis-dive": {
+      "sheet": "sheets/char-tennis-dive_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 22,
+      "kind": "character-layer"
+    },
+    "char-tennis-ready": {
+      "sheet": "sheets/char-tennis-ready_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 10,
+      "kind": "character-layer"
+    },
+    "char-tennis-idle-racket": {
+      "sheet": "sheets/char-tennis-idle-racket_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 6,
+      "kind": "character-layer"
+    },
+    "char-tennis-run": {
+      "sheet": "sheets/char-tennis-run_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 14,
+      "kind": "character-layer"
+    },
+    "char-tennis-celebrate": {
+      "sheet": "sheets/char-tennis-celebrate_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 16,
+      "kind": "character-layer"
+    },
+    "char-tennis-dejected": {
+      "sheet": "sheets/char-tennis-dejected_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 14,
+      "kind": "character-layer"
+    },
+    "char-tennis-faces": {
+      "sheet": "sheets/char-tennis-faces_sheet.png",
+      "grid": [
+        4,
+        4
+      ],
+      "fps": 8,
+      "kind": "character-layer"
     }
   }
 }

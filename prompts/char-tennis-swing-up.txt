@@ -1,0 +1,19 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a BACK-VIEW TENNIS OVERHEAD SMASH sprite sheet: a 4x4 grid of 16 frames showing ONE continuous animation seen FROM BEHIND the player (the viewer sees his BACK the whole time, as if standing behind him while he smashes away from the camera), read order left-to-right, top-to-bottom.
+- Character: the SAME cute chibi boy as the reference image (short dark brown hair, plain white t-shirt, dark navy pants, brown shoes, about 2.5 heads tall, 16-bit pixel art, Stardew Valley style). Same size in every frame, feet on the same baseline. Tennis racket in his RIGHT hand in EVERY frame (on the right side of his back-view silhouette).
+
+CRITICAL — this is ONE single overhead smash. The racket head follows ONE continuous UP-then-DOWN arc and must NEVER reset. Picture the racket head rising up the right side, over the top of his head, then driving down the front-left: between ANY two neighbouring frames it moves only a SMALL step along that single arc. It is STRICTLY FORBIDDEN for the head to drop back to a low/loading position after it has already gone high, or to jump across to the opposite side in one step.
+
+- Racket-HEAD path across the 16 frames (all back view):
+  - Frames 1-4 (wind-up): knees bend, shoulders rotate, the racket head lifts from waist height on his RIGHT side up to shoulder height behind his right shoulder. Head rising steadily.
+  - Frames 5-8 (cock / highest): elbow lifts, racket head reaches its HIGHEST point directly above/behind his head (the classic "back-scratch" cocked position). By frame 8 it is at the very top. It must NOT dip back down in this range.
+  - Frames 9-12 (drive down): the racket head accelerates UP-and-OVER the top of his head then DOWN toward the front-left, passing the contact point high in front (~frame 10, tip visible above his head), continuing downward. Each frame the head is LOWER and further to his LEFT-FRONT than the previous — monotonic descent, no going back up.
+  - Frames 13-16 (follow-through): racket head finishes low across his left/front side near the opposite hip, then he straightens back toward the ready stance.
+- Whole-body drive (not just the arm): across frames 5-12 the torso must lean/press FORWARD by a few px, the hitting shoulder rises then rolls forward, and the knees go from bent (wind-up) to straightening (contact). The body is NOT static — it uncoils into the smash.
+- FORBIDDEN transitions: frame 4->5 head dropping back low; frame 8->9 head jumping to the far opposite side; frame 12->13 head returning to a high cocked pose. The head goes up ONCE (1->8) and down ONCE (9->16).
+- The back of his head (brown hair) faces the camera throughout; NO face visible.
+- Only TWO arms total; arm positions must read clearly from behind. Keep at least 6px transparent margin from every cell edge.
+- Background: fully transparent. NO ball, NO floor, NO shadow, NO motion-blur streaks.
+- No grid lines, no labels, no text.

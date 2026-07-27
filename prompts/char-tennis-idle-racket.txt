@@ -1,0 +1,15 @@
+Use your image_gen tool to generate exactly ONE PNG image, 1024x1024, with a fully transparent background (alpha channel). Do nothing else (no file operations, no code).
+
+Spec:
+- It is a STANDING-WITH-RACKET idle sprite sheet: a 4x4 grid, 16 cells. DIRECTIONAL sheet: each ROW is one facing direction with a 4-frame idle loop (left-to-right within the row).
+  - Row 1 (top): facing the viewer (front view).
+  - Row 2: facing screen LEFT (left profile).
+  - Row 3: facing screen RIGHT (right profile).
+  - Row 4 (bottom): facing away (back view).
+- Character: the SAME cute chibi boy as the reference image (short dark brown hair, plain white t-shirt, dark navy pants, brown shoes, about 2.5 heads tall, 16-bit pixel art, Stardew Valley style). Same size in every frame, feet baseline consistent.
+- Pose: relaxed casual standing, tennis racket in his RIGHT hand resting over his RIGHT SHOULDER like a baseball bat, left hand relaxed at his side or on his hip. Content easygoing face with a small smile.
+- The 4-frame loop per row is a gentle breathing idle: tiny up-down body bob, the racket on his shoulder rocking slightly. Frames differ only subtly.
+- Racket clearly visible in all four directions (back view: racket head sticks up beside his head on the right).
+- Only TWO arms total in every frame.
+- Background: fully transparent. NO ball, NO floor, NO shadow.
+- No grid lines, no labels, no text.
