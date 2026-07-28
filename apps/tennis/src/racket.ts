@@ -3,6 +3,7 @@
  * 純呈現物件 —— 擊中判定在 main(拍距 + 球高 + 揮拍時間窗),這裡只管畫。
  */
 import { Container, Graphics } from 'pixi.js';
+import type { Dir } from '@rpg-maker/engine';
 
 export const SWING_MS = 220;
 
@@ -45,6 +46,21 @@ export class Racket {
 
   get swinging(): boolean {
     return this.swingT >= 0;
+  }
+
+  /**
+   * 揮拍中身體該面向的方向(null = 沒在揮,由移動邏輯自理)。
+   * 真人正手是「轉肩背向 → 側身擊球 → 轉正隨揮」:引拍段背向打擊方向側身、
+   * 擊球段面向打擊方向側身、收拍段轉回正面。也順帶讓正面 sprite 的原生雙手
+   * 離開畫面主視角——疊加的揮拍手臂才不會變成第三隻手。
+   */
+  get swingDir(): Dir | null {
+    if (this.swingT < 0) return null;
+    const p = Math.min(1, this.swingT / (SWING_MS / 1000));
+    const e = p < 0.5 ? 2 * p * p : 1 - ((-2 * p + 2) * (-2 * p + 2)) / 2;
+    if (e < 0.3) return this.facing === 1 ? 'left' : 'right';
+    if (e < 0.78) return this.facing === 1 ? 'right' : 'left';
+    return 'down';
   }
 
   /**

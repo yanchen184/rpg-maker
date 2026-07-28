@@ -1,0 +1,54 @@
+name: Deploy tennis to Cloudflare Pages
+
+# push 到 master 且動到 tennis / engine / 素材 → 自動 build 推 Cloudflare Pages(ts.yanchen.app)。
+# 密室逃脫走另一支 deploy.yml(gh-pages),兩站互不干擾。
+#
+# 需要的 repo secrets:
+#   CLOUDFLARE_API_TOKEN   — Pages:Edit + DNS:Edit(yanchen.app zone)
+#   CLOUDFLARE_ACCOUNT_ID  — b6ff8eae…
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/tennis/**"
+      - "packages/engine/**"
+      - "assets/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/deploy-tennis.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: tennis-pages-deploy
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # engine 直供 TS 源碼(無 build step),tennis 的 tsc/vite 直接吃。
+      - name: Build tennis
+        run: npm run build -w tennis
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/tennis/dist --project-name=tennis --branch=master
+
+      - name: Round-trip verify
+        run: |
+          sleep 20
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://ts.yanchen.app/)
+          echo "https://ts.yanchen.app/ -> $code"
+          test "$code" = "200"

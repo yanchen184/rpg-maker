@@ -60,6 +60,11 @@ export class RemotePlayer {
     this.applyDir(st.dir, moved);
   }
 
+  /** 當前朝向(對手球拍的 idle 錨點要跟身體幀同向) */
+  get dir(): string {
+    return this.curDir;
+  }
+
   /** 頭上短暫顯示 emoji 泡泡(對手揮拍 🎾 等) */
   emote(emoji: string, durSec = 0.6): void {
     if (!this.bubble) {

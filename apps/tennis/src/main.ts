@@ -625,10 +625,15 @@ async function boot(): Promise<void> {
       if (performance.now() <= swingUntil) trySwingHit();
       else swingUntil = 0;
     }
-    if (player && racket) racket.update(dt, player.x, player.y, player.dir);
+    if (player && racket) {
+      // 揮拍轉體:引拍背向側身 → 擊球面向側身 → 收拍轉正(dir 會隨 net.push 同步給對面)
+      const sd = racket.swingDir;
+      if (sd) player.face(sd);
+      racket.update(dt, player.x, player.y, player.dir);
+    }
     if (remoteRacket) {
       remoteRacket.view.visible = !!remote;
-      if (remote) remoteRacket.update(dt, remote.view.x, remote.view.y);
+      if (remote) remoteRacket.update(dt, remote.view.x, remote.view.y, remote.dir);
     }
 
     // 失分裁定:線上由接球方單邊判(單一寫入者);本機模式整場都在本頁,直接判。
@@ -668,9 +673,10 @@ async function boot(): Promise<void> {
         oppoX: foe?.x ?? 750,
         oppoY: foe?.y ?? 500,
       });
-      ai.body.onUpdate({ id: `ai-${ai.ctl.side}`, x: ai.ctl.x, y: ai.ctl.y, dir: ai.ctl.dir, ts: nowSrv });
+      const aiDir = ai.racket.swingDir ?? ai.ctl.dir; // 揮拍轉體優先於移動朝向
+      ai.body.onUpdate({ id: `ai-${ai.ctl.side}`, x: ai.ctl.x, y: ai.ctl.y, dir: aiDir, ts: nowSrv });
       ai.body.update(dt);
-      ai.racket.update(dt, ai.body.view.x, ai.body.view.y, ai.ctl.dir);
+      ai.racket.update(dt, ai.body.view.x, ai.body.view.y, aiDir);
       if (intent) {
         ai.racket.swing();
         if (intent.type === 'serve') shoot(ai.ctl.side, intent.kind, ai.ctl.x, ai.ctl.y - 20, ai.ctl.y, null);

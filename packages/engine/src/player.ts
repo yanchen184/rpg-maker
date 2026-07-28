@@ -126,6 +126,11 @@ export class Player {
     this.turnLock = turning ? Player.TURN_LOCK_SEC : 0;
   }
 
+  /** 強制面向某方向(不動位置):遊戲層做揮拍轉體、對話面向 NPC 等演出用 */
+  face(dir: Dir) {
+    this.setAnim(this.moving, dir);
+  }
+
   /** 打招呼:👋 泡泡 + 身體上下彈跳兩下(純程式,不需招手素材) */
   greet() {
     this.startAction('greet', Player.GREET_SEC, '👋', 48);
