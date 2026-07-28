@@ -14,6 +14,7 @@ import {
   loadManifest,
   loadScene,
   buildScene,
+  aabbOverlap,
   Player,
   type Aabb,
 } from '@rpg-maker/engine';
@@ -41,6 +42,8 @@ import {
   serveLandsIn,
   RACKET_REACH,
   HIT_H_MAX,
+  SMASH_MIN_H,
+  SPECIAL_KINDS,
   SWING_WINDOW_MS,
   SWING_COOLDOWN_MS,
   type ShotAim,
@@ -57,6 +60,25 @@ const PLAYER_SCALE = 0.55;
 const STALE_SHOT_MS = 15_000;
 /** 觀戰模式:整場打完後幾 ms 自動再開一場 */
 const WATCH_RESTART_MS = 3200;
+
+// ── 招式:氣力槽 ──
+// 三式共用一條氣力,回復速度刻意偏慢 —— 招式要是能一直放就不是招式,是普通鍵。
+// 滿槽 100、每秒回 22:連放兩式(閃身+殺球=70)後要約 3 秒才回得滿。
+const ENERGY_MAX = 100;
+const ENERGY_REGEN = 22;
+const COST = { dash: 30, smash: 40, slice: 25 } as const;
+
+// ── 閃身 ──
+/** 衝刺總位移(px):約兩個身位,夠救掉一顆本來搆不到的球 */
+const DASH_DIST = 165;
+/** 衝刺時長(秒):短而爆,長了會變成「用飛的走路」 */
+const DASH_SEC = 0.16;
+/** 閃身期間(含收尾窗)拍子可及半徑的倍率 —— 撲救的本體就是這個 */
+const DASH_REACH_MUL = 1.85;
+/** 衝刺結束後拍子加成再延續多久(秒):撲出去要「還在撲的姿勢裡」能揮到 */
+const DASH_REACH_TAIL = 0.22;
+/** 閃身冷卻(ms):比氣力更早卡住連續閃,避免抖動式亂閃 */
+const DASH_COOLDOWN_MS = 520;
 
 type Mode = 'online' | 'ai' | 'watch';
 
@@ -126,6 +148,8 @@ async function boot(): Promise<void> {
   const sb = document.getElementById('scoreboard')!;
   const hintEl = document.getElementById('hint')!;
   const flashEl = document.getElementById('flash')!;
+  const energyEl = document.getElementById('energy');
+  const energyFillEl = document.getElementById('energy-fill');
 
   const mode = parseMode();
   // 大廳的模式切換鈕(等人等膩了可改跟 AI 打/看 AI 對打)
@@ -195,11 +219,16 @@ async function boot(): Promise<void> {
   fx.view.zIndex = 9000; // 特效永遠蓋在人與球上面
   built.objectLayer.addChild(fx.view);
   let shake = 0; // 畫面震動幅度(px),drive 擊球觸發、指數衰減
-  /** 擊球回饋(本地與遠端共用):音效 + 衝擊圈,平抽加震動 */
+  /** 擊球回饋(本地與遠端共用):音效 + 衝擊圈;殺球最重、平抽次之 */
   const fxHit = (kind: ShotKind, x: number, y: number) => {
     sfx.hit(kind);
-    fx.ring(x, y - 20, kind === 'drive' ? 0xffd24a : 0xffffff);
-    if (kind === 'drive') shake = 6;
+    if (kind === 'smash') {
+      fx.burst(x, y - 20); // 殺球專屬爆裂圈,比一般 ring 大而狠
+      shake = 13;
+    } else {
+      fx.ring(x, y - 20, kind === 'drive' ? 0xffd24a : kind === 'slice' ? 0x9fe8ff : 0xffffff);
+      if (kind === 'drive') shake = 6;
+    }
   };
 
   // ── AI 球員(ai 模式:右側一隻;watch 模式:左右各一隻) ──
@@ -379,11 +408,13 @@ async function boot(): Promise<void> {
     ball.play(shot);
     if (isNew && shot.by !== side) {
       remoteRacket?.swing();
-      // 對手擊球回饋:Shot 事件沒帶球種(線上兼容),從 apexH 反推
-      const kind: ShotKind = shot.apexH <= 62 ? 'drive' : shot.apexH >= 225 ? 'lob' : 'normal';
+      // 對手擊球回饋:優先讀 shot.kind;舊版 client 沒這欄才從 apexH 反推
+      // (殺球弧頂 52~64 跟平抽 48~62 重疊,所以招式球一定要靠明確欄位,反推區分不出來)
+      const kind: ShotKind = shot.kind ?? (shot.apexH <= 62 ? 'drive' : shot.apexH >= 225 ? 'lob' : 'normal');
       fxHit(kind, shot.x0, shot.y0);
-      anim[shot.by].pose('swing', facingOf(shot.by));
-      if (kind === 'drive') anim[shot.by].say('😤', 0.7);
+      anim[shot.by].pose(kind === 'smash' ? 'smash' : 'swing', facingOf(shot.by));
+      if (kind === 'smash') anim[shot.by].say('🔥', 0.8);
+      else if (kind === 'drive') anim[shot.by].say('😤', 0.7);
       anim[otherSide(shot.by)].pose('splitstep', facingOf(otherSide(shot.by)));
     }
   };
@@ -461,15 +492,18 @@ async function boot(): Promise<void> {
   };
 
   // ── 鍵盤:揮拍/發球(觀戰模式空白鍵只用來提早再開) ──
-  // 球種各自有鍵:空白 = 普通、J = 平抽、K = 挑高;方向鍵/WASD 在揮拍瞬間兼瞄準。
+  // 球種各自有鍵:空白 = 普通、J = 平抽、K = 挑高、L = 切球;方向鍵/WASD 在揮拍瞬間兼瞄準。
+  // 招式:Shift = 閃身;殺球沒有專屬鍵 —— 球夠高時 J 自動升級成殺球(條件觸發才像招式)。
   const held = new Set<string>();
   window.addEventListener('keydown', (e) => {
     sfx.unlock();
     const k = e.key.toLowerCase();
     held.add(k);
-    if (e.key === ' ') onSwing('normal');
-    else if (k === 'j') onSwing('drive');
+    if (k === 'shift') onDash();
+    else if (e.key === ' ') onSwing('normal');
+    else if (k === 'j') onSwing(canSmash() ? 'smash' : 'drive');
     else if (k === 'k') onSwing('lob');
+    else if (k === 'l') onSwing('slice');
     else if (k === '1') setAiLevel('easy');
     else if (k === '2') setAiLevel('normal');
     else if (k === '3') setAiLevel('hard');
@@ -493,18 +527,124 @@ async function boot(): Promise<void> {
     return aim.x == null && aim.y == null ? null : aim;
   };
 
-  /** 球在拍子可及範圍內(距離 + 高度都要夠) */
+  /** 球在拍子可及範圍內(距離 + 高度都要夠);閃身中半徑放大 —— 撲救就是靠這個 */
   const ballHittable = (): boolean =>
     !!player &&
     !!currentShot &&
     currentShot.by !== side &&
     ball.phase !== 'dead' &&
     ball.h <= HIT_H_MAX &&
-    Math.hypot(ball.gx - player.x, ball.gy - player.y) <= RACKET_REACH;
+    Math.hypot(ball.gx - player.x, ball.gy - player.y) <= reachNow();
+
+  /** 殺球條件:球夠高(高球才殺得下去)+ 氣力夠。不符就退回平抽,不擋玩家出手 */
+  const canSmash = (): boolean =>
+    energy >= COST.smash && ball.phase !== 'dead' && ball.h >= SMASH_MIN_H && ballHittable();
 
   let swingUntil = 0; // 揮拍判定窗截止時刻(performance.now ms);0 = 沒在揮
   let nextSwingAt = 0; // 冷卻結束時刻
   let pendingKind: ShotKind = 'normal'; // 這次揮拍要打的球種(揮拍鍵決定)
+
+  // ── 招式狀態(只有本地玩家有;AI 不吃氣力,難度靠 AI_PRESETS 調) ──
+  let energy = ENERGY_MAX;
+  let dashLeft = 0; // 衝刺剩餘秒數;>0 = 正在閃身
+  let dashVx = 0; // 衝刺速度向量(px/s)
+  let dashVy = 0;
+  let dashReachLeft = 0; // 拍子加成剩餘秒數(衝刺結束後還延續 DASH_REACH_TAIL)
+  let nextDashAt = 0;
+
+  /** 這一刻的拍子可及半徑:閃身中放大 —— 撲救就是靠這個構到平常搆不到的球 */
+  const reachNow = (): number => (dashReachLeft > 0 ? RACKET_REACH * DASH_REACH_MUL : RACKET_REACH);
+
+  /** 氣力槽 HUD:條長 + 各招式圖示的可用/不可用狀態(觀戰模式沒氣力槽,整塊藏掉) */
+  const moveEls = ['dash', 'smash', 'slice'].map((n) => document.getElementById(`move-${n}`));
+  let hudPct = -1;
+  const updateEnergyHud = () => {
+    if (!energyEl || !energyFillEl) return;
+    const show = !!player; // 觀戰模式沒有本地球員 = 沒有氣力概念
+    energyEl.style.display = show ? 'flex' : 'none';
+    if (!show) return;
+    const pct = Math.round((energy / ENERGY_MAX) * 100);
+    if (pct === hudPct) return; // 只在真的變動時碰 DOM,免得每幀 layout
+    hudPct = pct;
+    energyFillEl.style.width = `${pct}%`;
+    moveEls.forEach((el, i) => {
+      if (!el) return;
+      const cost = [COST.dash, COST.smash, COST.slice][i];
+      el.classList.toggle('off', energy < cost);
+    });
+  };
+
+  /** 氣力夠不夠放這一式;不夠就給個悶音,不吃鍵也不罰 */
+  const spend = (cost: number): boolean => {
+    if (energy < cost) {
+      sfx.reject();
+      return false;
+    }
+    energy -= cost;
+    return true;
+  };
+
+  /** 閃身瞄準:按住的方向 = 閃向那邊;沒按方向就朝球撲(最常見的意圖) */
+  const dashDir = (): { x: number; y: number } => {
+    let dx = 0;
+    let dy = 0;
+    if (held.has('w') || held.has('arrowup')) dy -= 1;
+    if (held.has('s') || held.has('arrowdown')) dy += 1;
+    if (held.has('a') || held.has('arrowleft')) dx -= 1;
+    if (held.has('d') || held.has('arrowright')) dx += 1;
+    if (dx === 0 && dy === 0 && player && currentShot && ball.phase !== 'dead') {
+      dx = ball.gx - player.x;
+      dy = ball.gy - player.y;
+    }
+    const len = Math.hypot(dx, dy);
+    if (len < 0.001) return { x: facingOf(side), y: 0 }; // 真的沒方向:朝網前撲
+    return { x: dx / len, y: dy / len };
+  };
+
+  /** 閃身:朝指定方向爆衝一小段,期間拍子構得更遠(魚躍撲救) */
+  const onDash = (): boolean => {
+    if (!player || !score || score.winner) return false;
+    const nowMs = performance.now();
+    if (nowMs < nextDashAt || dashLeft > 0) return false;
+    if (!spend(COST.dash)) return false;
+    nextDashAt = nowMs + DASH_COOLDOWN_MS;
+    const d = dashDir();
+    dashVx = (d.x * DASH_DIST) / DASH_SEC;
+    dashVy = (d.y * DASH_DIST) / DASH_SEC;
+    dashLeft = DASH_SEC;
+    dashReachLeft = DASH_SEC + DASH_REACH_TAIL;
+    sfx.dash();
+    fx.streak(player.x, player.y, d.x * DASH_DIST, d.y * DASH_DIST);
+    fx.puff(player.x, player.y);
+    // 傾身方向 = 閃的左右向;純上下閃時用本方朝網方向,免得傾角變 0 看不出動作
+    anim[side].pose('dash', Math.abs(d.x) > 0.2 ? Math.sign(d.x) : facingOf(side));
+    return true;
+  };
+
+  /** 衝刺位移:逐幀推進 + 沿用半場圍欄碰撞(撞牆就停,不會穿到對面半場) */
+  const stepDash = (dtSec: number) => {
+    if (!player || dashReachLeft <= 0) return;
+    dashReachLeft = Math.max(0, dashReachLeft - dtSec);
+    if (dashLeft <= 0) return;
+    const step = Math.min(dtSec, dashLeft);
+    dashLeft -= step;
+    const fits = (nx: number, ny: number): boolean => {
+      const box: Aabb = {
+        x: nx,
+        y: ny - player.collider.h / 2,
+        w: player.collider.w,
+        h: player.collider.h,
+      };
+      return !colliders.some((c) => aabbOverlap(box, c));
+    };
+    // x/y 分開推進:撞到圍欄時能沿牆滑,跟引擎的走路手感一致
+    const nx = player.x + dashVx * step;
+    if (fits(nx, player.y)) player.x = nx;
+    else dashVx = 0;
+    const ny = player.y + dashVy * step;
+    if (fits(player.x, ny)) player.y = ny;
+    else dashVy = 0;
+  };
 
   /** 判定窗內每幀試打:球真的碰到拍子(可及範圍)才出手 */
   const trySwingHit = (): boolean => {
@@ -530,6 +670,12 @@ async function boot(): Promise<void> {
       return true;
     }
     if (!player || !racket) return false; // 觀戰模式:比賽中揮拍鍵無作用
+    // 招式球要收氣力。發球不給用招式(發球本來就有 serveBox 的規則,再疊招式會失衡)
+    const special = SPECIAL_KINDS.includes(kind);
+    if (special && !currentShot && score.server === side) {
+      sfx.reject();
+      return false;
+    }
     if (!currentShot && score.server === side) {
       // 發球:必須站在正確半區(deuce/ad 依局內分數奇偶),站錯不揮拍只提示
       const half = serveHalf(side, score);
@@ -547,11 +693,14 @@ async function boot(): Promise<void> {
     }
     const nowMs = performance.now();
     if (nowMs < nextSwingAt) return false; // 冷卻中
+    // 氣力在冷卻檢查之後才收 —— 冷卻中按鍵不該白扣氣力
+    if (special && !spend(COST[kind === 'smash' ? 'smash' : 'slice'])) return false;
     nextSwingAt = nowMs + SWING_COOLDOWN_MS;
     pendingKind = kind;
     sfx.swing(); // 風聲:揮空也有回饋,打到再疊擊球聲
     racket.swing();
-    anim[side].pose('swing', facingOf(side)); // 空揮也要帶身,不然角色像雕像只有拍子在飛
+    // 殺球有專屬的舉拍下壓動作;其餘走一般揮拍帶身
+    anim[side].pose(kind === 'smash' ? 'smash' : 'swing', facingOf(side));
     // 回擊:開判定窗,球進拍子範圍才算打到(揮空就是空)
     swingUntil = nowMs + SWING_WINDOW_MS;
     return trySwingHit();
@@ -596,8 +745,12 @@ async function boot(): Promise<void> {
     const nowSrv = net.now();
     if (player) {
       player.update(dt, colliders);
+      stepDash(dt); // 閃身位移疊在一般走位之上(衝刺期間仍可微調方向)
       net.push({ x: player.x, y: player.y, dir: player.dir });
     }
+    // 氣力回復:比賽進行中才回,分數結算/勝利畫面不累積
+    if (energy < ENERGY_MAX) energy = Math.min(ENERGY_MAX, energy + ENERGY_REGEN * dt);
+    updateEnergyHud();
     remote?.update(dt);
 
     const prevPhase = ball.phase;
@@ -707,8 +860,14 @@ async function boot(): Promise<void> {
       } else if (currentShot && currentShot.by !== side && ball.phase !== 'dead') {
         const d = Math.hypot(ball.gx - player.x, ball.gy - player.y);
         if (d <= RACKET_REACH * 1.6) {
-          hint =
-            ball.h > HIT_H_MAX ? '球太高了!等它降下來再揮' : '空白揮拍!J 平抽.K 挑高|按住方向鍵瞄準';
+          // 球高到可以殺、氣力也夠 → 直接喊出來,不然玩家不會知道 J 這時候變殺球
+          hint = canSmash()
+            ? '🔥 可以殺球!按 J 灌下去'
+            : ball.h > HIT_H_MAX
+              ? '球太高了!等它降下來再揮'
+              : '空白揮拍!J 平抽.K 挑高.L 切球|Shift 閃身|按住方向鍵瞄準';
+        } else if (d <= RACKET_REACH * 3 && energy >= COST.dash) {
+          hint = '搆不到?按 Shift 閃身撲救(耗氣力)';
         }
       }
     }
@@ -752,6 +911,23 @@ async function boot(): Promise<void> {
     swing: (kind: ShotKind = 'normal') => onSwing(kind),
     slowmo: (f: number) => {
       timeScale = f;
+    },
+    /** 招式驗收用:氣力/冷卻/可及半徑的當下狀態 */
+    energy: () => ({
+      value: Math.round(energy),
+      max: ENERGY_MAX,
+      cost: COST,
+      reach: Math.round(reachNow()),
+      dashing: dashLeft > 0,
+      dashReach: dashReachLeft > 0,
+      canSmash: canSmash(),
+    }),
+    /** 測試用:直接放閃身(方向沿用 held 方向鍵/朝球),回傳有沒有真的放出去 */
+    dash: () => onDash(),
+    /** 測試用:把氣力設成指定值(驗不足時被擋、足時能放) */
+    setEnergy: (v: number) => {
+      energy = Math.max(0, Math.min(ENERGY_MAX, v));
+      hudPct = -1; // 強制下一幀重畫 HUD
     },
     /** 測試用:模擬按住方向鍵(下次 humanAim 讀得到) */
     holdKey: (k: string, down: boolean) => (down ? held.add(k) : held.delete(k)),

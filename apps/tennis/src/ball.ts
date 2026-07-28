@@ -13,6 +13,7 @@
  */
 import { Container, Graphics } from 'pixi.js';
 import type { CourtHalf, Side } from './scoring';
+import type { ShotKind } from './shots';
 import { COURT } from './court';
 
 export interface Shot {
@@ -29,6 +30,8 @@ export interface Shot {
   flightMs: number;
   /** 飛行最高點(px):挑高球大、平抽小 —— 決定過不過得了網 */
   apexH: number;
+  /** 球種(給對面播對的音效/特效)。舊版 client 送的 shot 沒這欄,接收端要能從 apexH 反推 */
+  kind?: ShotKind;
   /** 發球才有:必須落進的對角發球區;一般對打為 null(RTDB 不吃 undefined) */
   serveBox?: CourtHalf | null;
 }

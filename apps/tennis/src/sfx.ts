@@ -59,9 +59,18 @@ export class Sfx {
     src.start(t);
   }
 
-  /** 擊球:球種不同手感 —— drive 尖銳爆、lob 悶軟、normal 居中 */
-  hit(kind: 'lob' | 'drive' | 'normal'): void {
-    if (kind === 'drive') {
+  /** 擊球:球種不同手感 —— smash 最重、drive 尖銳爆、slice 輕削、lob 悶軟、normal 居中 */
+  hit(kind: 'lob' | 'drive' | 'normal' | 'smash' | 'slice'): void {
+    if (kind === 'smash') {
+      // 殺球:低頻重擊墊底 + 高頻爆音,兩層疊出「砸」的份量
+      this.noise(0.08, 1, 3200);
+      this.tone(180, 'square', 0.16, 0.5, 0, 60);
+      this.tone(760, 'square', 0.07, 0.3, 0, 200);
+    } else if (kind === 'slice') {
+      // 切球:短促高頻摩擦聲,力道收得很乾淨
+      this.noise(0.05, 0.4, 3600);
+      this.tone(560, 'triangle', 0.08, 0.22, 0, 380);
+    } else if (kind === 'drive') {
       this.noise(0.05, 0.85, 2400);
       this.tone(420, 'square', 0.09, 0.35, 0, 150);
     } else if (kind === 'lob') {
@@ -76,6 +85,17 @@ export class Sfx {
   /** 揮拍風聲(揮空也有,打到再疊 hit) */
   swing(): void {
     this.noise(0.12, 0.22, 620);
+  }
+
+  /** 閃身:低頻掃過的「唰」,比揮拍風聲長而沉 */
+  dash(): void {
+    this.noise(0.2, 0.34, 380);
+    this.tone(300, 'sine', 0.16, 0.16, 0, 90);
+  }
+
+  /** 招式打不出來(氣力不足/條件不符):短促悶音,不是失誤警示那種責備感 */
+  reject(): void {
+    this.tone(160, 'square', 0.07, 0.14);
   }
 
   /** 球落地悶響 */

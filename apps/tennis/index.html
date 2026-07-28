@@ -74,6 +74,30 @@
       #lobby .modes { display: flex; gap: 12px; margin-top: 6px; }
       #lobby .modes button { background: #1e2f3d; border-color: #38566a; }
       #lobby .modes button:hover { background: #2a4050; }
+
+      /* 招式氣力槽:左下角,槽 + 三式圖示(氣力不夠的那式變灰) */
+      #energy {
+        position: fixed; left: 14px; bottom: 14px; z-index: 20;
+        display: none; align-items: center; gap: 10px;
+        background: #101a0cd8; border: 1px solid #35502a; border-radius: 10px;
+        padding: 8px 12px; color: #e8f0dc; font: 12px/1.4 monospace;
+        pointer-events: none;
+      }
+      #energy .bar {
+        width: 132px; height: 10px; background: #0c140a;
+        border: 1px solid #35502a; border-radius: 5px; overflow: hidden;
+      }
+      #energy-fill {
+        height: 100%; width: 100%;
+        background: linear-gradient(90deg, #7fd43a, #d8ff70);
+        transition: width 0.12s linear;
+      }
+      #energy .moves { display: flex; gap: 8px; }
+      #energy .moves span {
+        border: 1px solid #4a6a38; border-radius: 6px; padding: 2px 7px;
+        background: #2a3d1e; color: #d8ff70; white-space: nowrap;
+      }
+      #energy .moves span.off { opacity: 0.32; color: #93a878; border-color: #35502a; background: #1a2612; }
     </style>
   </head>
   <body>
@@ -81,12 +105,22 @@
     <div id="scoreboard"></div>
     <div id="hint"></div>
     <div id="flash"></div>
+    <div id="energy">
+      <span>氣力</span>
+      <div class="bar"><div id="energy-fill"></div></div>
+      <div class="moves">
+        <span id="move-dash">Shift 閃身</span>
+        <span id="move-smash">J 殺球</span>
+        <span id="move-slice">L 切球</span>
+      </div>
+    </div>
     <div id="lobby">
       <div class="big">🎾 網球對戰</div>
       <div id="lobby-msg">建立房間中…</div>
       <input id="lobby-link" readonly value="" />
       <button id="lobby-copy">複製對戰連結</button>
       <div class="tip">把連結傳給對手,兩人連上就開打。移動:WASD / 方向鍵;發球與揮拍:空白鍵。</div>
+      <div class="tip">招式(耗左下角氣力):Shift 閃身撲救.L 切球吊網前;球夠高時 J 自動變殺球。</div>
       <div class="modes">
         <button id="mode-ai-easy">🤖 AI:簡單</button>
         <button id="mode-ai">🤖 AI:普通</button>
