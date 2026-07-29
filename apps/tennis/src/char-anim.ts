@@ -1,12 +1,20 @@
 /**
- * 角色程式化動作 + 表情泡泡(網球層,不動引擎)。
- * 動作走 view.pivot.y(正值 = 內容上移;Player/RemotePlayer 的 update 都不會重設 pivot/rotation)
- * 與 view.rotation(傾身)。表情泡泡自己掛 Text 冒出 → 浮起 → 淡出,不鎖角色移動
- * (引擎的 emote() 會把角色定格,rally 進行中不能用)。
+ * 角色程式化姿勢 + 正式網球 sprite 動作。
+ *
+ * 一般短動作仍用容器位移/旋轉;勉強救球與殺球改播完整逐格人物動畫，
+ * 讓表情與全身動勢住在角色本身，不再靠頭頂 emoji 代替演出。
  */
-import { Container, Text } from 'pixi.js';
+import { AnimatedSprite, Container, type Texture } from 'pixi.js';
 
 export type PoseKind = 'swing' | 'celebrate' | 'droop' | 'shrug' | 'splitstep' | 'dash' | 'smash';
+export type CharacterAction = 'strained' | 'smash' | 'forehand' | 'backhand';
+
+export interface CharacterActionAssets {
+  strained: Texture[];
+  smash: Texture[];
+  forehand: Texture[];
+  backhand: Texture[];
+}
 
 interface PoseState {
   kind: PoseKind;
@@ -25,114 +33,144 @@ const POSE_DUR: Record<PoseKind, number> = {
   smash: 0.34,
 };
 
+const ACTION_FPS: Record<CharacterAction, number> = {
+  strained: 28,
+  smash: 48,
+  forehand: 48,
+  backhand: 48,
+};
+
+const CONTACT_FRAME: Record<CharacterAction, number> = {
+  strained: 11,
+  smash: 20,
+  forehand: 26,
+  backhand: 21,
+};
+
 export class CharAnim {
   private poseState: PoseState | null = null;
-  private bubble: Text | null = null;
-  private bubbleHost: Container | null = null;
-  private bubbleT = 0;
-  private bubbleDur = 0;
+  private actionSprite: AnimatedSprite | null = null;
+  private actionHost: Container | null = null;
+  private hiddenChildren: Array<{ child: Container; visible: boolean }> = [];
 
-  /** getView:回傳這一側當前的角色容器(online 對手可能中途才建立/銷毀,所以用 getter) */
-  constructor(private getView: () => Container | null) {}
+  constructor(
+    private getView: () => Container | null,
+    private actionAssets: CharacterActionAssets,
+    private scale: number,
+  ) {}
 
-  /** 播一段姿勢動畫;facing = 傾身方向(左側球員 +1 往右傾) */
+  /** 播短姿勢;facing = 動作朝向(畫面右 +1 / 左 -1)。 */
   pose(kind: PoseKind, facing = 1): void {
+    if (this.actionSprite) return;
     this.poseState = { kind, t: 0, dur: POSE_DUR[kind], facing };
   }
 
-  /** 頭上表情泡泡(得分 😆、失分 😫、失誤 😅…),與姿勢獨立、可疊加 */
-  say(emoji: string, durSec = 1.1): void {
+  /**
+   * 播完整人物 sprite。
+   * strained sheet 前 18 幀向左、後 18 幀向右;其餘各是一套 36 幀完整動作。
+   */
+  action(kind: CharacterAction, facing = 1): void {
     const view = this.getView();
     if (!view) return;
-    if (!this.bubble || this.bubbleHost !== view || this.bubble.destroyed) {
-      if (this.bubble && !this.bubble.destroyed) this.bubble.destroy();
-      this.bubble = new Text({ style: { fontSize: 44, fill: 0xffffff } });
-      this.bubble.anchor.set(0.5, 1);
-      this.bubbleHost = view;
-      view.addChild(this.bubble);
-    }
-    this.bubble.text = emoji;
-    this.bubble.visible = true;
-    this.bubble.alpha = 1;
-    this.bubbleT = 0;
-    this.bubbleDur = durSec;
+    this.clearAction();
+    this.poseState = null;
+    view.pivot.set(0, 0);
+    view.rotation = 0;
+
+    const source = this.actionAssets[kind];
+    const frames =
+      kind === 'strained'
+        ? facing < 0
+          ? source.slice(0, 18)
+          : source.slice(18, 36)
+        : source;
+    const sprite = new AnimatedSprite(frames);
+    sprite.anchor.set(0.5, 1);
+    const actionScale = this.scale * (kind === 'strained' ? 1.25 : 1.45);
+    sprite.scale.set(actionScale);
+    const mirror =
+      (kind === 'smash' && facing < 0) ||
+      (kind === 'forehand' && facing < 0) ||
+      (kind === 'backhand' && facing > 0);
+    if (mirror) sprite.scale.x *= -1;
+    sprite.animationSpeed = ACTION_FPS[kind] / 60;
+    sprite.loop = false;
+
+    this.hiddenChildren = view.children.map((child) => ({
+      child: child as Container,
+      visible: child.visible,
+    }));
+    for (const item of this.hiddenChildren) item.child.visible = false;
+    view.addChild(sprite);
+    this.actionSprite = sprite;
+    this.actionHost = view;
+    sprite.onComplete = () => this.clearAction();
+    sprite.gotoAndPlay(CONTACT_FRAME[kind]);
   }
 
-  /** 測試/除錯:泡泡是否顯示中 */
-  get talking(): boolean {
-    return !!this.bubble && !this.bubble.destroyed && this.bubble.visible;
+  get acting(): boolean {
+    return !!this.actionSprite;
+  }
+
+  private clearAction(): void {
+    if (this.actionSprite && !this.actionSprite.destroyed) {
+      this.actionHost?.removeChild(this.actionSprite);
+      this.actionSprite.destroy();
+    }
+    for (const item of this.hiddenChildren) {
+      if (!item.child.destroyed) item.child.visible = item.visible;
+    }
+    this.actionSprite = null;
+    this.actionHost = null;
+    this.hiddenChildren = [];
   }
 
   update(dtSec: number): void {
     const view = this.getView();
-    if (!view) return;
+    if (!view || this.actionSprite) return;
+    if (!this.poseState) return;
 
-    if (this.poseState) {
-      const ps = this.poseState;
-      ps.t += dtSec;
-      const p = Math.min(1, ps.t / ps.dur);
-      let lift = 0;
-      let rot = 0;
-      let lunge = 0;
-      if (ps.kind === 'swing') {
-        // 揮拍帶身:重心撲向擊球側(傾身 + 前撲位移),腳下蹬地,尾段回正
-        const s = Math.sin(p * Math.PI);
-        rot = s * 0.3 * ps.facing;
-        lift = s * 8;
-        lunge = s * 10 * ps.facing;
-      } else if (ps.kind === 'splitstep') {
-        // 對手出手瞬間的預備小彈跳(split-step):輕跳落地壓低重心
-        lift = p < 0.6 ? Math.sin((p / 0.6) * Math.PI) * 10 : -Math.sin(((p - 0.6) / 0.4) * Math.PI) * 3;
-      } else if (ps.kind === 'dash') {
-        // 閃身:重心壓低橫甩出去(近乎魚躍),尾段撐起回正。
-        // facing 這裡不是打擊方向,而是「閃向哪邊」——由呼叫端傳衝刺方向。
-        const s = Math.sin(p * Math.PI);
-        lift = -s * 12; // 往下沉:撲救是壓低不是彈起
-        rot = s * 0.5 * ps.facing; // 傾角比揮拍大得多,一眼看得出在撲
-        lunge = s * 22 * ps.facing;
-      } else if (ps.kind === 'smash') {
-        // 殺球:先拔高伸展(舉拍到頂)再狠狠壓下去,收在低位
-        const rise = Math.sin(Math.min(1, p / 0.4) * (Math.PI / 2));
-        const drop = p < 0.4 ? 0 : Math.sin(((p - 0.4) / 0.6) * Math.PI);
-        lift = rise * 20 - drop * 16;
-        rot = drop * 0.34 * ps.facing;
-        lunge = drop * 14 * ps.facing;
-      } else if (ps.kind === 'celebrate') {
-        // 得分開心跳兩下,幅度漸收
-        lift = Math.abs(Math.sin(p * Math.PI * 2)) * 22 * (1 - p * 0.3);
-        rot = Math.sin(p * Math.PI * 4) * 0.08;
-      } else if (ps.kind === 'droop') {
-        // 沮喪:下沉 + 歪頭,尾段回正
-        const sag = Math.sin(Math.min(1, p * 1.25) * Math.PI);
-        lift = -sag * 8;
-        rot = sag * 0.12 * ps.facing;
-      } else {
-        // shrug:失誤小小下蹲聳一下
-        lift = -Math.sin(p * Math.PI) * 6;
-      }
-      view.pivot.y = lift;
-      view.pivot.x = -lunge; // pivot 正值往反向移,取負讓身體撲向 facing 側
-      view.rotation = rot;
-      if (p >= 1) {
-        this.poseState = null;
-        view.pivot.y = 0;
-        view.pivot.x = 0;
-        view.rotation = 0;
-      }
+    const ps = this.poseState;
+    ps.t += dtSec;
+    const p = Math.min(1, ps.t / ps.dur);
+    let lift = 0;
+    let rot = 0;
+    let lunge = 0;
+    if (ps.kind === 'swing') {
+      const s = Math.sin(p * Math.PI);
+      rot = s * 0.3 * ps.facing;
+      lift = s * 8;
+      lunge = s * 10 * ps.facing;
+    } else if (ps.kind === 'splitstep') {
+      lift = p < 0.6 ? Math.sin((p / 0.6) * Math.PI) * 10 : -Math.sin(((p - 0.6) / 0.4) * Math.PI) * 3;
+    } else if (ps.kind === 'dash') {
+      const s = Math.sin(p * Math.PI);
+      lift = -s * 12;
+      rot = s * 0.5 * ps.facing;
+      lunge = s * 22 * ps.facing;
+    } else if (ps.kind === 'smash') {
+      const rise = Math.sin(Math.min(1, p / 0.4) * (Math.PI / 2));
+      const drop = p < 0.4 ? 0 : Math.sin(((p - 0.4) / 0.6) * Math.PI);
+      lift = rise * 20 - drop * 16;
+      rot = drop * 0.34 * ps.facing;
+      lunge = drop * 14 * ps.facing;
+    } else if (ps.kind === 'celebrate') {
+      lift = Math.abs(Math.sin(p * Math.PI * 2)) * 22 * (1 - p * 0.3);
+      rot = Math.sin(p * Math.PI * 4) * 0.08;
+    } else if (ps.kind === 'droop') {
+      const sag = Math.sin(Math.min(1, p * 1.25) * Math.PI);
+      lift = -sag * 8;
+      rot = sag * 0.12 * ps.facing;
+    } else {
+      lift = -Math.sin(p * Math.PI) * 6;
     }
-
-    if (this.bubble && !this.bubble.destroyed && this.bubble.visible && this.bubbleHost === view) {
-      this.bubbleT += dtSec;
-      const p = this.bubbleT / this.bubbleDur;
-      if (p >= 1) {
-        this.bubble.visible = false;
-      } else {
-        const pop = Math.min(1, p * 6); // 前 1/6 快速冒出
-        this.bubble.scale.set(0.6 + 0.4 * pop);
-        const h = (view.children[0] as Container | undefined)?.height ?? 150;
-        this.bubble.y = -h - 26 - p * 18; // 緩緩浮起
-        this.bubble.alpha = p < 0.75 ? 1 : 1 - (p - 0.75) / 0.25; // 尾段淡出
-      }
+    view.pivot.y = lift;
+    view.pivot.x = -lunge;
+    view.rotation = rot;
+    if (p >= 1) {
+      this.poseState = null;
+      view.pivot.set(0, 0);
+      view.rotation = 0;
     }
   }
 }

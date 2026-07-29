@@ -116,6 +116,25 @@
       }
       #energy .moves span.off { opacity: 0.32; color: #93a878; border-color: #35502a; background: #1a2612; }
 
+      /* 回合氣勢:好身位連續回球與長回合會升溫;勉強救球會掉氣勢。 */
+      #flow {
+        position: fixed; right: 14px; bottom: 14px; z-index: 20;
+        display: none; align-items: center; gap: 9px;
+        background: #101a0cd8; border: 1px solid #5b4727; border-radius: 10px;
+        padding: 8px 12px; color: #ffe9a8; font: 12px/1.4 monospace;
+        pointer-events: none;
+      }
+      #flow .bar {
+        width: 112px; height: 10px; overflow: hidden; border-radius: 5px;
+        background: #0c140a; border: 1px solid #5b4727;
+      }
+      #momentum-fill {
+        width: 0%; height: 100%;
+        background: linear-gradient(90deg, #ffc857, #ff6b35);
+        transition: width .14s ease-out;
+      }
+      #quality-text { min-width: 52px; color: #fff; font-weight: bold; }
+
       /* 大廳操作說明:鍵盤版與觸控版互斥 —— 手機上寫「按空白鍵」是叫玩家找不存在的鍵 */
       .touch-only { display: none; }
       body.touch-mode .kb-only { display: none; }
@@ -170,6 +189,9 @@
         #energy { left: auto; right: calc(10px + env(safe-area-inset-right)); transform: none; bottom: auto; top: calc(6px + env(safe-area-inset-top)); padding: 4px 8px; font-size: 11px; }
         #energy .bar { width: 84px; }
         #energy .moves { display: none; } /* 手機有實體按鍵了,不需要再列鍵位提示 */
+        #flow { right: calc(10px + env(safe-area-inset-right)); bottom: auto;
+          top: calc(42px + env(safe-area-inset-top)); padding: 4px 8px; font-size: 10px; }
+        #flow .bar { width: 72px; }
         #lobby { font-size: 13px; gap: 12px; padding: 16px; }
         #lobby .big { font-size: 24px; }
         #lobby .modes { flex-wrap: wrap; justify-content: center; }
@@ -184,6 +206,9 @@
         body.touch-mode #energy { left: auto; right: calc(10px + env(safe-area-inset-right)); transform: none; bottom: auto; top: calc(6px + env(safe-area-inset-top)); padding: 4px 8px; font-size: 11px; }
         body.touch-mode #energy .bar { width: 84px; }
         body.touch-mode #energy .moves { display: none; } /* 手機有實體按鍵了,不需要再列鍵位提示 */
+        body.touch-mode #flow { right: calc(10px + env(safe-area-inset-right)); bottom: auto;
+          top: calc(42px + env(safe-area-inset-top)); padding: 4px 8px; font-size: 10px; }
+        body.touch-mode #flow .bar { width: 72px; }
         body.touch-mode #lobby { font-size: 13px; gap: 12px; padding: 16px; }
         body.touch-mode #lobby .big { font-size: 24px; }
         body.touch-mode #lobby .modes { flex-wrap: wrap; justify-content: center; }
@@ -216,6 +241,12 @@
         <span id="move-smash">J 殺球</span>
         <span id="move-slice">L 切球</span>
       </div>
+    </div>
+    <div id="flow">
+      <span id="rally-count">回合 0</span>
+      <span>氣勢</span>
+      <div class="bar"><div id="momentum-fill"></div></div>
+      <span id="quality-text">待機</span>
     </div>
     <div id="lobby">
       <div class="big">🎾 網球對戰</div>

@@ -66,6 +66,32 @@ export interface ShotAim {
   y?: number;
 }
 
+/** 低於這條就視為勉強救球:散布放大,並強制回成對手網前淺球。 */
+export const STRAINED_QUALITY = 0.58;
+
+export interface ContactQualityInput {
+  /** 球心到擊球者中心的地面投影距離。 */
+  distance: number;
+  /** 當下可及半徑;閃身期間會比普通拍距大。 */
+  reach: number;
+  /** 球離地高度。腰部以上越難穩定控制。 */
+  ballH: number;
+  /** 閃身本體已結束、只靠尾勁拍距碰到球。 */
+  dashTail: boolean;
+}
+
+/**
+ * 擊球品質 0..1。只看真正觸球當下的身位,玩家與 AI 共用:
+ * 越靠拍距外緣、球越高、越依賴閃身尾勁,回球品質越差。
+ */
+export function contactQuality(input: ContactQualityInput): number {
+  const reachRatio = input.distance / Math.max(1, input.reach);
+  const reachPressure = Math.max(0, Math.min(1, (reachRatio - 0.35) / 0.65));
+  const highBallPressure = Math.max(0, Math.min(1, (input.ballH - 62) / 88));
+  const raw = 1 - reachPressure * 0.62 - highBallPressure * 0.28 - (input.dashTail ? 0.22 : 0);
+  return Math.max(0.08, Math.min(1, raw));
+}
+
 // 各球種參數:弧頂高度(px)/球速(px/s)/飛行時長 clamp。
 // 網高 NET_H=46:drive 弧頂只有 48~62,過網點離弧頂稍遠就真的掛網 —— 風險換速度。
 // smash 弧頂 52~64:比 drive 還平但仍高於網高 46 —— 殺球該險,不該必掛網。
@@ -95,6 +121,8 @@ export interface MakeShotOpts {
   serveBox?: CourtHalf | null;
   /** 對打瞄準(發球分支忽略,發球落點由 serveBox 散布決定) */
   aim?: ShotAim | null;
+  /** 觸球品質 0..1;發球或舊呼叫端省略時視為完美身位。 */
+  quality?: number;
 }
 
 /** 發球區深度:發球線在 netX ± 這個距離 */
@@ -116,6 +144,7 @@ export function serveLandsIn(shot: Shot): boolean {
 /** 出球:落點帶隨機散布,球種決定弧頂/球速;回傳確定性軌跡參數 */
 export function makeShot(o: MakeShotOpts): Shot {
   const k = KIND[o.kind];
+  const quality = Math.max(0, Math.min(1, o.quality ?? 1));
   let x1: number;
   let y1: number;
   if (o.serveBox) {
@@ -137,7 +166,8 @@ export function makeShot(o: MakeShotOpts): Shot {
     // 對打:有瞄準 → 目標點 + 小散布(drive 快但散布大,風險換速度);
     // 沒瞄 → 原本的大範圍隨機(等於「隨便回一拍」)
     // smash 跟 drive 一樣散布大(打得越狠越難控);slice 是精細活,散布最小
-    const spread = o.kind === 'drive' || o.kind === 'smash' ? 80 : o.kind === 'slice' ? 38 : 55;
+    const baseSpread = o.kind === 'drive' || o.kind === 'smash' ? 80 : o.kind === 'slice' ? 38 : 55;
+    const spread = baseSpread * (1 + (1 - quality) * 1.8);
     const dy = o.y0 - o.ownerY;
     if (o.aim?.y != null) {
       y1 = Math.max(190, Math.min(810, o.aim.y + rand(-spread, spread)));
@@ -165,6 +195,12 @@ export function makeShot(o: MakeShotOpts): Shot {
             ? rand(200, 480)
             : rand(250, 660);
     }
+    // 勉強搆到的球不能反過來打出深區壓制:一律浮回對方網前,
+    // 讓「先調動 → 對方弱回 → 下一拍進攻」成為可重現的戰術鏈。
+    if (quality < STRAINED_QUALITY && o.kind !== 'slice') {
+      const shallow = rand(105, 285);
+      x1 = o.by === 'left' ? COURT.netX + shallow : COURT.netX - shallow;
+    }
   }
   const dist = Math.hypot(x1 - o.x0, y1 - o.y0);
   const flightMs = Math.max(k.minMs, Math.min(k.maxMs, (dist / k.speed) * 1000));
@@ -180,5 +216,6 @@ export function makeShot(o: MakeShotOpts): Shot {
     apexH: rand(k.apex[0], k.apex[1]),
     kind: o.kind,
     serveBox: o.serveBox ?? null,
+    quality,
   };
 }

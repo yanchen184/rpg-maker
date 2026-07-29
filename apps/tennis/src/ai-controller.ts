@@ -19,6 +19,7 @@ import {
   DASH_REACH_MUL,
   DASH_REACH_TAIL,
   DASH_COOLDOWN_MS,
+  contactQuality,
   serveSpot,
   type ShotAim,
   type ShotKind,
@@ -41,7 +42,7 @@ export interface AiSense {
 
 export type AiIntent =
   | { type: 'serve'; kind: ShotKind }
-  | { type: 'hit'; kind: ShotKind; x0: number; y0: number; aim: ShotAim | null }
+  | { type: 'hit'; kind: ShotKind; x0: number; y0: number; aim: ShotAim | null; quality: number }
   /** 閃身撲救:dx/dy 是這次衝刺的位移向量,交給呈現層播殘影/音效 */
   | { type: 'dash'; dx: number; dy: number }
   /** 就位發球:位置已在 controller 內套用,這個 intent 只是讓呈現層播傳送特效 */
@@ -330,9 +331,16 @@ export class AiController {
     ) {
       this.nextSwingAt = s.now + SWING_COOLDOWN_MS;
       const kind = this.pickKind(s);
+      const distance = Math.hypot(s.ballX - this.x, s.ballY - this.y);
+      const quality = contactQuality({
+        distance,
+        reach: this.reach,
+        ballH: s.ballH,
+        dashTail: this.dashReachLeft > 0 && this.dashLeft <= 0,
+      });
       // 招式球要收氣力(同價);氣力不足就自動退回一般球,不是打不出手
       if (kind === 'smash' || kind === 'slice') this.spend(COST[kind]);
-      return { type: 'hit', kind, x0: s.ballX, y0: s.ballY, aim: this.pickAim(s) };
+      return { type: 'hit', kind, x0: s.ballX, y0: s.ballY, aim: this.pickAim(s), quality };
     }
     return null;
   }

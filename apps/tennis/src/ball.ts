@@ -32,6 +32,8 @@ export interface Shot {
   apexH: number;
   /** 球種(給對面播對的音效/特效)。舊版 client 送的 shot 沒這欄,接收端要能從 apexH 反推 */
   kind?: ShotKind;
+  /** 觸球品質 0..1;舊版 client 沒有時視為一般品質。 */
+  quality?: number;
   /** 發球才有:必須落進的對角發球區;一般對打為 null(RTDB 不吃 undefined) */
   serveBox?: CourtHalf | null;
 }
