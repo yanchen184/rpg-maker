@@ -635,6 +635,51 @@
       ],
       "fps": 48,
       "kind": "character-layer"
+    },
+    "char-tennis-serve-flagship": {
+      "sheet": "sheets/char-tennis-serve-flagship_sheet.png",
+      "grid": [
+        6,
+        6
+      ],
+      "fps": 48,
+      "kind": "character-layer"
+    },
+    "char-tennis-locomotion-flagship": {
+      "sheet": "sheets/char-tennis-locomotion-flagship_sheet.png",
+      "grid": [
+        6,
+        7
+      ],
+      "fps": 24,
+      "kind": "character-layer"
+    },
+    "char-tennis-ready-flagship": {
+      "sheet": "sheets/char-tennis-ready-flagship_sheet.png",
+      "grid": [
+        6,
+        6
+      ],
+      "fps": 12,
+      "kind": "character-layer"
+    },
+    "char-tennis-special-flagship": {
+      "sheet": "sheets/char-tennis-special-flagship_sheet.png",
+      "grid": [
+        6,
+        6
+      ],
+      "fps": 36,
+      "kind": "character-layer"
+    },
+    "char-tennis-reactions-flagship": {
+      "sheet": "sheets/char-tennis-reactions-flagship_sheet.png",
+      "grid": [
+        6,
+        6
+      ],
+      "fps": 24,
+      "kind": "character-layer"
     }
   }
 }
