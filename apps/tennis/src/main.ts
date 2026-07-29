@@ -62,7 +62,7 @@ import {
   type ShotKind,
 } from './shots';
 import { isTouchDevice, setupTouchControls } from './touch';
-import { CharAnim, type PoseKind } from './char-anim';
+import { CharAnim, type CharacterAction } from './char-anim';
 import { Sfx } from './sfx';
 import { FxLayer } from './fx';
 
@@ -73,6 +73,8 @@ const PLAYER_SCALE = 0.55;
 const STALE_SHOT_MS = 15_000;
 /** 觀戰模式:整場打完後幾 ms 自動再開一場 */
 const WATCH_RESTART_MS = 3200;
+/** 36 幀、48 fps 發球動畫的觸球點約在第 20 幀。 */
+const SERVE_CONTACT_DELAY_MS = 420;
 
 // 招式數值(氣力槽 / 閃身)住在 shots.ts,人類與 AI 共用同一組 —— 見該檔註解。
 
@@ -187,17 +189,37 @@ async function boot(): Promise<void> {
 
   // ── 場景與球場 ──
   const manifest = await loadManifest();
-  const [strainedFrames, smashFrames, forehandFrames, backhandFrames] = await Promise.all([
+  const [
+    strainedFrames,
+    smashFrames,
+    forehandFrames,
+    backhandFrames,
+    serveFrames,
+    locomotionFrames,
+    readyFrames,
+    specialFrames,
+    reactionFrames,
+  ] = await Promise.all([
     loadFrames('char-tennis-dive-flagship', manifest.assets['char-tennis-dive-flagship']),
     loadFrames('char-tennis-smash-flagship', manifest.assets['char-tennis-smash-flagship']),
     loadFrames('char-tennis-forehand-flagship', manifest.assets['char-tennis-forehand-flagship']),
     loadFrames('char-tennis-backhand-flagship', manifest.assets['char-tennis-backhand-flagship']),
+    loadFrames('char-tennis-serve-flagship', manifest.assets['char-tennis-serve-flagship']),
+    loadFrames('char-tennis-locomotion-flagship', manifest.assets['char-tennis-locomotion-flagship']),
+    loadFrames('char-tennis-ready-flagship', manifest.assets['char-tennis-ready-flagship']),
+    loadFrames('char-tennis-special-flagship', manifest.assets['char-tennis-special-flagship']),
+    loadFrames('char-tennis-reactions-flagship', manifest.assets['char-tennis-reactions-flagship']),
   ]);
   const characterActionAssets = {
     strained: strainedFrames,
     smash: smashFrames,
     forehand: forehandFrames,
     backhand: backhandFrames,
+    serve: serveFrames,
+    locomotion: locomotionFrames,
+    ready: readyFrames,
+    special: specialFrames,
+    reactions: reactionFrames,
   };
   const built = await buildScene(await loadScene('tennis-court'), manifest);
   app.stage.addChild(built.root);
@@ -299,6 +321,14 @@ async function boot(): Promise<void> {
   let rallyHits = 0;
   let momentum = 0;
   let qualityText = '待機';
+  type PendingServe = {
+    kind: ShotKind;
+    x: number;
+    y: number;
+    ownerY: number;
+    fireAt: number;
+  };
+  const pendingServe: Record<Side, PendingServe | null> = { left: null, right: null };
   const updateFlowHud = () => {
     if (!flowEl || !rallyCountEl || !momentumFillEl || !qualityTextEl) return;
     flowEl.style.display = player ? 'flex' : 'none';
@@ -352,7 +382,7 @@ async function boot(): Promise<void> {
     flash(`🤖 AI 難度:${LEVEL_NAME[l]}`);
   };
 
-  // ── 角色動作與表情(揮拍帶身/得分跳/失分垂頭/失誤聳肩) ──
+  // ── 角色動作與表情:全身逐格動畫,不使用頭頂表情符號 ──
   const viewFor = (s: Side) => {
     if (player && s === side) return player.view;
     const ai = ais.find((a) => a.ctl.side === s);
@@ -365,11 +395,13 @@ async function boot(): Promise<void> {
     right: new CharAnim(() => viewFor('right'), characterActionAssets, PLAYER_SCALE),
   };
   const facingOf = (s: Side): number => (s === 'left' ? 1 : -1);
-  /** 得分方慶祝、失分方垂頭(整場結束用 🏆/😭 加長版) */
+  const movementFacing = (dir: string, fallback: number): number =>
+    dir === 'left' ? -1 : dir === 'right' ? 1 : fallback;
+  /** 得分與失分都由臉部、肩膀、握拳和重心演出。 */
   const reactPoint = (winner: Side) => {
-    anim[winner].pose('celebrate', facingOf(winner));
+    anim[winner].action('celebrate', facingOf(winner), false);
     const loser = otherSide(winner);
-    anim[loser].pose('droop', facingOf(loser));
+    anim[loser].action('dejected', facingOf(loser), false);
   };
 
   const updateHud = () => {
@@ -459,15 +491,15 @@ async function boot(): Promise<void> {
       fxHit(kind, shot.x0, shot.y0);
       const owner = viewFor(shot.by);
       const contactFacing = Math.sign(shot.x0 - (owner?.x ?? shot.x0)) || facingOf(shot.by);
-      if ((shot.quality ?? 1) < STRAINED_QUALITY) anim[shot.by].action('strained', contactFacing);
+      if (shot.serveBox) anim[shot.by].action('serve', facingOf(shot.by));
+      else if ((shot.quality ?? 1) < STRAINED_QUALITY) anim[shot.by].action('strained', contactFacing);
       else if (kind === 'smash') anim[shot.by].action('smash', facingOf(shot.by));
       else if (kind === 'normal' || kind === 'drive') {
         const action = contactFacing === facingOf(shot.by) ? 'forehand' : 'backhand';
         anim[shot.by].action(action, facingOf(shot.by));
-      } else {
-        anim[shot.by].pose('swing', facingOf(shot.by));
-      }
-      anim[otherSide(shot.by)].pose('splitstep', facingOf(otherSide(shot.by)));
+      } else if (kind === 'slice') anim[shot.by].action('slice', facingOf(shot.by));
+      else anim[shot.by].action('lob', facingOf(shot.by));
+      anim[otherSide(shot.by)].action('splitstep', facingOf(otherSide(shot.by)), false);
     }
   };
 
@@ -484,7 +516,11 @@ async function boot(): Promise<void> {
     }
     const scoreAdvanced = !score || s.seq > score.seq;
     score = s;
-    if (scoreAdvanced && (s.lastPointTo || (s.faults ?? 0) > 0)) resetFlow();
+    if (scoreAdvanced) {
+      pendingServe.left = null;
+      pendingServe.right = null;
+      if (s.lastPointTo || (s.faults ?? 0) > 0) resetFlow();
+    }
     updateHud();
     if (s.seq > 0 && s.seq > lastFlashSeq && s.lastPointTo) {
       lastFlashSeq = s.seq;
@@ -512,7 +548,7 @@ async function boot(): Promise<void> {
         mode === 'watch' ? `${sideName(s.server)}方 AI` : s.server === side ? '你' : mode === 'ai' ? 'AI' : '對手';
       flash(`⚠️ ${who}一發失誤,還有第二發`);
       sfx.fault();
-      anim[s.server].pose('shrug', facingOf(s.server));
+      anim[s.server].action('fault', facingOf(s.server), false);
     }
   };
 
@@ -579,22 +615,57 @@ async function boot(): Promise<void> {
       fx.burst(x0, y0, 0xffd166); // 擊球瞬間的擴散
       shake = Math.max(shake, 5); // fxHit 已按球種給過震動,發球只保底不疊加
     }
-    // 勉強救球與殺球用完整人物 sprite:表情/肢體直接演在角色身上,不用頭頂 emoji。
-    if (!serving && quality < STRAINED_QUALITY) anim[by].action('strained', contactFacing);
+    // 每個球種都有完整人物 sprite；發球若已從蓄力幀開始播放，觸球時不重啟。
+    if (serving && !anim[by].isAction('serve')) anim[by].action('serve', facingOf(by));
+    else if (!serving && quality < STRAINED_QUALITY) anim[by].action('strained', contactFacing);
     else if (!serving && kind === 'smash') anim[by].action('smash', facingOf(by));
     else if (!serving && (kind === 'normal' || kind === 'drive')) {
       const action = contactFacing === facingOf(by) ? 'forehand' : 'backhand';
       anim[by].action(action, facingOf(by));
-    } else if (!serving) {
-      anim[by].pose('swing', facingOf(by));
+    } else if (!serving && kind === 'slice') anim[by].action('slice', facingOf(by));
+    else if (!serving) anim[by].action('lob', facingOf(by));
+    anim[otherSide(by)].action('splitstep', facingOf(otherSide(by)), false);
+  };
+
+  /** 先播完整拋球與蓄力，等逐格動畫抵達觸球幀才真正建立球軌跡。 */
+  const beginServe = (by: Side, kind: ShotKind, x: number, y: number, ownerY: number): void => {
+    if (pendingServe[by]) return;
+    pendingServe[by] = {
+      kind,
+      x,
+      y,
+      ownerY,
+      fireAt: performance.now() + SERVE_CONTACT_DELAY_MS,
+    };
+    anim[by].action('serve', facingOf(by), false);
+  };
+
+  const firePendingServes = (): void => {
+    const now = performance.now();
+    for (const by of ['left', 'right'] as const) {
+      const pending = pendingServe[by];
+      if (!pending || now < pending.fireAt) continue;
+      pendingServe[by] = null;
+      if (!score || score.winner || score.server !== by || currentShot) continue;
+      shoot(by, pending.kind, pending.x, pending.y, pending.ownerY, null);
     }
-    anim[otherSide(by)].pose('splitstep', facingOf(otherSide(by)));
   };
 
   // ── 鍵盤:揮拍/發球(觀戰模式空白鍵只用來提早再開) ──
   // 球種各自有鍵:空白 = 普通、J = 平抽、K = 挑高、L = 切球;方向鍵/WASD 在揮拍瞬間兼瞄準。
   // 招式:Shift = 閃身;殺球沒有專屬鍵 —— 球夠高時 J 自動升級成殺球(條件觸發才像招式)。
   const held = new Set<string>();
+  const devActions: CharacterAction[] = [
+    'serve',
+    'slice',
+    'lob',
+    'splitstep',
+    'brake',
+    'celebrate',
+    'dejected',
+    'fault',
+  ];
+  let devActionIndex = 0;
   window.addEventListener('keydown', (e) => {
     sfx.unlock();
     const k = e.key.toLowerCase();
@@ -611,6 +682,11 @@ async function boot(): Promise<void> {
     else if (import.meta.env.DEV && k === '7') anim[side].action('backhand', facingOf(side));
     else if (import.meta.env.DEV && k === '8') anim[side].action('strained', -1);
     else if (import.meta.env.DEV && k === '9') anim[side].action('smash', 1);
+    else if (import.meta.env.DEV && k === 'p') {
+      const action = devActions[devActionIndex % devActions.length];
+      devActionIndex += 1;
+      anim[side].action(action, facingOf(side), false);
+    }
   });
   window.addEventListener('keyup', (e) => held.delete(e.key.toLowerCase()));
   if (mode === 'ai') flash(`🤖 AI 難度:${LEVEL_NAME[aiLevel]}(按 1 簡單.2 普通.3 困難)`);
@@ -746,7 +822,7 @@ async function boot(): Promise<void> {
     sfx.dash();
     fx.ring(spot.x, spot.y, 0xffe08a); // 就位落地圈
     fx.puff(spot.x, spot.y);
-    anim[side].pose('splitstep', facingOf(side));
+    anim[side].action('splitstep', facingOf(side), false);
     return true;
   };
 
@@ -782,8 +858,7 @@ async function boot(): Promise<void> {
     sfx.dash();
     fx.streak(player.x, player.y, d.x * DASH_DIST, d.y * DASH_DIST);
     fx.puff(player.x, player.y);
-    // 傾身方向 = 閃的左右向;純上下閃時用本方朝網方向,免得傾角變 0 看不出動作
-    anim[side].pose('dash', Math.abs(d.x) > 0.2 ? Math.sign(d.x) : facingOf(side));
+    anim[side].setLocomotion(true, Math.abs(d.x) > 0.2 ? Math.sign(d.x) : facingOf(side));
     return true;
   };
 
@@ -793,6 +868,7 @@ async function boot(): Promise<void> {
     dashReachLeft = Math.max(0, dashReachLeft - dtSec);
     if (dashLeft <= 0) return;
     const step = Math.min(dtSec, dashLeft);
+    const finishesDash = step >= dashLeft;
     dashLeft -= step;
     const fits = (nx: number, ny: number): boolean => {
       const box: Aabb = {
@@ -810,6 +886,11 @@ async function boot(): Promise<void> {
     const ny = player.y + dashVy * step;
     if (fits(player.x, ny)) player.y = ny;
     else dashVy = 0;
+    if (finishesDash) {
+      dashLeft = 0;
+      const facing = Math.abs(dashVx) > 1 ? Math.sign(dashVx) : facingOf(side);
+      anim[side].action('brake', facing, false);
+    }
   };
 
   /** 判定窗內每幀試打:球真的碰到拍子(可及範圍)才出手 */
@@ -866,7 +947,7 @@ async function boot(): Promise<void> {
       if (nowMs < nextSwingAt) return false; // 冷卻中
       nextSwingAt = nowMs + SWING_COOLDOWN_MS;
       racket.swing();
-      shoot(side, kind, player.x, player.y - 20, player.y, null); // 發球:拋球直接出手(落點歸發球散布)
+      beginServe(side, kind, player.x, player.y - 20, player.y);
       return true;
     }
     const nowMs = performance.now();
@@ -877,11 +958,15 @@ async function boot(): Promise<void> {
     pendingKind = kind;
     sfx.swing(); // 風聲:揮空也有回饋,打到再疊擊球聲
     racket.swing();
-    // 殺球有專屬的舉拍下壓動作;其餘走一般揮拍帶身
-    anim[side].pose(kind === 'smash' ? 'smash' : 'swing', facingOf(side));
     // 回擊:開判定窗,球進拍子範圍才算打到(揮空就是空)
     swingUntil = nowMs + SWING_WINDOW_MS;
-    return trySwingHit();
+    const hit = trySwingHit();
+    if (!hit) {
+      const missAction: CharacterAction =
+        kind === 'smash' ? 'smash' : kind === 'slice' ? 'slice' : kind === 'lob' ? 'lob' : 'forehand';
+      anim[side].action(missAction, facingOf(side), false);
+    }
+    return hit;
   };
 
   /** 這球的落點是否為好球(落在接球方半場界內) */
@@ -950,14 +1035,22 @@ async function boot(): Promise<void> {
     if (player) {
       player.update(dt, colliders);
       stepDash(dt); // 閃身位移疊在一般走位之上(衝刺期間仍可微調方向)
+      anim[side].setLocomotion(
+        player.moving || dashLeft > 0,
+        movementFacing(player.dir, facingOf(side)),
+      );
       net.push({ x: player.x, y: player.y, dir: player.dir });
     }
+    firePendingServes();
     // 氣力回復:比賽進行中才回,分數結算/勝利畫面不累積
     if (energy < ENERGY_MAX) energy = Math.min(ENERGY_MAX, energy + ENERGY_REGEN * dt);
     updateEnergyHud();
     updateFlowHud();
     updateAimMarker();
     remote?.update(dt);
+    if (remote) {
+      anim[oppo].setLocomotion(remote.moving, movementFacing(remote.dir, facingOf(oppo)));
+    }
 
     const prevPhase = ball.phase;
     const phase = ball.update(nowSrv);
@@ -969,9 +1062,9 @@ async function boot(): Promise<void> {
     fx.update(rawDt); // 特效走真實時間:slowmo 只慢角色動畫,puff 圈不會被拉長掛在畫面上
     anim.left.update(dt);
     anim.right.update(dt);
-    if (racket) racket.view.visible = !anim[side].acting;
-    if (remoteRacket) remoteRacket.view.visible = !!remote && !anim[oppo].acting;
-    for (const ai of ais) ai.racket.view.visible = !anim[ai.ctl.side].acting;
+    if (racket) racket.view.visible = !anim[side].rendering;
+    if (remoteRacket) remoteRacket.view.visible = !!remote && !anim[oppo].rendering;
+    for (const ai of ais) ai.racket.view.visible = !anim[ai.ctl.side].rendering;
     // 畫面震動:在鏡頭基準位置上加抖動,指數衰減
     if (shake > 0.4) {
       built.root.x = rootBase.x + (Math.random() * 2 - 1) * shake;
@@ -1037,6 +1130,10 @@ async function boot(): Promise<void> {
       const aiDir = ai.racket.swingDir ?? ai.ctl.dir; // 揮拍轉體優先於移動朝向
       ai.body.onUpdate({ id: `ai-${ai.ctl.side}`, x: ai.ctl.x, y: ai.ctl.y, dir: aiDir, ts: nowSrv });
       ai.body.update(dt);
+      anim[ai.ctl.side].setLocomotion(
+        ai.body.moving,
+        movementFacing(aiDir, facingOf(ai.ctl.side)),
+      );
       ai.racket.update(dt, ai.body.view.x, ai.body.view.y, aiDir);
       if (intent) {
         if (intent.type === 'dash') {
@@ -1051,8 +1148,8 @@ async function boot(): Promise<void> {
           sfx.dash();
           fx.streak(ai.ctl.x, ai.ctl.y, intent.dx, intent.dy);
           fx.puff(ai.ctl.x, ai.ctl.y);
-          anim[ai.ctl.side].pose(
-            'dash',
+          anim[ai.ctl.side].setLocomotion(
+            true,
             Math.abs(intent.dx) > 0.2 ? Math.sign(intent.dx) : facingOf(ai.ctl.side),
           );
         } else if (intent.type === 'teleport') {
@@ -1060,10 +1157,12 @@ async function boot(): Promise<void> {
           sfx.dash();
           fx.ring(intent.x, intent.y, 0xffe08a);
           fx.puff(intent.x, intent.y);
-          anim[ai.ctl.side].pose('splitstep', facingOf(ai.ctl.side));
+          anim[ai.ctl.side].action('splitstep', facingOf(ai.ctl.side), false);
         } else {
           ai.racket.swing();
-          if (intent.type === 'serve') shoot(ai.ctl.side, intent.kind, ai.ctl.x, ai.ctl.y - 20, ai.ctl.y, null);
+          if (intent.type === 'serve') {
+            beginServe(ai.ctl.side, intent.kind, ai.ctl.x, ai.ctl.y - 20, ai.ctl.y);
+          }
           else {
             const contactFacing = Math.sign(intent.x0 - ai.ctl.x) || facingOf(ai.ctl.side);
             shoot(
@@ -1172,12 +1271,17 @@ async function boot(): Promise<void> {
         reach: Math.round(a.ctl.reach),
       })),
     emoteTest: (s: Side) => {
-      anim[s].pose('celebrate', facingOf(s));
+      anim[s].action('celebrate', facingOf(s), false);
     },
-    poseTest: (s: Side, kind: PoseKind) => anim[s].pose(kind, facingOf(s)),
-    actionTest: (s: Side, kind: 'strained' | 'smash' | 'forehand' | 'backhand', facing = facingOf(s)) =>
-      anim[s].action(kind, facing),
+    poseTest: (s: Side, kind: CharacterAction) => anim[s].action(kind, facingOf(s), false),
+    actionTest: (
+      s: Side,
+      kind: CharacterAction,
+      facing = facingOf(s),
+      fromContact = false,
+    ) => anim[s].action(kind, facing, fromContact),
     acting: (s: Side) => anim[s].acting,
+    rendering: (s: Side) => anim[s].rendering,
     pos: () => (player ? { x: Math.round(player.x), y: Math.round(player.y) } : null),
     ais: () => ais.map((a) => ({ side: a.ctl.side, x: Math.round(a.ctl.x), y: Math.round(a.ctl.y) })),
     teleport: (x: number, y: number) => {

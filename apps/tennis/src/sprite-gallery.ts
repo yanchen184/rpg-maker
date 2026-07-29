@@ -28,6 +28,15 @@ const LABELS: Record<string, string> = {
   'char-tennis-celebrate': '得分慶祝',
   'char-tennis-dejected': '失分沮喪',
   'char-tennis-faces': '表情變化',
+  'char-tennis-dive-flagship': '旗艦・勉強救球',
+  'char-tennis-smash-flagship': '旗艦・全力殺球',
+  'char-tennis-forehand-flagship': '旗艦・正拍',
+  'char-tennis-backhand-flagship': '旗艦・反拍',
+  'char-tennis-serve-flagship': '旗艦・完整發球',
+  'char-tennis-locomotion-flagship': '旗艦・跑動急停',
+  'char-tennis-ready-flagship': '旗艦・待機墊步',
+  'char-tennis-special-flagship': '旗艦・切球高吊',
+  'char-tennis-reactions-flagship': '旗艦・賽果反應',
 };
 
 async function makeCell(key: string, def: any): Promise<void> {

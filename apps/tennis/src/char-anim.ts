@@ -1,43 +1,52 @@
 /**
- * 角色程式化姿勢 + 正式網球 sprite 動作。
+ * 網球角色旗艦動畫狀態機。
  *
- * 一般短動作仍用容器位移/旋轉;勉強救球與殺球改播完整逐格人物動畫，
- * 讓表情與全身動勢住在角色本身，不再靠頭頂 emoji 代替演出。
+ * ready/run 是持續循環；擊球、發球、分腿墊步與賽果反應是一次性動作。
+ * 一次性動作結束後會自動回到最新的移動狀態，不再靠容器旋轉或頭頂符號假裝演出。
  */
-import { AnimatedSprite, Container, type Texture } from 'pixi.js';
+import { AnimatedSprite, Container, Text, type Texture } from 'pixi.js';
 
-export type PoseKind = 'swing' | 'celebrate' | 'droop' | 'shrug' | 'splitstep' | 'dash' | 'smash';
-export type CharacterAction = 'strained' | 'smash' | 'forehand' | 'backhand';
+export type CharacterAction =
+  | 'strained'
+  | 'smash'
+  | 'forehand'
+  | 'backhand'
+  | 'serve'
+  | 'slice'
+  | 'lob'
+  | 'celebrate'
+  | 'dejected'
+  | 'fault'
+  | 'splitstep'
+  | 'brake';
+
+type LocomotionKind = 'ready' | 'run';
 
 export interface CharacterActionAssets {
   strained: Texture[];
   smash: Texture[];
   forehand: Texture[];
   backhand: Texture[];
+  serve: Texture[];
+  locomotion: Texture[];
+  ready: Texture[];
+  special: Texture[];
+  reactions: Texture[];
 }
-
-interface PoseState {
-  kind: PoseKind;
-  t: number;
-  dur: number;
-  facing: number;
-}
-
-const POSE_DUR: Record<PoseKind, number> = {
-  swing: 0.22,
-  celebrate: 0.9,
-  droop: 0.8,
-  shrug: 0.45,
-  splitstep: 0.28,
-  dash: 0.3,
-  smash: 0.34,
-};
 
 const ACTION_FPS: Record<CharacterAction, number> = {
   strained: 28,
   smash: 48,
   forehand: 48,
   backhand: 48,
+  serve: 48,
+  slice: 36,
+  lob: 36,
+  celebrate: 24,
+  dejected: 18,
+  fault: 20,
+  splitstep: 28,
+  brake: 28,
 };
 
 const CONTACT_FRAME: Record<CharacterAction, number> = {
@@ -45,132 +54,233 @@ const CONTACT_FRAME: Record<CharacterAction, number> = {
   smash: 20,
   forehand: 26,
   backhand: 21,
+  serve: 20,
+  slice: 10,
+  lob: 10,
+  celebrate: 0,
+  dejected: 0,
+  fault: 0,
+  splitstep: 0,
+  brake: 0,
+};
+
+const LOOP_FPS: Record<LocomotionKind, number> = {
+  ready: 10,
+  run: 24,
+};
+
+const ANCHOR_Y: Record<CharacterAction | LocomotionKind, number> = {
+  strained: 0.933,
+  smash: 0.933,
+  forehand: 0.933,
+  backhand: 0.933,
+  serve: 0.933,
+  slice: 0.933,
+  lob: 0.933,
+  celebrate: 0.933,
+  dejected: 0.933,
+  fault: 0.933,
+  splitstep: 0.933,
+  brake: 0.933,
+  ready: 0.933,
+  run: 0.933,
 };
 
 export class CharAnim {
-  private poseState: PoseState | null = null;
   private actionSprite: AnimatedSprite | null = null;
-  private actionHost: Container | null = null;
-  private hiddenChildren: Array<{ child: Container; visible: boolean }> = [];
+  private actionKind: CharacterAction | null = null;
+  private loopSprite: AnimatedSprite | null = null;
+  private loopKind: LocomotionKind | null = null;
+  private loopFacing = 1;
+  private desiredMoving = false;
+  private desiredFacing = 1;
+  private host: Container | null = null;
+  private baseVisibility: Array<{
+    child: Container;
+    visible: boolean;
+    renderable: boolean;
+    alpha: number;
+  }> = [];
 
   constructor(
     private getView: () => Container | null,
-    private actionAssets: CharacterActionAssets,
+    private assets: CharacterActionAssets,
     private scale: number,
   ) {}
 
-  /** 播短姿勢;facing = 動作朝向(畫面右 +1 / 左 -1)。 */
-  pose(kind: PoseKind, facing = 1): void {
-    if (this.actionSprite) return;
-    this.poseState = { kind, t: 0, dur: POSE_DUR[kind], facing };
+  /**
+   * 更新角色的底層循環。一次性動作播放中只記住最新狀態，結束後再切換，
+   * 避免跑動輸入把擊球動畫蓋掉。
+   */
+  setLocomotion(moving: boolean, facing = 1): void {
+    this.desiredMoving = moving;
+    this.desiredFacing = facing || 1;
+    if (!this.actionSprite) this.syncLoop();
   }
 
   /**
-   * 播完整人物 sprite。
-   * strained sheet 前 18 幀向左、後 18 幀向右;其餘各是一套 36 幀完整動作。
+   * 播放一次性全身動作。
+   * fromContact=true 用在球已經離拍的網路／物理事件，直接從接觸幀接續收拍；
+   * false 用在發球蓄力、揮空與賽果反應，會從第一幀完整播放。
    */
-  action(kind: CharacterAction, facing = 1): void {
-    const view = this.getView();
+  action(kind: CharacterAction, facing = 1, fromContact = true): void {
+    const view = this.ensureHost();
     if (!view) return;
-    this.clearAction();
-    this.poseState = null;
-    view.pivot.set(0, 0);
-    view.rotation = 0;
+    this.destroySprite(this.actionSprite);
+    this.actionSprite = null;
+    this.actionKind = null;
+    this.destroySprite(this.loopSprite);
+    this.loopSprite = null;
+    this.loopKind = null;
+    this.hideBase(view);
 
-    const source = this.actionAssets[kind];
-    const frames =
-      kind === 'strained'
-        ? facing < 0
-          ? source.slice(0, 18)
-          : source.slice(18, 36)
-        : source;
-    const sprite = new AnimatedSprite(frames);
-    sprite.anchor.set(0.5, 1);
-    const actionScale = this.scale * (kind === 'strained' ? 1.25 : 1.45);
-    sprite.scale.set(actionScale);
-    const mirror =
-      (kind === 'smash' && facing < 0) ||
-      (kind === 'forehand' && facing < 0) ||
-      (kind === 'backhand' && facing > 0);
-    if (mirror) sprite.scale.x *= -1;
-    sprite.animationSpeed = ACTION_FPS[kind] / 60;
+    const sprite = this.buildSprite(this.framesForAction(kind, facing), kind, facing);
     sprite.loop = false;
-
-    this.hiddenChildren = view.children.map((child) => ({
-      child: child as Container,
-      visible: child.visible,
-    }));
-    for (const item of this.hiddenChildren) item.child.visible = false;
+    sprite.onComplete = () => {
+      if (this.actionSprite !== sprite) return;
+      this.destroySprite(sprite);
+      this.actionSprite = null;
+      this.actionKind = null;
+      this.syncLoop();
+    };
     view.addChild(sprite);
     this.actionSprite = sprite;
-    this.actionHost = view;
-    sprite.onComplete = () => this.clearAction();
-    sprite.gotoAndPlay(CONTACT_FRAME[kind]);
+    this.actionKind = kind;
+    sprite.gotoAndPlay(fromContact ? CONTACT_FRAME[kind] : 0);
   }
 
   get acting(): boolean {
     return !!this.actionSprite;
   }
 
-  private clearAction(): void {
-    if (this.actionSprite && !this.actionSprite.destroyed) {
-      this.actionHost?.removeChild(this.actionSprite);
-      this.actionSprite.destroy();
-    }
-    for (const item of this.hiddenChildren) {
-      if (!item.child.destroyed) item.child.visible = item.visible;
-    }
-    this.actionSprite = null;
-    this.actionHost = null;
-    this.hiddenChildren = [];
+  get rendering(): boolean {
+    return !!this.actionSprite || !!this.loopSprite;
   }
 
-  update(dtSec: number): void {
-    const view = this.getView();
-    if (!view || this.actionSprite) return;
-    if (!this.poseState) return;
+  isAction(kind: CharacterAction): boolean {
+    return this.actionKind === kind && !!this.actionSprite;
+  }
 
-    const ps = this.poseState;
-    ps.t += dtSec;
-    const p = Math.min(1, ps.t / ps.dur);
-    let lift = 0;
-    let rot = 0;
-    let lunge = 0;
-    if (ps.kind === 'swing') {
-      const s = Math.sin(p * Math.PI);
-      rot = s * 0.3 * ps.facing;
-      lift = s * 8;
-      lunge = s * 10 * ps.facing;
-    } else if (ps.kind === 'splitstep') {
-      lift = p < 0.6 ? Math.sin((p / 0.6) * Math.PI) * 10 : -Math.sin(((p - 0.6) / 0.4) * Math.PI) * 3;
-    } else if (ps.kind === 'dash') {
-      const s = Math.sin(p * Math.PI);
-      lift = -s * 12;
-      rot = s * 0.5 * ps.facing;
-      lunge = s * 22 * ps.facing;
-    } else if (ps.kind === 'smash') {
-      const rise = Math.sin(Math.min(1, p / 0.4) * (Math.PI / 2));
-      const drop = p < 0.4 ? 0 : Math.sin(((p - 0.4) / 0.6) * Math.PI);
-      lift = rise * 20 - drop * 16;
-      rot = drop * 0.34 * ps.facing;
-      lunge = drop * 14 * ps.facing;
-    } else if (ps.kind === 'celebrate') {
-      lift = Math.abs(Math.sin(p * Math.PI * 2)) * 22 * (1 - p * 0.3);
-      rot = Math.sin(p * Math.PI * 4) * 0.08;
-    } else if (ps.kind === 'droop') {
-      const sag = Math.sin(Math.min(1, p * 1.25) * Math.PI);
-      lift = -sag * 8;
-      rot = sag * 0.12 * ps.facing;
+  update(_dtSec: number): void {
+    const view = this.getView();
+    if (view !== this.host) {
+      this.detachFromHost();
+      this.host = view;
+      if (!this.actionSprite) this.syncLoop();
+    }
+    if (!this.actionSprite || !this.actionKind) return;
+    const frame = this.actionSprite.currentFrame;
+    if (this.actionKind === 'serve') {
+      this.actionSprite.y = frame >= 12 && frame <= 24 ? -Math.sin(((frame - 12) / 12) * Math.PI) * 18 : 0;
+    } else if (this.actionKind === 'celebrate') {
+      this.actionSprite.y = frame >= 4 && frame <= 9 ? -Math.sin(((frame - 4) / 5) * Math.PI) * 20 : 0;
+    } else if (this.actionKind === 'splitstep') {
+      this.actionSprite.y = frame >= 2 && frame <= 8 ? -Math.sin(((frame - 2) / 6) * Math.PI) * 10 : 0;
     } else {
-      lift = -Math.sin(p * Math.PI) * 6;
+      this.actionSprite.y = 0;
     }
-    view.pivot.y = lift;
-    view.pivot.x = -lunge;
-    view.rotation = rot;
-    if (p >= 1) {
-      this.poseState = null;
-      view.pivot.set(0, 0);
-      view.rotation = 0;
+  }
+
+  private framesForAction(kind: CharacterAction, facing: number): Texture[] {
+    if (kind === 'strained') return facing < 0 ? this.assets.strained.slice(0, 18) : this.assets.strained.slice(18, 36);
+    if (kind === 'slice') return this.assets.special.slice(0, 18);
+    if (kind === 'lob') return this.assets.special.slice(18, 36);
+    if (kind === 'celebrate') return this.assets.reactions.slice(0, 12);
+    if (kind === 'dejected') return this.assets.reactions.slice(12, 24);
+    if (kind === 'fault') return this.assets.reactions.slice(24, 36);
+    if (kind === 'splitstep') return this.assets.ready.slice(24, 36);
+    if (kind === 'brake') return this.assets.locomotion.slice(30, 42);
+    return this.assets[kind];
+  }
+
+  private framesForLoop(kind: LocomotionKind): Texture[] {
+    return kind === 'run' ? this.assets.locomotion.slice(0, 30) : this.assets.ready.slice(0, 24);
+  }
+
+  private buildSprite(frames: Texture[], kind: CharacterAction | LocomotionKind, facing: number): AnimatedSprite {
+    const sprite = new AnimatedSprite(frames);
+    sprite.anchor.set(0.5, ANCHOR_Y[kind]);
+    sprite.scale.set(this.scale * 1.45);
+    if (this.shouldMirror(kind, facing)) sprite.scale.x *= -1;
+    sprite.animationSpeed =
+      (kind === 'ready' || kind === 'run' ? LOOP_FPS[kind] : ACTION_FPS[kind]) / 60;
+    return sprite;
+  }
+
+  private shouldMirror(kind: CharacterAction | LocomotionKind, facing: number): boolean {
+    if (kind === 'strained') return false;
+    if (kind === 'backhand') return facing > 0;
+    if (kind === 'ready') return facing > 0;
+    return facing < 0;
+  }
+
+  private syncLoop(): void {
+    if (this.actionSprite) return;
+    const view = this.ensureHost();
+    if (!view) return;
+    const nextKind: LocomotionKind = this.desiredMoving ? 'run' : 'ready';
+    if (this.loopSprite && this.loopKind === nextKind && this.loopFacing === this.desiredFacing) return;
+    this.destroySprite(this.loopSprite);
+    this.hideBase(view);
+    const sprite = this.buildSprite(this.framesForLoop(nextKind), nextKind, this.desiredFacing);
+    sprite.loop = true;
+    view.addChild(sprite);
+    sprite.play();
+    this.loopSprite = sprite;
+    this.loopKind = nextKind;
+    this.loopFacing = this.desiredFacing;
+  }
+
+  private ensureHost(): Container | null {
+    const view = this.getView();
+    if (view === this.host) return view;
+    this.detachFromHost();
+    this.host = view;
+    return view;
+  }
+
+  private hideBase(view: Container): void {
+    if (this.baseVisibility.length > 0) return;
+    this.baseVisibility = view.children
+      .filter((child) => child !== this.actionSprite && child !== this.loopSprite && !(child instanceof Text))
+      .map((child) => ({
+        child: child as Container,
+        visible: child.visible,
+        renderable: child.renderable,
+        alpha: child.alpha,
+      }));
+    for (const item of this.baseVisibility) {
+      item.child.visible = false;
+      item.child.renderable = false;
+      item.child.alpha = 0;
     }
+  }
+
+  private restoreBase(): void {
+    for (const item of this.baseVisibility) {
+      if (!item.child.destroyed) {
+        item.child.visible = item.visible;
+        item.child.renderable = item.renderable;
+        item.child.alpha = item.alpha;
+      }
+    }
+    this.baseVisibility = [];
+  }
+
+  private destroySprite(sprite: AnimatedSprite | null): void {
+    if (!sprite || sprite.destroyed) return;
+    sprite.parent?.removeChild(sprite);
+    sprite.destroy();
+  }
+
+  private detachFromHost(): void {
+    this.destroySprite(this.actionSprite);
+    this.destroySprite(this.loopSprite);
+    this.actionSprite = null;
+    this.actionKind = null;
+    this.loopSprite = null;
+    this.loopKind = null;
+    this.restoreBase();
+    this.host = null;
   }
 }

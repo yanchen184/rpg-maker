@@ -1,6 +1,6 @@
 /**
  * 對手的顯示 sprite:同一套 char-body 素材依朝向渲染,頭上掛名牌。
- * 不吃鍵盤、不做碰撞,只跟著網路狀態插值移動;emote() 顯示揮拍等 emoji 泡泡。
+ * 不吃鍵盤、不做碰撞,只跟著網路狀態插值移動。
  */
 import { AnimatedSprite, Container, Text, Texture } from 'pixi.js';
 import { loadFrames } from '@rpg-maker/engine';
@@ -19,8 +19,6 @@ export class RemotePlayer {
   private curMoving = false;
   private targetX = 0;
   private targetY = 0;
-  private bubble: Text | null = null;
-  private bubbleLeft = 0;
 
   private constructor(walk: Texture[], idle: Texture[], scale: number, name: string) {
     this.walk = walk;
@@ -65,17 +63,8 @@ export class RemotePlayer {
     return this.curDir;
   }
 
-  /** 頭上短暫顯示 emoji 泡泡(對手揮拍 🎾 等) */
-  emote(emoji: string, durSec = 0.6): void {
-    if (!this.bubble) {
-      this.bubble = new Text({ style: { fontSize: 40, fill: 0xffffff } });
-      this.bubble.anchor.set(0.5, 1);
-      this.view.addChild(this.bubble);
-    }
-    this.bubble.text = emoji;
-    this.bubble.y = -this.sprite.height - 30;
-    this.bubble.visible = true;
-    this.bubbleLeft = durSec;
+  get moving(): boolean {
+    return this.curMoving;
   }
 
   private applyDir(dir: string, moving: boolean): void {
@@ -97,10 +86,6 @@ export class RemotePlayer {
     this.view.zIndex = this.view.y;
     if (this.curMoving && Math.hypot(this.targetX - this.view.x, this.targetY - this.view.y) < 2) {
       this.applyDir(this.curDir, false);
-    }
-    if (this.bubbleLeft > 0) {
-      this.bubbleLeft -= dtSec;
-      if (this.bubbleLeft <= 0 && this.bubble) this.bubble.visible = false;
     }
   }
 
