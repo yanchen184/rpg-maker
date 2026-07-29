@@ -104,6 +104,17 @@ export class Player {
     window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
   }
 
+  /**
+   * 虛擬按鍵:讓非鍵盤的輸入源(手機虛擬搖桿、腳本、錄製回放)也能驅動走位。
+   * 走的是與實體鍵盤同一份 `keys` —— 不是另一條移動路徑,所以速度、轉身頓挫、
+   * 碰撞全部一致,手機與桌機不可能在移動手感上漂移。
+   */
+  setVirtualKey(key: string, down: boolean) {
+    const k = key.toLowerCase();
+    if (down) this.keys.add(k);
+    else this.keys.delete(k);
+  }
+
   private setAnim(moving: boolean, dir: Dir) {
     if (moving === this.moving && dir === this.dir) return;
     // 純轉身(移動中只改方向)→ 先頓一下再邁步;起步/停步不頓

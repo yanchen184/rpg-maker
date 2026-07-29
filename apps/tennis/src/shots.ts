@@ -34,12 +34,22 @@ export const ENERGY_REGEN = 22;
 /** 招式耗氣:AI 與玩家同價,AI 打了殺球一樣有一段時間閃不了身 */
 export const COST = { dash: 30, smash: 40, slice: 25 } as const;
 
-/** 閃身:位移距離 / 持續秒數 / 期間拍子可及倍率 / 倍率尾勁 / 冷卻 */
+/**
+ * 閃身:位移距離 / 持續秒數 / 期間拍子可及倍率 / 倍率尾勁 / 冷卻。
+ *
+ * 2026-07-29 平衡:實測 AI 閃身「撲了就救到」的成功率高達 95%(hard 95.1% / normal 94.6%),
+ * 等於一顆「我要接到這球」按鈕 —— 太無腦。降倍率沒用(AI 只在 gap ≤ dashable 時才撲,
+ * 縮拍距只是讓它改成「不撲」,成功率照樣近 100%),真正有效的是這兩把:
+ *   1. 冷卻 520 → 780ms:連續快球第二顆閃不了,救球密度直接下降。
+ *   2. 尾勁 0.22 → 0.10 秒:撲過去後拍子加成很快退掉,晚到就搆不到 ——
+ *      預估落點的誤差終於會轉成真正的失手,而不是被長尾勁兜回來。
+ * 兩把都是「機制」不是「加價」:耗氣仍是 30,人與 AI 同一組常數。
+ */
 export const DASH_DIST = 165;
 export const DASH_SEC = 0.16;
 export const DASH_REACH_MUL = 1.85;
-export const DASH_REACH_TAIL = 0.22;
-export const DASH_COOLDOWN_MS = 520;
+export const DASH_REACH_TAIL = 0.1;
+export const DASH_COOLDOWN_MS = 780;
 
 /**
  * 發球站位:輪到誰發球,人就站這裡 —— 底線後方 × 該半區(deuce/ad)正中央。

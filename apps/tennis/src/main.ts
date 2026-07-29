@@ -58,6 +58,7 @@ import {
   type ShotAim,
   type ShotKind,
 } from './shots';
+import { isTouchDevice, setupTouchControls } from './touch';
 import { CharAnim, type PoseKind } from './char-anim';
 import { Sfx } from './sfx';
 import { FxLayer } from './fx';
@@ -144,6 +145,9 @@ async function boot(): Promise<void> {
   const energyFillEl = document.getElementById('energy-fill');
 
   const mode = parseMode();
+  // 觸控樣式要在「大廳還在畫面上」時就決定 —— 大廳的操作說明有鍵盤版/觸控版兩份,
+  // 等進遊戲才掛 class 的話,玩家在大廳讀到的會是叫他按不存在的鍵。
+  if (isTouchDevice()) document.body.classList.add('touch-mode');
   // 大廳的模式切換鈕(等人等膩了可改跟 AI 打/看 AI 對打)
   const gotoMode = (m: Mode, level?: AiLevel) => {
     location.href = `${location.pathname}?mode=${m}${level ? `&level=${level}` : ''}`;
@@ -274,7 +278,14 @@ async function boot(): Promise<void> {
   let currentShot: Shot | null = null;
   /** 驗收用:每次出手的球種紀錄(含 AI),配 aiDashes 驗招式真的有打出來 */
   const shotLog: { by: Side; kind: ShotKind; h: number }[] = [];
-  const aiDashes: { side: Side; dx: number; dy: number }[] = [];
+  /**
+   * 閃身紀錄。`saved` 是平衡調校的關鍵指標:這次撲救最後有沒有真的把球打回去。
+   * 撲了卻沒救到(saved=false)才是設計上該存在的「白閃」—— 全是 true 代表閃身無腦強。
+   * 撲出去時先記 false,同一顆球稍後打到才翻成 true(見 shotLog 那側)。
+   */
+  const aiDashes: { side: Side; dx: number; dy: number; saved: boolean }[] = [];
+  /** 每邊「還沒揭曉結果」的那次閃身在 aiDashes 的索引;-1 = 沒有待結算的撲救 */
+  const pendingDash: Record<Side, number> = { left: -1, right: -1 };
   let judgedKey = ''; // 已裁定過的 shot(seq-t0),防重複計分
   let lastFlashSeq = -1;
   // 本機模式沒有真人對手,直接視為「對手在場」讓開球/提示邏輯通行
@@ -479,6 +490,12 @@ async function boot(): Promise<void> {
     currentShot = shot;
     shotLog.push({ by, kind, h: Math.round(ball.h) });
     if (shotLog.length > 200) shotLog.shift();
+    // 這一擊如果緊接在自己的閃身之後,代表那次撲救真的把球救回來了(平衡調校用的關鍵指標)
+    const pend = pendingDash[by];
+    if (pend >= 0) {
+      if (aiDashes[pend]) aiDashes[pend].saved = true;
+      pendingDash[by] = -1;
+    }
     ball.play(shot);
     net.sendShot(shot);
     fxHit(kind, x0, y0);
@@ -768,6 +785,9 @@ async function boot(): Promise<void> {
   /** 一分結束:整包寫分 + 清球 */
   const settlePoint = (to: Side) => {
     if (!score) return;
+    // 這一分結束時還沒揭曉的撲救 = 撲了但沒把球救回來,維持 saved:false
+    pendingDash.left = -1;
+    pendingDash.right = -1;
     const ns = pointWon(score, to);
     net.sendScore(ns);
     net.clearShot();
@@ -784,6 +804,22 @@ async function boot(): Promise<void> {
     currentShot = null;
     ball.clear();
   };
+
+  // ── 觸控操作:手機上直接可玩 ──
+  // 只在觸控裝置掛(桌機不該多一層半透明按鈕);觀戰模式沒有本地球員,沒東西可操作也不掛。
+  // 觸控只是「另一組按鍵」—— 搖桿寫進同一份 held、動作鍵呼叫同一組 onSwing/onDash,
+  // 所以瞄準、招式、冷卻、發球儀式全部與鍵盤共用同一條路徑,不可能兩邊規則漂移。
+  // 提示文案要跟著操作方式走:手機上寫「按空白鍵」等於叫玩家找一個不存在的鍵。
+  const touchUi = mode !== 'watch' && isTouchDevice();
+  if (touchUi) {
+    setupTouchControls({
+      held,
+      setMoveKey: (k, down) => player?.setVirtualKey(k, down),
+      onSwing: (k) => void onSwing(k),
+      onDash: () => void onDash(),
+      canSmash,
+    });
+  }
 
   // ── 主迴圈 ──
   // 測試用時間縮放(__tennis.slowmo):只縮 dt 驅動的動畫(揮拍/走路),球飛行走伺服器時鐘不受影響
@@ -889,7 +925,13 @@ async function boot(): Promise<void> {
       if (intent) {
         if (intent.type === 'dash') {
           // 閃身撲救:走跟玩家同一套呈現(殘影 + 塵土 + 音效 + 傾身)
-          aiDashes.push({ side: ai.ctl.side, dx: Math.round(intent.dx), dy: Math.round(intent.dy) });
+          aiDashes.push({
+            side: ai.ctl.side,
+            dx: Math.round(intent.dx),
+            dy: Math.round(intent.dy),
+            saved: false,
+          });
+          pendingDash[ai.ctl.side] = aiDashes.length - 1; // 這一撲有沒有救到,等下一次出手揭曉
           sfx.dash();
           fx.streak(ai.ctl.x, ai.ctl.y, intent.dx, intent.dy);
           fx.puff(ai.ctl.x, ai.ctl.y);
@@ -922,7 +964,7 @@ async function boot(): Promise<void> {
     // 底部提示(觀戰模式不提示操作)
     let hint = '';
     if (player && opponent && score) {
-      if (score.winner) hint = '按空白鍵再來一場';
+      if (score.winner) hint = touchUi ? '點「擊球」再來一場' : '按空白鍵再來一場';
       else if (!currentShot && score.server === side) {
         // 發球提示:站位半區 + 第幾發。人已自動就位,所以只在「凝神中」與「可出手」間切換
         const half = serveHalf(side, score);
@@ -931,18 +973,22 @@ async function boot(): Promise<void> {
         const settling = !atServeSpot() || (serveReadyAt && performance.now() - serveReadyAt < SERVE_SETTLE_MS);
         hint = settling
           ? `${nth}:${box}就位中…調整呼吸`
-          : `${nth}(${box}):空白鍵發球(J 平抽發.K 挑高發),要落進對角發球區`;
+          : touchUi
+            ? `${nth}(${box}):點「擊球」發球(「抽」平抽發.「挑」挑高發),要落進對角發球區`
+            : `${nth}(${box}):空白鍵發球(J 平抽發.K 挑高發),要落進對角發球區`;
       } else if (currentShot && currentShot.by !== side && ball.phase !== 'dead') {
         const d = Math.hypot(ball.gx - player.x, ball.gy - player.y);
         if (d <= RACKET_REACH * 1.6) {
           // 球高到可以殺、氣力也夠 → 直接喊出來,不然玩家不會知道 J 這時候變殺球
           hint = canSmash()
-            ? '🔥 可以殺球!按 J 灌下去'
+            ? (touchUi ? '🔥 可以殺球!點「抽」灌下去' : '🔥 可以殺球!按 J 灌下去')
             : ball.h > HIT_H_MAX
               ? '球太高了!等它降下來再揮'
-              : '空白揮拍!J 平抽.K 挑高.L 切球|Shift 閃身|按住方向鍵瞄準';
+              : touchUi
+                ? '點「擊球」!「抽」平抽.「挑」挑高.「切」切球|「閃」閃身|推搖桿瞄準'
+                : '空白揮拍!J 平抽.K 挑高.L 切球|Shift 閃身|按住方向鍵瞄準';
         } else if (d <= RACKET_REACH * 3 && energy >= COST.dash) {
-          hint = '搆不到?按 Shift 閃身撲救(耗氣力)';
+          hint = touchUi ? '搆不到?點「閃」撲救(耗氣力)' : '搆不到?按 Shift 閃身撲救(耗氣力)';
         }
       }
     }
