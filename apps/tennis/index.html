@@ -40,11 +40,13 @@
       #scoreboard .serve { color: #ffd670; font-size: 12px; }
 
       /* 底部提示浮條(發球/揮拍提示) */
+      /* 提示列:抬到氣力槽上方一層 —— 兩者同在底部,同一行會被氣力槽壓住看不到字 */
       #hint {
-        position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 20;
+        position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 20;
         background: #101a0cd8; border: 1px solid #35502a; border-radius: 10px;
         color: #ffe9a8; font: 14px/1.4 monospace; padding: 8px 16px;
         display: none; user-select: none; white-space: nowrap;
+        max-width: 94vw; overflow: hidden; text-overflow: ellipsis;
       }
 
       /* 得分快報(短暫置中閃現) */

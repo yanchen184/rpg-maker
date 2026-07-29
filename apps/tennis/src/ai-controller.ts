@@ -6,7 +6,23 @@
  */
 import type { Shot } from './ball';
 import { serveHalf, type Score, type Side } from './scoring';
-import { RACKET_REACH, HIT_H_MAX, SWING_COOLDOWN_MS, type ShotAim, type ShotKind } from './shots';
+import {
+  RACKET_REACH,
+  HIT_H_MAX,
+  SWING_COOLDOWN_MS,
+  SMASH_MIN_H,
+  ENERGY_MAX,
+  ENERGY_REGEN,
+  COST,
+  DASH_DIST,
+  DASH_SEC,
+  DASH_REACH_MUL,
+  DASH_REACH_TAIL,
+  DASH_COOLDOWN_MS,
+  serveSpot,
+  type ShotAim,
+  type ShotKind,
+} from './shots';
 
 /** AI 每幀感知(座標同球場世界座標) */
 export interface AiSense {
@@ -25,7 +41,11 @@ export interface AiSense {
 
 export type AiIntent =
   | { type: 'serve'; kind: ShotKind }
-  | { type: 'hit'; kind: ShotKind; x0: number; y0: number; aim: ShotAim | null };
+  | { type: 'hit'; kind: ShotKind; x0: number; y0: number; aim: ShotAim | null }
+  /** 閃身撲救:dx/dy 是這次衝刺的位移向量,交給呈現層播殘影/音效 */
+  | { type: 'dash'; dx: number; dy: number }
+  /** 就位發球:位置已在 controller 內套用,這個 intent 只是讓呈現層播傳送特效 */
+  | { type: 'teleport'; x: number; y: number };
 
 export interface AiOpts {
   /** 腳程 px/s(玩家是 220) */
@@ -38,15 +58,24 @@ export interface AiOpts {
   aimProb?: number;
   /** 打出深平抽後上網搶截的意願(0 = 從不上網) */
   netAggro?: number;
+  /**
+   * 招式意願(0 = 完全不用招式,維持舊手感)。
+   * 只調「想不想用」,不調氣力價格 —— AI 與玩家吃同一組 COST/回充,不另外加罰。
+   * 平衡由 AI 本來就有的反應延遲 / 落點誤差 / 腳程承擔:用錯時機就是失手。
+   */
+  special?: number;
 }
 
 export type AiLevel = 'easy' | 'normal' | 'hard';
 
-/** 難度預設:easy 腳慢眼慢誤差大不上網;hard 反應快誤差小、愛瞄空檔也愛上網壓迫 */
+/**
+ * 難度預設:easy 腳慢眼慢誤差大不上網;hard 反應快誤差小、愛瞄空檔也愛上網壓迫。
+ * special = 招式意願:easy 完全不用(手感不變)、normal 偶爾、hard 三招全開。
+ */
 export const AI_PRESETS: Record<AiLevel, Required<AiOpts>> = {
-  easy: { speed: 185, reactMs: 400, errPx: 62, aimProb: 0.3, netAggro: 0 },
-  normal: { speed: 240, reactMs: 240, errPx: 34, aimProb: 0.7, netAggro: 0.35 },
-  hard: { speed: 290, reactMs: 140, errPx: 14, aimProb: 0.9, netAggro: 0.7 },
+  easy: { speed: 185, reactMs: 400, errPx: 62, aimProb: 0.3, netAggro: 0, special: 0 },
+  normal: { speed: 240, reactMs: 240, errPx: 34, aimProb: 0.7, netAggro: 0.35, special: 0.4 },
+  hard: { speed: 290, reactMs: 140, errPx: 14, aimProb: 0.9, netAggro: 0.7, special: 0.85 },
 };
 
 const rand = (a: number, b: number): number => a + Math.random() * (b - a);
@@ -69,8 +98,18 @@ export class AiController {
   private errPx: number;
   private aimProb: number;
   private netAggro: number;
+  private special: number;
   private readonly xMin: number;
   private readonly xMax: number;
+
+  /** 氣力:跟玩家同一組上限/回充/耗費,不另外加罰 */
+  private energy = ENERGY_MAX;
+  private dashLeft = 0; // 衝刺剩餘秒數
+  private dashVx = 0;
+  private dashVy = 0;
+  private dashReachLeft = 0; // 拍子加成剩餘秒數(衝刺後再延續 DASH_REACH_TAIL)
+  private nextDashAt = 0;
+  private dashedForKey = ''; // 同一顆來球只撲一次,不連閃
 
   private serveAt = 0; // 預定發球時刻;0 = 未排
   private nextSwingAt = 0; // 揮拍冷卻結束時刻
@@ -92,6 +131,7 @@ export class AiController {
     this.errPx = opts.errPx ?? 34;
     this.aimProb = opts.aimProb ?? 0.7;
     this.netAggro = opts.netAggro ?? 0.35;
+    this.special = opts.special ?? 0.4;
     // 活動範圍鎖自己半場(網前 710/790、場端與上下邊線)
     this.xMin = side === 'left' ? 75 : 795;
     this.xMax = side === 'left' ? 705 : 1425;
@@ -104,6 +144,24 @@ export class AiController {
     if (opts.errPx !== undefined) this.errPx = opts.errPx;
     if (opts.aimProb !== undefined) this.aimProb = opts.aimProb;
     if (opts.netAggro !== undefined) this.netAggro = opts.netAggro;
+    if (opts.special !== undefined) this.special = opts.special;
+  }
+
+  /** 現在的拍子可及半徑(閃身中放大;跟玩家同一條公式) */
+  get reach(): number {
+    return this.dashReachLeft > 0 ? RACKET_REACH * DASH_REACH_MUL : RACKET_REACH;
+  }
+
+  /** 氣力現值(debug / HUD 用) */
+  get energyNow(): number {
+    return this.energy;
+  }
+
+  /** 扣氣力;不夠就打不出來(跟玩家同價,不另外加罰) */
+  private spend(cost: number): boolean {
+    if (this.energy < cost) return false;
+    this.energy -= cost;
+    return true;
   }
 
   /** 在網前(截擊距離)? */
@@ -111,8 +169,64 @@ export class AiController {
     return Math.abs(this.x - 750) < 160;
   }
 
+  /**
+   * 氣力回充 + 閃身位移推進。每幀最先跑,跟玩家同一組速率。
+   * 衝刺中位置由 dashV 接管(蓋過 moveToward),但一樣鎖在自己半場範圍內。
+   */
+  private stepEnergy(dtSec: number): void {
+    if (this.energy < ENERGY_MAX) {
+      this.energy = Math.min(ENERGY_MAX, this.energy + ENERGY_REGEN * dtSec);
+    }
+    if (this.dashReachLeft > 0) this.dashReachLeft = Math.max(0, this.dashReachLeft - dtSec);
+    if (this.dashLeft > 0) {
+      const step = Math.min(dtSec, this.dashLeft);
+      this.x = Math.max(this.xMin, Math.min(this.xMax, this.x + this.dashVx * step));
+      this.y = Math.max(95, Math.min(905, this.y + this.dashVy * step));
+      this.dashLeft -= step;
+    }
+  }
+
+  /**
+   * 要不要閃身撲救:預估落點超出腳程、但在「閃身位移 + 放大後拍距」內才值得撲。
+   * 撲錯(落點誤差骗了它)就是白閃一次還噴氣力 —— 不給它預知真實落點的捷徑,
+   * 判斷一律用帶誤差的預估點,跟它跑位用的是同一個數字。
+   */
+  private tryDash(s: AiSense, sh: Shot, key: string): AiIntent | null {
+    if (this.special <= 0 || this.dashLeft > 0 || s.now < this.nextDashAt) return null;
+    if (key === this.dashedForKey) return null; // 同一顆球只撲一次
+    if (this.energy < COST.dash) return null;
+    if (Math.random() >= this.special) return null;
+
+    // 預估落點(含誤差)與剩餘時間 —— 用 AI 自己「以為」的落點,不是真值
+    const tx = Math.max(this.xMin, Math.min(this.xMax, sh.x1 + this.err.x));
+    const ty = Math.max(95, Math.min(905, sh.y1 - 12 + this.err.y));
+    const dx = tx - this.x;
+    const dy = ty - this.y;
+    const gap = Math.hypot(dx, dy);
+    const secLeft = (sh.t0 + sh.flightMs - s.now) / 1000;
+    if (secLeft <= 0.05) return null;
+
+    // 走路搆得到就別浪費氣力;超出「閃身位移 + 放大拍距」也救不回,不做無用功
+    const walkable = this.speed * secLeft + RACKET_REACH;
+    const dashable = this.speed * secLeft + DASH_DIST + RACKET_REACH * DASH_REACH_MUL;
+    if (gap <= walkable || gap > dashable) return null;
+
+    this.dashedForKey = key;
+    this.energy -= COST.dash;
+    this.nextDashAt = s.now + DASH_COOLDOWN_MS;
+    const ux = dx / (gap || 1);
+    const uy = dy / (gap || 1);
+    this.dashVx = (ux * DASH_DIST) / DASH_SEC;
+    this.dashVy = (uy * DASH_DIST) / DASH_SEC;
+    this.dashLeft = DASH_SEC;
+    this.dashReachLeft = DASH_SEC + DASH_REACH_TAIL;
+    this.dir = Math.abs(ux) > Math.abs(uy) ? (ux > 0 ? 'right' : 'left') : uy > 0 ? 'down' : 'up';
+    return { type: 'dash', dx: ux * DASH_DIST, dy: uy * DASH_DIST };
+  }
+
   /** 每幀:推進位置,回傳出手意圖(揮拍那幀非 null) */
   tick(dtSec: number, s: AiSense): AiIntent | null {
+    this.stepEnergy(dtSec);
     if (!s.score || s.score.winner) {
       this.moveToward(this.home, dtSec);
       return null;
@@ -121,20 +235,23 @@ export class AiController {
     const sh = s.shot;
     if (!sh) {
       this.approaching = false; // 這分結束/還沒開始:收掉上網狀態
-      // 空場:輪到自己發球 → 先走到正確站位半區(deuce/ad 依局內分數奇偶),
+      // 空場:輪到自己發球 → 直接就位到該半區的發球點(deuce/ad 依局內分數奇偶),
       // 到位才排發球時刻(裝作思考);否則回位等接發
       if (s.score.server === this.side) {
         const half = serveHalf(this.side, s.score);
-        const spot = { x: this.home.x, y: half === 'top' ? 330 : 670 };
-        this.moveToward(spot, dtSec);
-        if (Math.abs(this.y - spot.y) < 40 && Math.abs(this.x - spot.x) < 60) {
-          if (!this.serveAt) this.serveAt = s.now + rand(900, 1700);
-          if (s.now >= this.serveAt) {
-            this.serveAt = 0;
-            return { type: 'serve', kind: pickServeKind(s.score.faults ?? 0) };
-          }
-        } else {
+        const spot = serveSpot(this.side, half);
+        // 就位不用走 —— 跟玩家一樣直接傳送到發球點,省掉沒戲的跑位,
+        // 到位後才排發球時刻(裝作調整呼吸),讓開球有「就位 → 停頓 → 出手」的節奏
+        if (Math.abs(this.y - spot.y) > 2 || Math.abs(this.x - spot.x) > 2) {
+          this.x = spot.x;
+          this.y = spot.y;
+          this.serveAt = s.now + rand(900, 1700);
+          return { type: 'teleport', x: spot.x, y: spot.y };
+        }
+        if (!this.serveAt) this.serveAt = s.now + rand(900, 1700);
+        if (s.now >= this.serveAt) {
           this.serveAt = 0;
+          return { type: 'serve', kind: pickServeKind(s.score.faults ?? 0) };
         }
       } else {
         this.serveAt = 0;
@@ -186,6 +303,10 @@ export class AiController {
     }
     if (s.now < this.reactUntil) return null;
 
+    // 追不到的球:反應完就評估要不要閃身撲救(在跑位之前決定,撲出去這幀就位移)
+    const dash = this.tryDash(s, sh, key);
+    if (dash) return dash;
+
     // 上網中且來球不是挑高 → 守在網前橫移攔截(截擊:球到落點前就出拍);
     // 否則追預測落點(含誤差)
     const target = this.approaching
@@ -199,21 +320,35 @@ export class AiController {
         };
     this.moveToward(target, dtSec);
 
-    // 出手判定:跟人類同規則(拍距 + 球高 + 冷卻),球死了就追不回
+    // 出手判定:跟人類同規則(拍距 + 球高 + 冷卻),球死了就追不回。
+    // 拍距用 this.reach —— 閃身中會放大,撲救的價值就在這裡兌現。
     if (
       s.ballPhase !== 'dead' &&
       s.ballH <= HIT_H_MAX &&
-      Math.hypot(s.ballX - this.x, s.ballY - this.y) <= RACKET_REACH &&
+      Math.hypot(s.ballX - this.x, s.ballY - this.y) <= this.reach &&
       s.now >= this.nextSwingAt
     ) {
       this.nextSwingAt = s.now + SWING_COOLDOWN_MS;
-      return { type: 'hit', kind: this.pickKind(), x0: s.ballX, y0: s.ballY, aim: this.pickAim(s) };
+      const kind = this.pickKind(s);
+      // 招式球要收氣力(同價);氣力不足就自動退回一般球,不是打不出手
+      if (kind === 'smash' || kind === 'slice') this.spend(COST[kind]);
+      return { type: 'hit', kind, x0: s.ballX, y0: s.ballY, aim: this.pickAim(s) };
     }
     return null;
   }
 
-  /** 回擊選球種:網前截擊快拍壓制(不吊高);底線普通為主,偶爾冒險平抽或吊高 */
-  private pickKind(): ShotKind {
+  /**
+   * 回擊選球種。招式優先(要氣力夠 + 骰過意願):
+   * 球夠高就殺球(跟玩家同一條 SMASH_MIN_H 門檻);否則偶爾切球把對手吊上網。
+   * 招式不成立才走原本的三檔:網前截擊快拍壓制,底線普通為主偶爾冒險。
+   */
+  private pickKind(s: AiSense): ShotKind {
+    if (this.special > 0 && Math.random() < this.special) {
+      if (s.ballH >= SMASH_MIN_H && this.energy >= COST.smash) return 'smash';
+      // 切球用來把對手從底線拉上來:對手已經在網前就沒意義了
+      const foeDeep = this.side === 'left' ? s.oppoX >= 1050 : s.oppoX <= 450;
+      if (foeDeep && !this.atNet && this.energy >= COST.slice && Math.random() < 0.5) return 'slice';
+    }
     const r = Math.random();
     if (this.atNet) return r < 0.55 ? 'drive' : 'normal';
     return r < 0.2 ? 'lob' : r < 0.38 ? 'drive' : 'normal';
@@ -230,6 +365,7 @@ export class AiController {
   }
 
   private moveToward(t: { x: number; y: number }, dtSec: number): void {
+    if (this.dashLeft > 0) return; // 衝刺中位置由 stepEnergy 接管,別讓走路把它拉回來
     const dx = t.x - this.x;
     const dy = t.y - this.y;
     const len = Math.hypot(dx, dy);

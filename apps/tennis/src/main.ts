@@ -46,6 +46,15 @@ import {
   SPECIAL_KINDS,
   SWING_WINDOW_MS,
   SWING_COOLDOWN_MS,
+  ENERGY_MAX,
+  ENERGY_REGEN,
+  COST,
+  DASH_DIST,
+  DASH_SEC,
+  DASH_REACH_MUL,
+  DASH_REACH_TAIL,
+  DASH_COOLDOWN_MS,
+  serveSpot,
   type ShotAim,
   type ShotKind,
 } from './shots';
@@ -61,24 +70,7 @@ const STALE_SHOT_MS = 15_000;
 /** 觀戰模式:整場打完後幾 ms 自動再開一場 */
 const WATCH_RESTART_MS = 3200;
 
-// ── 招式:氣力槽 ──
-// 三式共用一條氣力,回復速度刻意偏慢 —— 招式要是能一直放就不是招式,是普通鍵。
-// 滿槽 100、每秒回 22:連放兩式(閃身+殺球=70)後要約 3 秒才回得滿。
-const ENERGY_MAX = 100;
-const ENERGY_REGEN = 22;
-const COST = { dash: 30, smash: 40, slice: 25 } as const;
-
-// ── 閃身 ──
-/** 衝刺總位移(px):約兩個身位,夠救掉一顆本來搆不到的球 */
-const DASH_DIST = 165;
-/** 衝刺時長(秒):短而爆,長了會變成「用飛的走路」 */
-const DASH_SEC = 0.16;
-/** 閃身期間(含收尾窗)拍子可及半徑的倍率 —— 撲救的本體就是這個 */
-const DASH_REACH_MUL = 1.85;
-/** 衝刺結束後拍子加成再延續多久(秒):撲出去要「還在撲的姿勢裡」能揮到 */
-const DASH_REACH_TAIL = 0.22;
-/** 閃身冷卻(ms):比氣力更早卡住連續閃,避免抖動式亂閃 */
-const DASH_COOLDOWN_MS = 520;
+// 招式數值(氣力槽 / 閃身)住在 shots.ts,人類與 AI 共用同一組 —— 見該檔註解。
 
 type Mode = 'online' | 'ai' | 'watch';
 
@@ -280,6 +272,9 @@ async function boot(): Promise<void> {
   // ── 對戰狀態 ──
   let score: Score | null = null;
   let currentShot: Shot | null = null;
+  /** 驗收用:每次出手的球種紀錄(含 AI),配 aiDashes 驗招式真的有打出來 */
+  const shotLog: { by: Side; kind: ShotKind; h: number }[] = [];
+  const aiDashes: { side: Side; dx: number; dy: number }[] = [];
   let judgedKey = ''; // 已裁定過的 shot(seq-t0),防重複計分
   let lastFlashSeq = -1;
   // 本機模式沒有真人對手,直接視為「對手在場」讓開球/提示邏輯通行
@@ -467,7 +462,6 @@ async function boot(): Promise<void> {
   if (mode !== 'online') net.sendScore(initialScore('left'));
 
   // ── 出球(人與 AI 共用同一公式) ──
-  const COURT_MID = (COURT.top + COURT.bottom) / 2;
   const shoot = (by: Side, kind: ShotKind, x0: number, y0: number, ownerY: number, aim: ShotAim | null) => {
     // 沒有球在飛 = 這球是發球:必須瞄對角發球區(站位半區的相反 y 半區)
     const serving = !currentShot && !!score;
@@ -483,11 +477,24 @@ async function boot(): Promise<void> {
       aim,
     });
     currentShot = shot;
+    shotLog.push({ by, kind, h: Math.round(ball.h) });
+    if (shotLog.length > 200) shotLog.shift();
     ball.play(shot);
     net.sendShot(shot);
     fxHit(kind, x0, y0);
-    anim[by].pose('swing', facingOf(by));
-    if (kind === 'drive') anim[by].say('😤', 0.7);
+    // 發球演出(人與 AI 同一套):拋球的上升尾跡 + 擊球瞬間的擴散圈 + 一記震動。
+    // 開球是一分的起手式,要跟對打中隨手一擊分得出來。
+    if (serving) {
+      fx.streak(x0, y0, 0, -110, 0xffe08a); // 拋球:往上竄的一道亮線
+      fx.ring(x0, y0 - 90, 0xffe08a); // 球在最高點的那一圈
+      fx.burst(x0, y0, 0xffd166); // 擊球瞬間的擴散
+      shake = Math.max(shake, 5); // fxHit 已按球種給過震動,發球只保底不疊加
+      anim[by].say((score?.faults ?? 0) > 0 ? '😤' : '🎾', 0.9);
+    }
+    // 殺球是招式:姿勢與表情跟一般揮拍分開(AI 打的也走這條,表演一致)
+    anim[by].pose(kind === 'smash' ? 'smash' : 'swing', facingOf(by));
+    if (!serving && kind === 'smash') anim[by].say('🔥', 0.8);
+    else if (!serving && kind === 'drive') anim[by].say('😤', 0.7);
     anim[otherSide(by)].pose('splitstep', facingOf(otherSide(by)));
   };
 
@@ -544,13 +551,18 @@ async function boot(): Promise<void> {
   let nextSwingAt = 0; // 冷卻結束時刻
   let pendingKind: ShotKind = 'normal'; // 這次揮拍要打的球種(揮拍鍵決定)
 
-  // ── 招式狀態(只有本地玩家有;AI 不吃氣力,難度靠 AI_PRESETS 調) ──
+  // ── 招式狀態(本地玩家的那份;AI 各自持有自己的氣力,同價同回充,見 ai-controller) ──
   let energy = ENERGY_MAX;
   let dashLeft = 0; // 衝刺剩餘秒數;>0 = 正在閃身
   let dashVx = 0; // 衝刺速度向量(px/s)
   let dashVy = 0;
   let dashReachLeft = 0; // 拍子加成剩餘秒數(衝刺結束後還延續 DASH_REACH_TAIL)
   let nextDashAt = 0;
+
+  // ── 發球儀式(就位時刻;0 = 這一分還沒就位過) ──
+  let serveReadyAt = 0;
+  /** 就位後的凝神時間:這段內不准出手,逼出「站定 → 沉住氣 → 開球」的節奏 */
+  const SERVE_SETTLE_MS = 450;
 
   /** 這一刻的拍子可及半徑:閃身中放大 —— 撲救就是靠這個構到平常搆不到的球 */
   const reachNow = (): number => (dashReachLeft > 0 ? RACKET_REACH * DASH_REACH_MUL : RACKET_REACH);
@@ -581,6 +593,39 @@ async function boot(): Promise<void> {
       return false;
     }
     energy -= cost;
+    return true;
+  };
+
+  // ── 發球就位(儀式感第一拍:輪到發球就傳送到位,不用自己走) ──
+  /** 這一分該站的發球點(deuce/ad 依局內分數奇偶);沒有比分/沒球員就沒有 */
+  const mySpot = (): { x: number; y: number } | null =>
+    score && player ? serveSpot(side, serveHalf(side, score)) : null;
+
+  /** 已經站在發球點上(容許一點誤差,免得浮點讓人永遠「還沒就位」) */
+  const atServeSpot = (): boolean => {
+    const spot = mySpot();
+    if (!spot || !player) return false;
+    return Math.abs(player.x - spot.x) < 8 && Math.abs(player.y - spot.y) < 8;
+  };
+
+  /**
+   * 就位:把人傳送到發球點並起算凝神時間。回傳是否真的位移了
+   * (本來就站在點上 → 不重播特效,但一樣起算,儀式節奏不會因站位而不同)。
+   */
+  const toServeSpot = (): boolean => {
+    const spot = mySpot();
+    if (!spot || !player) return false;
+    serveReadyAt = performance.now();
+    if (atServeSpot()) return false;
+    fx.puff(player.x, player.y); // 原地留一團煙:人是「離開」這裡的
+    player.x = spot.x;
+    player.y = spot.y;
+    dashLeft = 0; // 傳送打斷閃身,免得衝刺速度把人又帶離發球點
+    dashReachLeft = 0;
+    sfx.dash();
+    fx.ring(spot.x, spot.y, 0xffe08a); // 就位落地圈
+    fx.puff(spot.x, spot.y);
+    anim[side].pose('splitstep', facingOf(side));
     return true;
   };
 
@@ -677,14 +722,18 @@ async function boot(): Promise<void> {
       return false;
     }
     if (!currentShot && score.server === side) {
-      // 發球:必須站在正確半區(deuce/ad 依局內分數奇偶),站錯不揮拍只提示
-      const half = serveHalf(side, score);
-      const okPos = half === 'top' ? player.y < COURT_MID : player.y > COURT_MID;
-      if (!okPos) {
-        flash(`發球要站在${half === 'top' ? '上' : '下'}半區(往${half === 'top' ? '上' : '下'}移動)`);
+      // 發球:不用自己走過去 —— 輪到發球 ticker 就把人傳送到位(見 toServeSpot)。
+      // 玩家若自己走離發球點,這裡把他拉回去並重新起算凝神:發球一定從定點開始。
+      if (!atServeSpot()) {
+        toServeSpot();
         return false;
       }
       const nowMs = performance.now();
+      // 凝神:就位後這段時間內按發球鍵不出手 —— 開球有停頓才有份量
+      if (serveReadyAt && nowMs - serveReadyAt < SERVE_SETTLE_MS) {
+        sfx.reject();
+        return false;
+      }
       if (nowMs < nextSwingAt) return false; // 冷卻中
       nextSwingAt = nowMs + SWING_COOLDOWN_MS;
       racket.swing();
@@ -743,6 +792,13 @@ async function boot(): Promise<void> {
     const rawDt = t.deltaMS / 1000;
     const dt = rawDt * timeScale;
     const nowSrv = net.now();
+    // 發球就位:輪到自己發球且場上無球 → 自動傳送到發球點(每分只傳一次,傳完就交還操控權,
+    // 玩家想在框內微調站位仍然可以走)。這是儀式的第一拍,不用玩家自己走過去。
+    if (player && score && !score.winner && !currentShot && score.server === side) {
+      if (!serveReadyAt) toServeSpot();
+    } else if (serveReadyAt) {
+      serveReadyAt = 0; // 球開出去/換人發球:這一分的儀式結束,下一分重新就位
+    }
     if (player) {
       player.update(dt, colliders);
       stepDash(dt); // 閃身位移疊在一般走位之上(衝刺期間仍可微調方向)
@@ -831,9 +887,27 @@ async function boot(): Promise<void> {
       ai.body.update(dt);
       ai.racket.update(dt, ai.body.view.x, ai.body.view.y, aiDir);
       if (intent) {
-        ai.racket.swing();
-        if (intent.type === 'serve') shoot(ai.ctl.side, intent.kind, ai.ctl.x, ai.ctl.y - 20, ai.ctl.y, null);
-        else shoot(ai.ctl.side, intent.kind, intent.x0, intent.y0, ai.ctl.y, intent.aim);
+        if (intent.type === 'dash') {
+          // 閃身撲救:走跟玩家同一套呈現(殘影 + 塵土 + 音效 + 傾身)
+          aiDashes.push({ side: ai.ctl.side, dx: Math.round(intent.dx), dy: Math.round(intent.dy) });
+          sfx.dash();
+          fx.streak(ai.ctl.x, ai.ctl.y, intent.dx, intent.dy);
+          fx.puff(ai.ctl.x, ai.ctl.y);
+          anim[ai.ctl.side].pose(
+            'dash',
+            Math.abs(intent.dx) > 0.2 ? Math.sign(intent.dx) : facingOf(ai.ctl.side),
+          );
+        } else if (intent.type === 'teleport') {
+          // 發球就位:位置已由 controller 套用,這裡只播跟玩家同一套的就位演出
+          sfx.dash();
+          fx.ring(intent.x, intent.y, 0xffe08a);
+          fx.puff(intent.x, intent.y);
+          anim[ai.ctl.side].pose('splitstep', facingOf(ai.ctl.side));
+        } else {
+          ai.racket.swing();
+          if (intent.type === 'serve') shoot(ai.ctl.side, intent.kind, ai.ctl.x, ai.ctl.y - 20, ai.ctl.y, null);
+          else shoot(ai.ctl.side, intent.kind, intent.x0, intent.y0, ai.ctl.y, intent.aim);
+        }
       }
     }
 
@@ -850,13 +924,14 @@ async function boot(): Promise<void> {
     if (player && opponent && score) {
       if (score.winner) hint = '按空白鍵再來一場';
       else if (!currentShot && score.server === side) {
-        // 發球提示:含站位半區與第幾發(站錯先引導移動)
+        // 發球提示:站位半區 + 第幾發。人已自動就位,所以只在「凝神中」與「可出手」間切換
         const half = serveHalf(side, score);
-        const okPos = half === 'top' ? player.y < COURT_MID : player.y > COURT_MID;
         const nth = (score.faults ?? 0) > 0 ? '第二發' : '第一發';
-        hint = okPos
-          ? `${nth}:空白鍵發球(J 平抽發.K 挑高發),要落進對角發球區`
-          : `${nth}:先移動到${half === 'top' ? '上' : '下'}半區才能發球`;
+        const box = `${half === 'top' ? '上' : '下'}半區`;
+        const settling = !atServeSpot() || (serveReadyAt && performance.now() - serveReadyAt < SERVE_SETTLE_MS);
+        hint = settling
+          ? `${nth}:${box}就位中…調整呼吸`
+          : `${nth}(${box}):空白鍵發球(J 平抽發.K 挑高發),要落進對角發球區`;
       } else if (currentShot && currentShot.by !== side && ball.phase !== 'dead') {
         const d = Math.hypot(ball.gx - player.x, ball.gy - player.y);
         if (d <= RACKET_REACH * 1.6) {
@@ -894,6 +969,34 @@ async function boot(): Promise<void> {
     aiLevel: () => aiLevel,
     setAiLevel: (l: AiLevel) => setAiLevel(l),
     aiAtNet: () => ais.map((a) => ({ side: a.ctl.side, atNet: a.ctl.atNet })),
+    /** 驗收用:出手球種紀錄 / AI 閃身紀錄 */
+    shots: () => shotLog.slice(),
+    aiDashes: () => aiDashes.slice(),
+    clearLog: () => {
+      shotLog.length = 0;
+      aiDashes.length = 0;
+    },
+    /** 發球儀式驗收用:該站哪、實際站哪、有沒有就位、凝神還剩多久 */
+    serveState: () => {
+      const spot = mySpot();
+      const settleLeft = serveReadyAt ? Math.max(0, SERVE_SETTLE_MS - (performance.now() - serveReadyAt)) : 0;
+      return {
+        server: score?.server ?? null,
+        mine: !!score && score.server === side,
+        half: score ? serveHalf(side, score) : null,
+        spot,
+        pos: player ? { x: Math.round(player.x), y: Math.round(player.y) } : null,
+        atSpot: atServeSpot(),
+        settleLeft: Math.round(settleLeft),
+      };
+    },
+    /** AI 招式驗收用:氣力與可及半徑(閃身中會放大) */
+    aiEnergy: () =>
+      ais.map((a) => ({
+        side: a.ctl.side,
+        energy: Math.round(a.ctl.energyNow),
+        reach: Math.round(a.ctl.reach),
+      })),
     emoteTest: (s: Side) => {
       anim[s].pose('celebrate', facingOf(s));
       anim[s].say('😆', 1.5);

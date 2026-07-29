@@ -27,6 +27,29 @@ export const SMASH_MIN_H = 82;
 /** 切球落點:壓在對方發球線前這個範圍內(貼網小球,逼對手往前跑) */
 export const SLICE_DEPTH = [55, 205] as const;
 
+/** 氣力上限與每秒回充 —— 人類與 AI 共用同一組,招式對雙方都是有限資源 */
+export const ENERGY_MAX = 100;
+export const ENERGY_REGEN = 22;
+
+/** 招式耗氣:AI 與玩家同價,AI 打了殺球一樣有一段時間閃不了身 */
+export const COST = { dash: 30, smash: 40, slice: 25 } as const;
+
+/** 閃身:位移距離 / 持續秒數 / 期間拍子可及倍率 / 倍率尾勁 / 冷卻 */
+export const DASH_DIST = 165;
+export const DASH_SEC = 0.16;
+export const DASH_REACH_MUL = 1.85;
+export const DASH_REACH_TAIL = 0.22;
+export const DASH_COOLDOWN_MS = 520;
+
+/**
+ * 發球站位:輪到誰發球,人就站這裡 —— 底線後方 × 該半區(deuce/ad)正中央。
+ * 人類與 AI 共用:兩邊都直接就位,不用自己走過去,發球才有「就位 → 開球」的儀式節奏。
+ */
+export const SERVE_SPOT_Y = { top: 330, bottom: 670 } as const;
+export function serveSpot(server: Side, half: CourtHalf): { x: number; y: number } {
+  return { x: server === 'left' ? 350 : 1150, y: SERVE_SPOT_Y[half] };
+}
+
 /** 瞄準:目標落點(世界座標)。有瞄散布收窄、沒瞄走大範圍隨機 —— 控制權換給打者 */
 export interface ShotAim {
   x?: number;
