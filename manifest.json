@@ -599,6 +599,42 @@
       ],
       "fps": 8,
       "kind": "character-layer"
+    },
+    "char-tennis-dive-flagship": {
+      "sheet": "sheets/char-tennis-dive-flagship_sheet.png",
+      "grid": [
+        6,
+        6
+      ],
+      "fps": 28,
+      "kind": "character-layer"
+    },
+    "char-tennis-smash-flagship": {
+      "sheet": "sheets/char-tennis-smash-flagship_sheet.png",
+      "grid": [
+        6,
+        6
+      ],
+      "fps": 48,
+      "kind": "character-layer"
+    },
+    "char-tennis-forehand-flagship": {
+      "sheet": "sheets/char-tennis-forehand-flagship_sheet.png",
+      "grid": [
+        6,
+        7
+      ],
+      "fps": 48,
+      "kind": "character-layer"
+    },
+    "char-tennis-backhand-flagship": {
+      "sheet": "sheets/char-tennis-backhand-flagship_sheet.png",
+      "grid": [
+        6,
+        6
+      ],
+      "fps": 48,
+      "kind": "character-layer"
     }
   }
 }
