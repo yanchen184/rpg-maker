@@ -18,7 +18,8 @@ export type CharacterAction =
   | 'dejected'
   | 'fault'
   | 'splitstep'
-  | 'brake';
+  | 'brake'
+  | 'glanceLeft';
 
 type LocomotionKind = 'ready' | 'run';
 
@@ -47,6 +48,7 @@ const ACTION_FPS: Record<CharacterAction, number> = {
   fault: 20,
   splitstep: 28,
   brake: 28,
+  glanceLeft: 12,
 };
 
 const CONTACT_FRAME: Record<CharacterAction, number> = {
@@ -62,6 +64,7 @@ const CONTACT_FRAME: Record<CharacterAction, number> = {
   fault: 0,
   splitstep: 0,
   brake: 0,
+  glanceLeft: 0,
 };
 
 const LOOP_FPS: Record<LocomotionKind, number> = {
@@ -82,9 +85,13 @@ const ANCHOR_Y: Record<CharacterAction | LocomotionKind, number> = {
   fault: 0.933,
   splitstep: 0.933,
   brake: 0.933,
+  glanceLeft: 0.933,
   ready: 0.933,
   run: 0.933,
 };
+
+const IDLE_GLANCE_MIN_SECONDS = 3.2;
+const IDLE_GLANCE_VARIANCE_SECONDS = 4;
 
 export class CharAnim {
   private actionSprite: AnimatedSprite | null = null;
@@ -94,6 +101,8 @@ export class CharAnim {
   private loopFacing = 1;
   private desiredMoving = false;
   private desiredFacing = 1;
+  private idleSeconds = 0;
+  private glanceDelaySeconds = 0;
   private host: Container | null = null;
   private baseVisibility: Array<{
     child: Container;
@@ -113,8 +122,20 @@ export class CharAnim {
    * 避免跑動輸入把擊球動畫蓋掉。
    */
   setLocomotion(moving: boolean, facing = 1): void {
+    const wasMoving = this.desiredMoving;
     this.desiredMoving = moving;
     this.desiredFacing = facing || 1;
+    if (moving) {
+      this.idleSeconds = 0;
+      this.glanceDelaySeconds = 0;
+      if (this.actionKind === 'glanceLeft') {
+        this.destroySprite(this.actionSprite);
+        this.actionSprite = null;
+        this.actionKind = null;
+      }
+    } else if (wasMoving || this.glanceDelaySeconds === 0) {
+      this.scheduleIdleGlance();
+    }
     if (!this.actionSprite) this.syncLoop();
   }
 
@@ -126,6 +147,8 @@ export class CharAnim {
   action(kind: CharacterAction, facing = 1, fromContact = true): void {
     const view = this.ensureHost();
     if (!view) return;
+    this.idleSeconds = 0;
+    this.glanceDelaySeconds = 0;
     this.destroySprite(this.actionSprite);
     this.actionSprite = null;
     this.actionKind = null;
@@ -141,6 +164,7 @@ export class CharAnim {
       this.destroySprite(sprite);
       this.actionSprite = null;
       this.actionKind = null;
+      if (!this.desiredMoving) this.scheduleIdleGlance();
       this.syncLoop();
     };
     view.addChild(sprite);
@@ -161,12 +185,19 @@ export class CharAnim {
     return this.actionKind === kind && !!this.actionSprite;
   }
 
-  update(_dtSec: number): void {
+  update(dtSec: number): void {
     const view = this.getView();
     if (view !== this.host) {
       this.detachFromHost();
       this.host = view;
       if (!this.actionSprite) this.syncLoop();
+    }
+    if (!this.desiredMoving && !this.actionSprite) {
+      if (this.glanceDelaySeconds === 0) this.scheduleIdleGlance();
+      this.idleSeconds += dtSec;
+      if (this.idleSeconds >= this.glanceDelaySeconds) {
+        this.action('glanceLeft', -1, false);
+      }
     }
     if (!this.actionSprite || !this.actionKind) return;
     const frame = this.actionSprite.currentFrame;
@@ -190,11 +221,12 @@ export class CharAnim {
     if (kind === 'fault') return this.assets.reactions.slice(24, 36);
     if (kind === 'splitstep') return this.assets.ready.slice(24, 36);
     if (kind === 'brake') return this.assets.locomotion.slice(30, 42);
+    if (kind === 'glanceLeft') return this.assets.ready.slice(12, 24);
     return this.assets[kind];
   }
 
   private framesForLoop(kind: LocomotionKind): Texture[] {
-    return kind === 'run' ? this.assets.locomotion.slice(0, 30) : this.assets.ready.slice(0, 24);
+    return kind === 'run' ? this.assets.locomotion.slice(0, 30) : this.assets.ready.slice(0, 12);
   }
 
   private buildSprite(frames: Texture[], kind: CharacterAction | LocomotionKind, facing: number): AnimatedSprite {
@@ -208,10 +240,16 @@ export class CharAnim {
   }
 
   private shouldMirror(kind: CharacterAction | LocomotionKind, facing: number): boolean {
-    if (kind === 'strained') return false;
+    if (kind === 'strained' || kind === 'glanceLeft') return false;
     if (kind === 'backhand') return facing > 0;
     if (kind === 'ready') return facing > 0;
     return facing < 0;
+  }
+
+  private scheduleIdleGlance(): void {
+    this.idleSeconds = 0;
+    this.glanceDelaySeconds =
+      IDLE_GLANCE_MIN_SECONDS + Math.random() * IDLE_GLANCE_VARIANCE_SECONDS;
   }
 
   private syncLoop(): void {

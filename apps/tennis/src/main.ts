@@ -664,6 +664,7 @@ async function boot(): Promise<void> {
     'celebrate',
     'dejected',
     'fault',
+    'glanceLeft',
   ];
   let devActionIndex = 0;
   window.addEventListener('keydown', (e) => {
