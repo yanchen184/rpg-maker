@@ -32,6 +32,14 @@ export interface PredictedBounce {
   bounce: number;
 }
 
+export interface PredictedWallImpact {
+  surface: 'front' | 'side' | 'back';
+  x: number;
+  y: number;
+  z: number;
+  seconds: number;
+}
+
 const FLOOR_RESTITUTION = 0.68;
 const WALL_RESTITUTION = 0.9;
 const MAX_BALL_AGE_SECONDS = 9;
@@ -282,6 +290,66 @@ export class SquashBall {
           bounce: clone.floorBounces + 1,
         };
       }
+    }
+    return null;
+  }
+
+  predictNextWallImpact(maxSeconds = 2.5): PredictedWallImpact | null {
+    if (!this.active || !this.lastHitter || this.frontHit) return null;
+    const clone = {
+      x: this.x,
+      y: this.y,
+      z: this.z,
+      vx: this.vx,
+      vy: this.vy,
+      vz: this.vz,
+    };
+    const dt = 1 / 180;
+
+    for (let seconds = dt; seconds <= maxSeconds; seconds += dt) {
+      clone.vz -= GRAVITY * dt;
+      clone.x += clone.vx * dt;
+      clone.y += clone.vy * dt;
+      clone.z += clone.vz * dt;
+      const drag = Math.pow(0.998, dt * 60);
+      clone.vx *= drag;
+      clone.vy *= drag;
+
+      if (clone.y <= 0 && clone.vy < 0) {
+        if (clone.z < TIN_HEIGHT || clone.z > FRONT_OUT_HEIGHT) return null;
+        return {
+          surface: 'front',
+          x: clamp(clone.x, -COURT_WIDTH / 2, COURT_WIDTH / 2),
+          y: 0,
+          z: clone.z,
+          seconds,
+        };
+      }
+
+      if (Math.abs(clone.x) >= COURT_WIDTH / 2 && Math.sign(clone.vx) === Math.sign(clone.x)) {
+        clone.x = Math.sign(clone.x) * COURT_WIDTH / 2;
+        if (clone.z > sideOutHeight(clone.y)) return null;
+        return {
+          surface: 'side',
+          x: clone.x,
+          y: clamp(clone.y, 0, COURT_LENGTH),
+          z: clone.z,
+          seconds,
+        };
+      }
+
+      if (clone.y >= COURT_LENGTH && clone.vy > 0) {
+        if (clone.z > BACK_OUT_HEIGHT) return null;
+        return {
+          surface: 'back',
+          x: clamp(clone.x, -COURT_WIDTH / 2, COURT_WIDTH / 2),
+          y: COURT_LENGTH,
+          z: clone.z,
+          seconds,
+        };
+      }
+
+      if (clone.z <= 0 && clone.vz < 0) return null;
     }
     return null;
   }

@@ -527,6 +527,12 @@ const landingLabel = new Text({
 landingLabel.anchor.set(0.5, 1);
 landingLayer.addChild(landingGraphics, landingLabel);
 
+const wallPredictionLayer = new Container();
+wallPredictionLayer.zIndex = 18;
+root.addChild(wallPredictionLayer);
+const wallShadowGraphics = new Graphics();
+wallPredictionLayer.addChild(wallShadowGraphics);
+
 const players: Record<PlayerId, CourtPlayer> = {
   you: {
     id: 'you',
@@ -956,6 +962,29 @@ function updateLandingMarker(now: number): void {
   landingLabel.position.set(point.x, point.y - outerRadius * perspectiveY - 5);
 }
 
+function updateWallShadow(): void {
+  const impact = ball.predictNextWallImpact();
+  wallShadowGraphics.clear();
+  if (!impact) return;
+
+  const point = project(impact.x, impact.y, impact.z);
+  const urgency = 1 - clamp(impact.seconds / 1.35, 0, 1);
+  const spread = 26 - urgency * 12;
+  const surfaceStretchX = impact.surface === 'side' ? 0.48 : 1;
+  const surfaceStretchY = impact.surface === 'back' ? 0.48 : 0.72;
+  const color = ball.lastHitter === 'you' ? 0x74e9d1 : 0xffc857;
+
+  wallShadowGraphics
+    .ellipse(point.x, point.y, spread * surfaceStretchX, spread * surfaceStretchY)
+    .fill({ color: 0x00060a, alpha: 0.1 + urgency * 0.1 })
+    .ellipse(point.x, point.y, spread * 0.68 * surfaceStretchX, spread * 0.68 * surfaceStretchY)
+    .fill({ color: 0x000207, alpha: 0.13 + urgency * 0.14 })
+    .ellipse(point.x, point.y, spread * 0.34 * surfaceStretchX, spread * 0.34 * surfaceStretchY)
+    .fill({ color: 0x000000, alpha: 0.28 + urgency * 0.22 })
+    .ellipse(point.x, point.y, spread * 0.84 * surfaceStretchX, spread * 0.84 * surfaceStretchY)
+    .stroke({ color, width: 1.5 + urgency, alpha: 0.2 + urgency * 0.28 });
+}
+
 function updateArena(now: number): void {
   const cycle = (now % 5200) / 5200;
   const scheduledGlassPulse =
@@ -1051,6 +1080,7 @@ app.ticker.add((ticker) => {
   updateBallVisual();
   updateImpacts(dtSeconds);
   updateAim();
+  updateWallShadow();
   updateLandingMarker(now);
   updateArena(now);
   updateHud(now);
