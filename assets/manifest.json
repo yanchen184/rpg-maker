@@ -680,6 +680,15 @@
       ],
       "fps": 24,
       "kind": "character-layer"
+    },
+    "char-squash-actions-flagship": {
+      "sheet": "sheets/char-squash-actions-flagship_sheet.png",
+      "grid": [
+        6,
+        6
+      ],
+      "fps": 36,
+      "kind": "character-layer"
     }
   }
 }
