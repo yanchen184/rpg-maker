@@ -15,6 +15,11 @@
       h1 { margin: 0 0 8px; font-size: 26px; letter-spacing: 3px; }
       p { margin: 0; color: #9bc4ce; line-height: 1.65; }
       #status { margin-top: 12px; color: #7dffb2; font: 12px ui-monospace, monospace; }
+      #controls { display: flex; gap: 8px; margin-top: 14px; }
+      #controls button {
+        border: 1px solid #70ddf877; border-radius: 8px; padding: 7px 12px;
+        background: #0c2631; color: #dffaff; cursor: pointer;
+      }
       #grid {
         max-width: 1100px; margin: 0 auto; padding: 18px 24px 40px;
         display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px;
@@ -44,8 +49,13 @@
   <body>
     <header>
       <h1>壁球角色動作驗收室</h1>
-      <p>逐幀檢查人物視線、重心、拍面和擊球接觸點。所有情緒都由臉部與身體演出，不使用頭頂表情符號。</p>
-      <div id="status">正在載入 36 幀旗艦角色素材…</div>
+      <p>逐幀檢查後視角面牆方向、人物視線、重心、拍面和擊球接觸點。所有情緒都由臉部與身體演出，不使用頭頂表情符號。</p>
+      <div id="status">正在載入 60 幀旗艦角色素材…</div>
+      <div id="controls">
+        <button id="pause" type="button">暫停</button>
+        <button id="prev" type="button">上一幀</button>
+        <button id="next" type="button">下一幀</button>
+      </div>
     </header>
     <main id="grid"></main>
     <script type="module" src="/src/sprite-gallery.ts"></script>

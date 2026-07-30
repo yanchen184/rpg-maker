@@ -25,6 +25,13 @@ export interface PredictedIntercept {
   seconds: number;
 }
 
+export interface PredictedBounce {
+  x: number;
+  y: number;
+  seconds: number;
+  bounce: number;
+}
+
 const FLOOR_RESTITUTION = 0.68;
 const WALL_RESTITUTION = 0.9;
 const MAX_BALL_AGE_SECONDS = 9;
@@ -222,6 +229,61 @@ export class SquashBall {
       y: clamp(clone.y, 1, COURT_LENGTH - 0.35),
       seconds: maxSeconds,
     };
+  }
+
+  predictNextBounce(maxSeconds = 4): PredictedBounce | null {
+    if (!this.active || !this.lastHitter) return null;
+    const clone = {
+      x: this.x,
+      y: this.y,
+      z: this.z,
+      vx: this.vx,
+      vy: this.vy,
+      vz: this.vz,
+      frontHit: this.frontHit,
+      floorBounces: this.floorBounces,
+    };
+    const dt = 1 / 180;
+
+    for (let seconds = dt; seconds <= maxSeconds; seconds += dt) {
+      clone.vz -= GRAVITY * dt;
+      clone.x += clone.vx * dt;
+      clone.y += clone.vy * dt;
+      clone.z += clone.vz * dt;
+      const drag = Math.pow(0.998, dt * 60);
+      clone.vx *= drag;
+      clone.vy *= drag;
+
+      if (clone.y <= 0 && clone.vy < 0) {
+        clone.y = 0;
+        if (clone.z < TIN_HEIGHT || clone.z > FRONT_OUT_HEIGHT) return null;
+        clone.vy = Math.abs(clone.vy) * WALL_RESTITUTION;
+        clone.frontHit = true;
+      }
+
+      if (Math.abs(clone.x) >= COURT_WIDTH / 2 && Math.sign(clone.vx) === Math.sign(clone.x)) {
+        clone.x = Math.sign(clone.x) * COURT_WIDTH / 2;
+        if (clone.z > sideOutHeight(clone.y)) return null;
+        clone.vx *= -WALL_RESTITUTION;
+      }
+
+      if (clone.y >= COURT_LENGTH && clone.vy > 0) {
+        clone.y = COURT_LENGTH;
+        if (clone.z > BACK_OUT_HEIGHT) return null;
+        clone.vy *= -WALL_RESTITUTION;
+      }
+
+      if (clone.z <= 0 && clone.vz < 0) {
+        if (!clone.frontHit) return null;
+        return {
+          x: clamp(clone.x, -COURT_WIDTH / 2, COURT_WIDTH / 2),
+          y: clamp(clone.y, 0, COURT_LENGTH),
+          seconds,
+          bounce: clone.floorBounces + 1,
+        };
+      }
+    }
+    return null;
   }
 
   private fail(reason: string, hitter: PlayerId): BallEvent {

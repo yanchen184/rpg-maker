@@ -689,6 +689,33 @@
       ],
       "fps": 36,
       "kind": "character-layer"
+    },
+    "char-squash-actions-rear-flagship": {
+      "sheet": "sheets/char-squash-actions-rear-flagship_sheet.png",
+      "grid": [
+        6,
+        6
+      ],
+      "fps": 36,
+      "kind": "character-layer"
+    },
+    "char-squash-rear-loops-flagship": {
+      "sheet": "sheets/char-squash-rear-loops-flagship_sheet.png",
+      "grid": [
+        6,
+        4
+      ],
+      "fps": 24,
+      "kind": "character-layer"
+    },
+    "crowd-squash-animated": {
+      "sheet": "sheets/crowd-squash-animated_sheet.png",
+      "grid": [
+        6,
+        4
+      ],
+      "fps": 8,
+      "kind": "character-layer"
     }
   }
 }

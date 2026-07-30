@@ -11,8 +11,7 @@ export type SquashAction =
 
 interface SquashAnimationAssets {
   actions: Texture[];
-  ready: Texture[];
-  locomotion: Texture[];
+  rearLoops: Texture[];
   reactions: Texture[];
 }
 
@@ -41,7 +40,6 @@ export class SquashCharacterAnim {
   private loopSprite: AnimatedSprite | null = null;
   private actionSprite: AnimatedSprite | null = null;
   private desiredMoving = false;
-  private desiredFacing = 1;
   private loopKind: 'ready' | 'run' | null = null;
   private idleSeconds = 0;
   private glanceAfter = 4 + Math.random() * 4;
@@ -56,9 +54,8 @@ export class SquashCharacterAnim {
     this.syncLoop();
   }
 
-  setLocomotion(moving: boolean, facing: number): void {
+  setLocomotion(moving: boolean, _facing: number): void {
     this.desiredMoving = moving;
-    this.desiredFacing = facing || 1;
     if (moving) {
       this.idleSeconds = 0;
       if (this.actionSprite?.label === 'glance') this.stopAction();
@@ -101,24 +98,21 @@ export class SquashCharacterAnim {
     if (kind === 'reach') return this.assets.actions.slice(24, 36);
     if (kind === 'celebrate') return this.assets.reactions.slice(0, 12);
     if (kind === 'dejected') return this.assets.reactions.slice(12, 24);
-    if (kind === 'splitstep') return this.assets.ready.slice(24, 36);
-    return this.assets.ready.slice(12, 24);
+    if (kind === 'splitstep') return this.assets.rearLoops.slice(0, 6);
+    return this.assets.rearLoops.slice(6, 12);
   }
 
   private syncLoop(): void {
     const kind = this.desiredMoving ? 'run' : 'ready';
     if (this.loopSprite && this.loopKind === kind) {
-      const shouldBeMirrored = this.desiredFacing < 0;
-      if ((this.loopSprite.scale.x < 0) !== shouldBeMirrored) this.loopSprite.scale.x *= -1;
       return;
     }
     this.destroyLoop();
-    const frames = kind === 'run' ? this.assets.locomotion.slice(0, 30) : this.assets.ready.slice(0, 12);
+    const frames = kind === 'run' ? this.assets.rearLoops.slice(12, 24) : this.assets.rearLoops.slice(0, 12);
     const sprite = new AnimatedSprite(frames);
     sprite.anchor.set(0.5, 0.933);
     sprite.animationSpeed = (kind === 'run' ? 24 : 10) / 60;
     sprite.scale.set(1.45);
-    if (this.desiredFacing < 0) sprite.scale.x *= -1;
     sprite.tint = this.tint;
     sprite.loop = true;
     this.view.addChild(sprite);
@@ -129,7 +123,9 @@ export class SquashCharacterAnim {
 
   private shouldMirror(kind: SquashAction, facing: number): boolean {
     if (kind === 'glance') return false;
-    if (kind === 'backhand') return facing > 0;
+    if (kind === 'forehand' || kind === 'backhand' || kind === 'reach' || kind === 'splitstep') {
+      return false;
+    }
     return facing < 0;
   }
 

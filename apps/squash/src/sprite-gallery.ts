@@ -5,29 +5,76 @@ setAssetBase(import.meta.env.BASE_URL);
 
 const ACTIONS = [
   {
-    title: '貼牆正手平抽',
-    detail: '肩膀內收、視線壓低盯住接觸點，揮拍路徑短而有力。',
+    title: '面牆待機與左側注視',
+    detail: '身體保持背對鏡頭，只有頭部短暫看左側，再回到前牆。',
+    source: 'loops',
     from: 0,
   },
   {
-    title: '反手穿越球',
-    detail: '身體先轉、眼睛持續追球，擊球後自然完成重心交換。',
+    title: '面牆移動與回位',
+    detail: '前進、橫移和後退都維持壁球的面牆基準，不再左右翻面。',
+    source: 'loops',
     from: 12,
   },
   {
-    title: '勉強低牆救球',
-    detail: '跨步、失衡、咬牙與伸手全部由人物演出，明確對應低品質回球。',
+    title: '後視角正手平抽',
+    detail: '背對玻璃、肩膀內收，接觸時才轉肩露出少量側臉。',
+    source: 'actions',
+    from: 0,
+  },
+  {
+    title: '後視角反手穿越',
+    detail: '相反方向的肩髖旋轉，擊球後回到面牆準備姿勢。',
+    source: 'actions',
+    from: 12,
+  },
+  {
+    title: '面牆低角救球',
+    detail: '朝前角衝刺、深跨步失衡伸拍，背部方向仍符合玻璃後視角。',
+    source: 'actions',
     from: 24,
   },
 ] as const;
 
 const grid = document.querySelector<HTMLElement>('#grid')!;
 const status = document.querySelector<HTMLElement>('#status')!;
+const pauseButton = document.querySelector<HTMLButtonElement>('#pause')!;
+const gallerySprites: AnimatedSprite[] = [];
+let paused = false;
+
+function setPaused(nextPaused: boolean): void {
+  paused = nextPaused;
+  pauseButton.textContent = paused ? '播放' : '暫停';
+  for (const sprite of gallerySprites) {
+    if (paused) sprite.stop();
+    else sprite.play();
+  }
+}
+
+function stepFrames(delta: number): void {
+  setPaused(true);
+  for (const sprite of gallerySprites) {
+    const nextFrame = (sprite.currentFrame + delta + sprite.totalFrames) % sprite.totalFrames;
+    sprite.gotoAndStop(nextFrame);
+  }
+}
+
+pauseButton.addEventListener('click', () => setPaused(!paused));
+document.querySelector<HTMLButtonElement>('#prev')!.addEventListener('click', () => stepFrames(-1));
+document.querySelector<HTMLButtonElement>('#next')!.addEventListener('click', () => stepFrames(1));
 
 void (async () => {
   const manifest = await loadManifest();
-  const definition = manifest.assets['char-squash-actions-flagship'];
-  const frames = await loadFrames('char-squash-actions-flagship', definition);
+  const [actionFrames, loopFrames] = await Promise.all([
+    loadFrames(
+      'char-squash-actions-rear-flagship',
+      manifest.assets['char-squash-actions-rear-flagship'],
+    ),
+    loadFrames(
+      'char-squash-rear-loops-flagship',
+      manifest.assets['char-squash-rear-loops-flagship'],
+    ),
+  ]);
 
   for (const action of ACTIONS) {
     const card = document.createElement('section');
@@ -45,6 +92,7 @@ void (async () => {
     await app.init({ width: 300, height: 310, backgroundAlpha: 0, antialias: false });
     card.querySelector('.stage')!.appendChild(app.canvas);
 
+    const frames = action.source === 'actions' ? actionFrames : loopFrames;
     const sprite = new AnimatedSprite(frames.slice(action.from, action.from + 12));
     sprite.anchor.set(0.5, 1);
     sprite.position.set(150, 300);
@@ -53,7 +101,8 @@ void (async () => {
     sprite.loop = true;
     sprite.play();
     app.stage.addChild(sprite);
+    gallerySprites.push(sprite);
   }
 
-  status.textContent = '36 / 36 幀載入完成 · 三套動作循環播放中';
+  status.textContent = '60 / 60 幀載入完成 · 五套後視角動作循環播放中';
 })();
