@@ -655,7 +655,7 @@
       "kind": "character-layer"
     },
     "char-tennis-ready-flagship": {
-      "sheet": "sheets/char-tennis-ready-flagship_sheet.png",
+      "sheet": "sheets/char-tennis-ready-gaze-flagship_sheet.png",
       "grid": [
         6,
         6
