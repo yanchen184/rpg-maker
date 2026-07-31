@@ -36,6 +36,24 @@ jobs:
       - name: Build squash
         run: npm run build -w squash
 
+      # 共用 publicDir 也包含概念圖、錄影與生圖工作檔；它們不是遊戲 runtime 資產，
+      # 而且完整對戰錄影超過 Pages 的 25 MiB 單檔限制。
+      - name: Keep runtime assets only
+        run: |
+          rm -rf \
+            apps/squash/dist/concepts \
+            apps/squash/dist/generated \
+            apps/squash/dist/prompts \
+            apps/squash/dist/queue \
+            apps/squash/dist/raw \
+            apps/squash/dist/raw-original \
+            apps/squash/dist/scenes \
+            apps/squash/dist/sprites
+          test ! -e apps/squash/dist/concepts/squash-ai-duel-full-match.mp4
+          test -f apps/squash/dist/manifest.json
+          test -f apps/squash/dist/environment/squash-arena-crowd.png
+          test -f apps/squash/dist/sheets/char-squash-blue-actions_sheet.png
+
       - name: Ensure independent Cloudflare Pages project
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
