@@ -630,6 +630,16 @@ function playerAnim(id: PlayerId): SquashCharacterAnim {
   return id === 'you' ? humanAnim : aiAnim;
 }
 
+function constrainServerToServiceBox(now = gameNow): void {
+  if (ball.active || pointPauseUntil > now || matchWinner) return;
+  const servingPlayer = players[server];
+  const minX = serveSide < 0 ? -COURT_WIDTH / 2 : COURT_WIDTH / 2 - 1.6;
+  const maxX = serveSide < 0 ? -COURT_WIDTH / 2 + 1.6 : COURT_WIDTH / 2;
+  const inset = 0.36;
+  servingPlayer.x = clamp(servingPlayer.x, minX + inset, maxX - inset);
+  servingPlayer.y = clamp(servingPlayer.y, SHORT_LINE_Y + inset, SHORT_LINE_Y + 1.6 - inset);
+}
+
 function resetRally(now: number): void {
   const servingPlayer = players[server];
   const receivingPlayer = players[otherPlayer(server)];
@@ -729,6 +739,7 @@ function queueHit(
   player.energy -= cost;
   player.lastSwingAt = now;
   if (serving) {
+    constrainServerToServiceBox(now);
     ball.x = player.x;
     ball.y = player.y - 0.25;
     ball.z = 0.9;
@@ -855,6 +866,7 @@ function dash(): void {
   player.dashTailUntil = now + 520;
   player.x = clamp(player.x + movement.x * 1.1, -COURT_WIDTH / 2 + 0.35, COURT_WIDTH / 2 - 0.35);
   player.y = clamp(player.y + movement.y * 1.1, 0.72, COURT_LENGTH - 0.4);
+  constrainServerToServiceBox(now);
   sfx.dash();
   showFlash('閃身', 360);
 }
@@ -1011,6 +1023,7 @@ function updatePlayers(dtSeconds: number, now: number): void {
     );
     players.ai.y = clamp(players.ai.y - pushY * correction, 0.72, COURT_LENGTH - 0.42);
   }
+  constrainServerToServiceBox(now);
 }
 
 function updateAiServe(now: number): void {
