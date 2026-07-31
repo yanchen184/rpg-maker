@@ -17,6 +17,8 @@ export interface ShotSpec {
   targetX: number;
   quality: number;
   pace?: number;
+  serving?: boolean;
+  serveSide?: -1 | 1;
 }
 
 export const COURT_WIDTH = 6.4;
@@ -24,6 +26,8 @@ export const COURT_LENGTH = 9.75;
 export const FRONT_OUT_HEIGHT = 4.57;
 export const BACK_OUT_HEIGHT = 2.13;
 export const TIN_HEIGHT = 0.48;
+export const SERVICE_LINE_HEIGHT = 1.78;
+export const SHORT_LINE_Y = 5.44;
 export const GRAVITY = 13.8;
 
 export function otherPlayer(id: PlayerId): PlayerId {

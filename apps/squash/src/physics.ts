@@ -4,6 +4,8 @@ import {
   COURT_WIDTH,
   FRONT_OUT_HEIGHT,
   GRAVITY,
+  SERVICE_LINE_HEIGHT,
+  SHORT_LINE_Y,
   TIN_HEIGHT,
   clamp,
   otherPlayer,
@@ -56,6 +58,8 @@ export class SquashBall {
   floorBounces = 0;
   frontHit = false;
   ageSeconds = 0;
+  serveSide: -1 | 1 | null = null;
+  serveAwaitingBounce = false;
 
   reset(x: number, y: number): void {
     this.active = false;
@@ -69,6 +73,8 @@ export class SquashBall {
     this.floorBounces = 0;
     this.frontHit = false;
     this.ageSeconds = 0;
+    this.serveSide = null;
+    this.serveAwaitingBounce = false;
   }
 
   strike(by: PlayerId, spec: ShotSpec): void {
@@ -82,6 +88,32 @@ export class SquashBall {
       -COURT_WIDTH * 0.43,
       COURT_WIDTH * 0.43,
     );
+
+    if (spec.serving && spec.serveSide) {
+      const frontSpeed = 13;
+      const desiredBounceX = -spec.serveSide * 2.08;
+      const desiredBounceY = 7.25;
+      const secondsToFront = this.y / frontSpeed;
+      const secondsFrontToBounce = desiredBounceY / (frontSpeed * WALL_RESTITUTION);
+      const secondsToBounce = secondsToFront + secondsFrontToBounce;
+
+      this.vy = -frontSpeed;
+      this.vx = (desiredBounceX - this.x) / secondsToBounce;
+      this.vz =
+        (-this.z + 0.5 * GRAVITY * secondsToBounce ** 2) /
+        secondsToBounce;
+      this.lastHitter = by;
+      this.floorBounces = 0;
+      this.frontHit = false;
+      this.active = true;
+      this.ageSeconds = 0;
+      this.serveSide = spec.serveSide;
+      this.serveAwaitingBounce = true;
+      return;
+    }
+
+    this.serveSide = null;
+    this.serveAwaitingBounce = false;
 
     if (spec.kind === 'glass') {
       const rearSpeed = 14.2 * pace * (weak ? 0.9 : 1);
@@ -187,6 +219,10 @@ export class SquashBall {
 
       if (this.y <= 0 && this.vy < 0) {
         this.y = 0;
+        if (this.serveAwaitingBounce && this.z < SERVICE_LINE_HEIGHT) {
+          events.push(this.fail('發球低於發球線', this.lastHitter));
+          continue;
+        }
         if (this.z < TIN_HEIGHT) {
           events.push(this.fail('下界板', this.lastHitter));
           continue;
@@ -203,6 +239,10 @@ export class SquashBall {
       const halfWidth = COURT_WIDTH / 2;
       if (Math.abs(this.x) >= halfWidth && Math.sign(this.vx) === Math.sign(this.x)) {
         this.x = Math.sign(this.x) * halfWidth;
+        if (this.serveAwaitingBounce && !this.frontHit) {
+          events.push(this.fail('發球須先碰正面牆', this.lastHitter));
+          continue;
+        }
         if (this.z > sideOutHeight(this.y)) {
           events.push(this.fail('側牆出界', this.lastHitter));
           continue;
@@ -213,6 +253,10 @@ export class SquashBall {
 
       if (this.y >= COURT_LENGTH && this.vy > 0) {
         this.y = COURT_LENGTH;
+        if (this.serveAwaitingBounce && !this.frontHit) {
+          events.push(this.fail('發球須先碰正面牆', this.lastHitter));
+          continue;
+        }
         if (this.z > BACK_OUT_HEIGHT) {
           events.push(this.fail('後牆出界', this.lastHitter));
           continue;
@@ -226,6 +270,16 @@ export class SquashBall {
         if (!this.frontHit) {
           events.push(this.fail('未先碰前牆', this.lastHitter));
           continue;
+        }
+        if (this.serveAwaitingBounce && this.serveSide) {
+          const landedOpposite = Math.sign(this.x) === -this.serveSide;
+          const landedDeep = this.y >= SHORT_LINE_Y;
+          if (!landedOpposite || !landedDeep) {
+            events.push(this.fail('發球未落入對角後場', this.lastHitter));
+            continue;
+          }
+          this.serveAwaitingBounce = false;
+          this.serveSide = null;
         }
         this.floorBounces += 1;
         this.vz = Math.abs(this.vz) * FLOOR_RESTITUTION;

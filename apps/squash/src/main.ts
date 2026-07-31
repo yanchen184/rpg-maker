@@ -25,6 +25,8 @@ import {
   COURT_LENGTH,
   COURT_WIDTH,
   FRONT_OUT_HEIGHT,
+  SERVICE_LINE_HEIGHT,
+  SHORT_LINE_Y,
   TIN_HEIGHT,
   clamp,
   distance,
@@ -547,7 +549,8 @@ const aimLayer = new Container();
 aimLayer.zIndex = 15;
 root.addChild(aimLayer);
 const aimGraphics = new Graphics();
-aimLayer.addChild(aimGraphics);
+const serveGuideGraphics = new Graphics();
+aimLayer.addChild(serveGuideGraphics, aimGraphics);
 
 const landingLayer = new Container();
 landingLayer.zIndex = 12;
@@ -609,9 +612,10 @@ const trail: TrailPoint[] = [];
 type GameMode = 'play' | 'watch';
 let gameMode: GameMode = 'play';
 let aiLevel: AiLevel = 'normal';
-let matchSpeed = 1;
+let ballSpeed = 1;
 let gameNow = performance.now();
 let server: PlayerId = 'you';
+let serveSide: -1 | 1 = -1;
 let rally = 0;
 let targetWallX = -1.2;
 let lastQuality = 1;
@@ -627,21 +631,28 @@ function playerAnim(id: PlayerId): SquashCharacterAnim {
 }
 
 function resetRally(now: number): void {
-  players.you.x = -0.9;
-  players.you.y = 7.3;
-  players.ai.x = 0.9;
-  players.ai.y = 5.45;
+  const servingPlayer = players[server];
+  const receivingPlayer = players[otherPlayer(server)];
+  servingPlayer.x = serveSide * 2.35;
+  servingPlayer.y = 6.2;
+  servingPlayer.facing = -serveSide;
+  receivingPlayer.x = -serveSide * 1.2;
+  receivingPlayer.y = 7.65;
+  receivingPlayer.facing = serveSide;
   players.you.energy = Math.max(players.you.energy, 70);
   players.ai.energy = Math.max(players.ai.energy, 70);
   delete pendingHits.you;
   delete pendingHits.ai;
   rally = 0;
-  const servingPlayer = players[server];
   ball.reset(servingPlayer.x, servingPlayer.y - 0.25);
   pointPauseUntil = 0;
   nextServeAt = now + 1050;
-  humanAnim.setLocomotion(false, 1);
-  aiAnim.setLocomotion(false, -1);
+  humanAnim.setLocomotion(false, players.you.facing);
+  aiAnim.setLocomotion(false, players.ai.facing);
+  const serverName = gameMode === 'watch'
+    ? server === 'you' ? '藍方' : '金方'
+    : server === 'you' ? '你' : '對手';
+  lastStrategy = `${serverName}站${serveSide < 0 ? '左' : '右'}發球格 · 目標對角後場`;
 }
 
 function showFlash(message: string, duration = 920): void {
@@ -721,6 +732,9 @@ function queueHit(
     ball.x = player.x;
     ball.y = player.y - 0.25;
     ball.z = 0.9;
+    if (id === 'you' && gameMode === 'play') {
+      showFlash('發球：正面牆發球線以上\n第一落點進對角後場', 1250);
+    }
   }
   const quality = serving ? 0.92 : contactQuality(player, now);
   lastQuality = quality;
@@ -755,6 +769,8 @@ function firePendingHits(now: number): void {
       targetX: pending.targetX,
       quality: pending.quality,
       pace: pending.pace,
+      serving: pending.serving,
+      serveSide: pending.serving ? serveSide : undefined,
     });
     rally += 1;
     sfx.hit(pending.kind, pending.quality);
@@ -770,7 +786,11 @@ function firePendingHits(now: number): void {
 function awardPoint(winner: PlayerId, reason: string, now: number): void {
   if (pointPauseUntil > now || matchWinner) return;
   scores[winner] += 1;
+  const previousServer = server;
   server = winner;
+  serveSide = winner === previousServer
+    ? serveSide === -1 ? 1 : -1
+    : winner === 'you' ? -1 : 1;
   ball.active = false;
   delete pendingHits.you;
   delete pendingHits.ai;
@@ -843,6 +863,7 @@ function resetMatch(): void {
   scores.you = 0;
   scores.ai = 0;
   server = 'you';
+  serveSide = -1;
   matchWinner = null;
   lastQuality = 1;
   lastStrategy = '雙方試探站位';
@@ -918,9 +939,7 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-level]'
 }
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-speed]')) {
   button.addEventListener('click', () => {
-    matchSpeed = Number(button.dataset.speed);
-    humanAnim.setPlaybackRate(matchSpeed);
-    aiAnim.setPlaybackRate(matchSpeed);
+    ballSpeed = Number(button.dataset.speed);
     for (const peer of document.querySelectorAll('[data-speed]')) {
       peer.classList.toggle('active', peer === button);
     }
@@ -997,7 +1016,13 @@ function updatePlayers(dtSeconds: number, now: number): void {
 function updateAiServe(now: number): void {
   const automaticServer = server === 'ai' || gameMode === 'watch';
   if (!automaticServer || ball.active || pendingHits[server] || now < nextServeAt || pointPauseUntil > now) return;
-  queueHit(server, 'drive', aiServeTarget(players[otherPlayer(server)], aiLevel), 0.88, '保守開球');
+  queueHit(
+    server,
+    'drive',
+    aiServeTarget(players[otherPlayer(server)], aiLevel),
+    0.88,
+    `${serveSide < 0 ? '左' : '右'}格發球 → 對角後場`,
+  );
 }
 
 function updateActorVisual(id: PlayerId): void {
@@ -1073,8 +1098,58 @@ function updateImpacts(dtSeconds: number): void {
   }
 }
 
+function updateServeGuide(now: number): void {
+  serveGuideGraphics.clear();
+  if (ball.active || pointPauseUntil > now || matchWinner) return;
+
+  const pulse = 0.72 + Math.sin(now * 0.008) * 0.18;
+  const boxMinX = serveSide < 0 ? -COURT_WIDTH / 2 : COURT_WIDTH / 2 - 1.6;
+  const boxMaxX = serveSide < 0 ? -COURT_WIDTH / 2 + 1.6 : COURT_WIDTH / 2;
+  const boxFrontLeft = project(boxMinX, SHORT_LINE_Y);
+  const boxFrontRight = project(boxMaxX, SHORT_LINE_Y);
+  const boxBackRight = project(boxMaxX, SHORT_LINE_Y + 1.6);
+  const boxBackLeft = project(boxMinX, SHORT_LINE_Y + 1.6);
+  const targetMinX = serveSide < 0 ? 0 : -COURT_WIDTH / 2;
+  const targetMaxX = serveSide < 0 ? COURT_WIDTH / 2 : 0;
+  const targetFrontLeft = project(targetMinX, SHORT_LINE_Y);
+  const targetFrontRight = project(targetMaxX, SHORT_LINE_Y);
+  const targetBackRight = project(targetMaxX, COURT_LENGTH);
+  const targetBackLeft = project(targetMinX, COURT_LENGTH);
+  const serviceBandBottomLeft = project(-COURT_WIDTH / 2, 0, SERVICE_LINE_HEIGHT);
+  const serviceBandBottomRight = project(COURT_WIDTH / 2, 0, SERVICE_LINE_HEIGHT);
+  const serviceBandTopRight = project(COURT_WIDTH / 2, 0, FRONT_OUT_HEIGHT);
+  const serviceBandTopLeft = project(-COURT_WIDTH / 2, 0, FRONT_OUT_HEIGHT);
+  const color = server === 'you' ? 0x65e8ff : 0xffc857;
+
+  serveGuideGraphics
+    .poly([
+      boxFrontLeft.x, boxFrontLeft.y,
+      boxFrontRight.x, boxFrontRight.y,
+      boxBackRight.x, boxBackRight.y,
+      boxBackLeft.x, boxBackLeft.y,
+    ])
+    .fill({ color, alpha: 0.12 * pulse })
+    .stroke({ color, width: 3, alpha: 0.72 * pulse })
+    .poly([
+      targetFrontLeft.x, targetFrontLeft.y,
+      targetFrontRight.x, targetFrontRight.y,
+      targetBackRight.x, targetBackRight.y,
+      targetBackLeft.x, targetBackLeft.y,
+    ])
+    .fill({ color: 0x7dffb2, alpha: 0.09 * pulse })
+    .stroke({ color: 0x7dffb2, width: 2, alpha: 0.58 * pulse })
+    .poly([
+      serviceBandBottomLeft.x, serviceBandBottomLeft.y,
+      serviceBandBottomRight.x, serviceBandBottomRight.y,
+      serviceBandTopRight.x, serviceBandTopRight.y,
+      serviceBandTopLeft.x, serviceBandTopLeft.y,
+    ])
+    .fill({ color, alpha: 0.035 * pulse })
+    .stroke({ color, width: 2, alpha: 0.32 * pulse });
+}
+
 function updateAim(): void {
-  const point = project(targetWallX, 0, 1.25);
+  const point = project(targetWallX, 0, ball.active ? 1.25 : 2.4);
   aimGraphics
     .clear()
     .circle(point.x, point.y, 14)
@@ -1205,7 +1280,11 @@ function updateHud(now: number): void {
     : matchWinner === 'you' ? '比賽勝利' : '對手獲勝';
   scoreMetaEl.textContent = matchWinner
     ? `${winnerText} · Enter 再戰`
-    : `${serveText} · ${ball.active ? `第 ${Math.max(1, rally)} 拍` : '準備發球'}`;
+    : !ball.active
+      ? `${serveText} · ${serveSide < 0 ? '左' : '右'}格 → 對角後場`
+      : rally === 1
+        ? `${serveText}進行中 · 發球線以上 → 對角後場`
+        : `回合進行中 · 第 ${Math.max(1, rally)} 拍`;
   energyFillEl.style.width = `${players.you.energy}%`;
   energyValueEl.textContent = `${Math.round(players.you.energy)}`;
   qualityFillEl.style.width = `${lastQuality * 100}%`;
@@ -1230,23 +1309,24 @@ window.setTimeout(() => loadingEl.remove(), 600);
 
 app.ticker.add((ticker) => {
   const realDtSeconds = Math.min(0.033, ticker.deltaMS / 1000);
-  const dtSeconds = realDtSeconds * matchSpeed;
-  gameNow += realDtSeconds * 1000 * matchSpeed;
+  const ballDtSeconds = realDtSeconds * ballSpeed;
+  gameNow += realDtSeconds * 1000;
   const now = gameNow;
 
   if (!matchWinner && pointPauseUntil <= now) {
-    updatePlayers(dtSeconds, now);
+    updatePlayers(realDtSeconds, now);
     firePendingHits(now);
     updateAiServe(now);
-    for (const event of ball.update(dtSeconds)) handleBallEvent(event, now);
+    for (const event of ball.update(ballDtSeconds)) handleBallEvent(event, now);
   }
 
-  humanAnim.update(dtSeconds);
-  aiAnim.update(dtSeconds);
+  humanAnim.update(realDtSeconds);
+  aiAnim.update(realDtSeconds);
   updateActorVisual('you');
   updateActorVisual('ai');
   updateBallVisual();
-  updateImpacts(dtSeconds);
+  updateImpacts(realDtSeconds);
+  updateServeGuide(now);
   updateAim();
   updateWallShadow();
   updateLandingMarker(now);
