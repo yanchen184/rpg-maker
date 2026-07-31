@@ -43,6 +43,7 @@ export class SquashCharacterAnim {
   private loopKind: 'ready' | 'run' | null = null;
   private idleSeconds = 0;
   private glanceAfter = 4 + Math.random() * 4;
+  private playbackRate = 1;
 
   constructor(
     private assets: SquashAnimationAssets,
@@ -63,14 +64,26 @@ export class SquashCharacterAnim {
     if (!this.actionSprite) this.syncLoop();
   }
 
+  setPlaybackRate(rate: number): void {
+    this.playbackRate = rate;
+    if (this.loopSprite) {
+      this.loopSprite.animationSpeed = (this.loopKind === 'run' ? 24 : 10) / 60 * rate;
+    }
+    if (this.actionSprite) {
+      const action = this.actionSprite.label as SquashAction;
+      this.actionSprite.animationSpeed = ACTION_FPS[action] / 60 * rate;
+    }
+  }
+
   action(kind: SquashAction, facing: number, fromContact = false): void {
     this.stopAction();
     this.destroyLoop();
     const sprite = new AnimatedSprite(this.framesFor(kind));
     sprite.label = kind;
     sprite.anchor.set(0.5, 0.933);
-    sprite.animationSpeed = ACTION_FPS[kind] / 60;
-    sprite.scale.set(1.45);
+    sprite.animationSpeed = ACTION_FPS[kind] / 60 * this.playbackRate;
+    sprite.scale.set(1.94);
+    sprite.tint = this.tint;
     if (this.shouldMirror(kind, facing)) sprite.scale.x *= -1;
     sprite.loop = false;
     sprite.onComplete = () => {
@@ -108,11 +121,13 @@ export class SquashCharacterAnim {
       return;
     }
     this.destroyLoop();
-    const frames = kind === 'run' ? this.assets.rearLoops.slice(12, 24) : this.assets.rearLoops.slice(0, 12);
+    const frames = kind === 'run'
+      ? this.assets.rearLoops.slice(12, 24)
+      : this.assets.rearLoops.slice(0, 6);
     const sprite = new AnimatedSprite(frames);
     sprite.anchor.set(0.5, 0.933);
-    sprite.animationSpeed = (kind === 'run' ? 24 : 10) / 60;
-    sprite.scale.set(1.45);
+    sprite.animationSpeed = (kind === 'run' ? 24 : 10) / 60 * this.playbackRate;
+    sprite.scale.set(1.94);
     sprite.tint = this.tint;
     sprite.loop = true;
     this.view.addChild(sprite);

@@ -10,7 +10,7 @@ import {
   TextStyle,
   type Texture,
 } from 'pixi.js';
-import { aiTargetWallX, decideAi, moveAi } from './ai';
+import { aiTargetWallX, decideAi, moveAi, type AiLevel } from './ai';
 import { SquashCharacterAnim, type SquashAction } from './character-anim';
 import {
   BACK_OUT_HEIGHT,
@@ -67,8 +67,12 @@ interface TrailPoint {
 }
 
 const appRoot = document.querySelector<HTMLDivElement>('#app')!;
-const pointsEl = document.querySelector<HTMLElement>('#points')!;
+const pointsLeftEl = document.querySelector<HTMLElement>('#points-left')!;
+const pointsRightEl = document.querySelector<HTMLElement>('#points-right')!;
+const leftNameEl = document.querySelector<HTMLElement>('#left-name')!;
+const rightNameEl = document.querySelector<HTMLElement>('#right-name')!;
 const scoreMetaEl = document.querySelector<HTMLElement>('#score-meta')!;
+const modeBadgeEl = document.querySelector<HTMLElement>('#mode-badge')!;
 const energyFillEl = document.querySelector<HTMLElement>('#energy-fill')!;
 const energyValueEl = document.querySelector<HTMLElement>('#energy-value')!;
 const qualityFillEl = document.querySelector<HTMLElement>('#quality-fill')!;
@@ -85,8 +89,8 @@ await app.init({
   resizeTo: window,
   background: 0x071016,
   antialias: false,
-  resolution: Math.min(devicePixelRatio, 2),
-  autoDensity: true,
+  resolution: 1,
+  autoDensity: false,
 });
 appRoot.appendChild(app.canvas);
 
@@ -122,17 +126,19 @@ function project(worldX: number, worldY: number, height = 0): Projected {
 }
 
 const manifest = await loadManifest();
-const [arenaTexture, frontWallTexture, floorTexture, glassTexture, crowdFrames] = await Promise.all([
+const [arenaTexture, frontWallTexture, sideWallTexture, floorTexture, glassTexture, crowdFrames] = await Promise.all([
   Assets.load<Texture>(`${import.meta.env.BASE_URL}environment/squash-arena-crowd.png`),
   Assets.load<Texture>(`${import.meta.env.BASE_URL}environment/squash-front-wall.png`),
+  Assets.load<Texture>(`${import.meta.env.BASE_URL}environment/squash-side-wall.png`),
   Assets.load<Texture>(`${import.meta.env.BASE_URL}environment/squash-maple-floor.png`),
   Assets.load<Texture>(`${import.meta.env.BASE_URL}environment/squash-glass-reflections.png`),
   loadFrames('crowd-squash-animated', manifest.assets['crowd-squash-animated']),
 ]);
-arenaTexture.source.scaleMode = 'linear';
-frontWallTexture.source.scaleMode = 'linear';
-floorTexture.source.scaleMode = 'linear';
-glassTexture.source.scaleMode = 'linear';
+arenaTexture.source.scaleMode = 'nearest';
+frontWallTexture.source.scaleMode = 'nearest';
+sideWallTexture.source.scaleMode = 'nearest';
+floorTexture.source.scaleMode = 'nearest';
+glassTexture.source.scaleMode = 'nearest';
 
 const arenaLayer = new Container();
 arenaLayer.zIndex = -200;
@@ -153,10 +159,10 @@ interface CrowdActor {
 
 const crowdActors: CrowdActor[] = [];
 const crowdPlacements = [
-  { x: 130, y: 255, scale: 0.7, row: 0, excitedRow: 2, phase: 0 },
-  { x: 1150, y: 255, scale: 0.7, row: 1, excitedRow: 2, phase: 3 },
-  { x: 92, y: 475, scale: 0.58, row: 1, excitedRow: 3, phase: 1 },
-  { x: 1188, y: 475, scale: 0.58, row: 0, excitedRow: 3, phase: 4 },
+  { x: 126, y: 268, scale: 0.44, row: 0, excitedRow: 2, phase: 0 },
+  { x: 1154, y: 268, scale: 0.44, row: 1, excitedRow: 2, phase: 3 },
+  { x: 96, y: 486, scale: 0.38, row: 1, excitedRow: 3, phase: 1 },
+  { x: 1184, y: 486, scale: 0.38, row: 0, excitedRow: 3, phase: 4 },
 ] as const;
 for (const placement of crowdPlacements) {
   const baseFrames = crowdFrames.slice(placement.row * 6, placement.row * 6 + 6);
@@ -252,8 +258,8 @@ const tinTexture = addMaskedTexture(
   0.82,
 );
 tinTexture.tint = 0xd95f52;
-const leftGlassTexture = addMaskedTexture(
-  glassTexture,
+const leftWallTexture = addMaskedTexture(
+  sideWallTexture,
   { x: backLeftFloor.x, y: frontTopLeftPoint.y, width: frontLeftFloor.x - backLeftFloor.x, height: backLeftFloor.y - frontTopLeftPoint.y },
   [
     frontTopLeftPoint.x, frontTopLeftPoint.y,
@@ -261,10 +267,10 @@ const leftGlassTexture = addMaskedTexture(
     backLeftFloor.x, backLeftFloor.y,
     backTopLeftPoint.x, backTopLeftPoint.y,
   ],
-  0.32,
+  0.96,
 );
-const rightGlassTexture = addMaskedTexture(
-  glassTexture,
+const rightWallTexture = addMaskedTexture(
+  sideWallTexture,
   { x: frontRightFloor.x, y: frontTopRightPoint.y, width: backRightFloor.x - frontRightFloor.x, height: backRightFloor.y - frontTopRightPoint.y },
   [
     frontTopRightPoint.x, frontTopRightPoint.y,
@@ -272,7 +278,7 @@ const rightGlassTexture = addMaskedTexture(
     backRightFloor.x, backRightFloor.y,
     backTopRightPoint.x, backTopRightPoint.y,
   ],
-  0.32,
+  0.96,
 );
 const backGlassTexture = addMaskedTexture(
   glassTexture,
@@ -291,6 +297,40 @@ const backGlassTexture = addMaskedTexture(
   0.25,
 );
 
+const rearGlassLayer = new Container();
+rearGlassLayer.zIndex = 66;
+root.addChild(rearGlassLayer);
+const rearGlassReflection = new Sprite(glassTexture);
+rearGlassReflection.position.set(backLeftFloor.x, 500);
+rearGlassReflection.width = backRightFloor.x - backLeftFloor.x;
+rearGlassReflection.height = 220;
+rearGlassReflection.alpha = 0.13;
+rearGlassLayer.addChild(rearGlassReflection);
+const rearGlassFrame = new Graphics();
+rearGlassFrame
+  .rect(backLeftFloor.x, 516, backRightFloor.x - backLeftFloor.x, 204)
+  .fill({ color: 0x6ddcf4, alpha: 0.025 })
+  .stroke({ color: 0xa8efff, width: 2, alpha: 0.48 })
+  .moveTo(backLeftFloor.x, 640)
+  .lineTo(backRightFloor.x, 640)
+  .stroke({ color: 0xbdf5ff, width: 3, alpha: 0.5 })
+  .moveTo(backLeftFloor.x, 706)
+  .lineTo(backRightFloor.x, 706)
+  .stroke({ color: 0x8de9ff, width: 8, alpha: 0.58 });
+for (const panelX of [backLeftFloor.x, 410, 640, 870, backRightFloor.x]) {
+  rearGlassFrame
+    .moveTo(panelX, 516)
+    .lineTo(panelX, 720)
+    .stroke({ color: 0xa6f1ff, width: panelX === 640 ? 4 : 2, alpha: panelX === 640 ? 0.64 : 0.42 });
+}
+for (const fixtureX of [410, 640, 870]) {
+  rearGlassFrame
+    .rect(fixtureX - 9, 626, 18, 28)
+    .fill({ color: 0x071016, alpha: 0.82 })
+    .stroke({ color: 0xa8efff, width: 2, alpha: 0.62 });
+}
+rearGlassLayer.addChild(rearGlassFrame);
+
 const ambientLayer = new Container();
 ambientLayer.zIndex = 70;
 root.addChild(ambientLayer);
@@ -298,20 +338,6 @@ const ambientGraphics = new Graphics();
 const glassPulseGraphics = new Graphics();
 ambientLayer.addChild(ambientGraphics, glassPulseGraphics);
 glassPulseGraphics
-  .poly([
-    frontTopLeftPoint.x, frontTopLeftPoint.y,
-    frontLeftFloor.x, frontLeftFloor.y,
-    backLeftFloor.x, backLeftFloor.y,
-    backTopLeftPoint.x, backTopLeftPoint.y,
-  ])
-  .stroke({ color: 0x9bf3ff, width: 5, alpha: 0.9 })
-  .poly([
-    frontTopRightPoint.x, frontTopRightPoint.y,
-    frontRightFloor.x, frontRightFloor.y,
-    backRightFloor.x, backRightFloor.y,
-    backTopRightPoint.x, backTopRightPoint.y,
-  ])
-  .stroke({ color: 0x9bf3ff, width: 5, alpha: 0.9 })
   .moveTo(backTopLeftPoint.x, backTopLeftPoint.y)
   .lineTo(backTopRightPoint.x, backTopRightPoint.y)
   .lineTo(backRightFloor.x, backRightFloor.y)
@@ -416,11 +442,22 @@ function drawCourt(): void {
   const centerBack = project(0, COURT_LENGTH);
   line(graphics, [centerShort.x, centerShort.y, centerBack.x, centerBack.y], 0xffffff, 2, 0.68);
 
+  const serviceBoxBackY = 5.44 + 1.6;
   for (const side of [-1, 1]) {
-    const boxOuter = project(side * COURT_WIDTH / 2, 7.15);
-    const boxInnerFront = project(side * 1.15, 7.15);
-    const boxInnerBack = project(side * 1.15, COURT_LENGTH);
-    line(graphics, [boxOuter.x, boxOuter.y, boxInnerFront.x, boxInnerFront.y, boxInnerBack.x, boxInnerBack.y], 0xffffff, 2, 0.48);
+    const boxInnerFront = project(side * (COURT_WIDTH / 2 - 1.6), 5.44);
+    const boxInnerBack = project(side * (COURT_WIDTH / 2 - 1.6), serviceBoxBackY);
+    const boxOuterBack = project(side * COURT_WIDTH / 2, serviceBoxBackY);
+    line(
+      graphics,
+      [
+        boxInnerFront.x, boxInnerFront.y,
+        boxInnerBack.x, boxInnerBack.y,
+        boxOuterBack.x, boxOuterBack.y,
+      ],
+      0xffffff,
+      2,
+      0.68,
+    );
   }
 
   const t = project(T_X, T_Y);
@@ -430,37 +467,34 @@ function drawCourt(): void {
   line(graphics, [frontTopLeft.x, frontTopLeft.y, backTopLeft.x, backTopLeft.y], 0xffcbd4, 3, 0.72);
   line(graphics, [frontTopRight.x, frontTopRight.y, backTopRight.x, backTopRight.y], 0xffcbd4, 3, 0.72);
   courtLayer.addChild(graphics);
-
-  const labelStyle = new TextStyle({
-    fill: 0xbfeef6,
-    fontFamily: 'monospace',
-    fontSize: 12,
-    letterSpacing: 2,
-  });
-  const frontLabel = new Text({ text: 'FRONT WALL', style: labelStyle });
-  frontLabel.anchor.set(0.5);
-  frontLabel.position.set(640, 82);
-  courtLayer.addChild(frontLabel);
-  const glassLabel = new Text({
-    text: 'GLASS BACK',
-    style: new TextStyle({ ...labelStyle, fill: 0x7eb0bb, fontSize: 10 }),
-  });
-  glassLabel.anchor.set(0.5);
-  glassLabel.position.set(640, 685);
-  courtLayer.addChild(glassLabel);
 }
 drawCourt();
 
-const [actionFrames, rearLoopFrames, reactionFrames] = await Promise.all([
-  loadFrames('char-squash-actions-rear-flagship', manifest.assets['char-squash-actions-rear-flagship']),
-  loadFrames('char-squash-rear-loops-flagship', manifest.assets['char-squash-rear-loops-flagship']),
-  loadFrames('char-tennis-reactions-flagship', manifest.assets['char-tennis-reactions-flagship']),
+const [
+  blueActionFrames,
+  blueLoopFrames,
+  blueReactionFrames,
+  goldActionFrames,
+  goldLoopFrames,
+  goldReactionFrames,
+] = await Promise.all([
+  loadFrames('char-squash-blue-actions', manifest.assets['char-squash-blue-actions']),
+  loadFrames('char-squash-blue-loops', manifest.assets['char-squash-blue-loops']),
+  loadFrames('char-squash-blue-reactions', manifest.assets['char-squash-blue-reactions']),
+  loadFrames('char-squash-gold-actions', manifest.assets['char-squash-gold-actions']),
+  loadFrames('char-squash-gold-loops', manifest.assets['char-squash-gold-loops']),
+  loadFrames('char-squash-gold-reactions', manifest.assets['char-squash-gold-reactions']),
 ]);
 
-const animationAssets = {
-  actions: actionFrames,
-  rearLoops: rearLoopFrames,
-  reactions: reactionFrames,
+const blueAnimationAssets = {
+  actions: blueActionFrames,
+  rearLoops: blueLoopFrames,
+  reactions: blueReactionFrames,
+};
+const goldAnimationAssets = {
+  actions: goldActionFrames,
+  rearLoops: goldLoopFrames,
+  reactions: goldReactionFrames,
 };
 
 const actorLayer = new Container();
@@ -468,27 +502,9 @@ actorLayer.sortableChildren = true;
 actorLayer.zIndex = 20;
 root.addChild(actorLayer);
 
-const humanAnim = new SquashCharacterAnim(animationAssets, 0xffffff);
-const aiAnim = new SquashCharacterAnim(animationAssets, 0xffffff);
+const humanAnim = new SquashCharacterAnim(blueAnimationAssets, 0xffffff);
+const aiAnim = new SquashCharacterAnim(goldAnimationAssets, 0xffffff);
 actorLayer.addChild(humanAnim.view, aiAnim.view);
-
-function addPlayerBadge(anim: SquashCharacterAnim, text: string, color: number): void {
-  const badge = new Text({
-    text,
-    style: new TextStyle({
-      fill: color,
-      fontFamily: 'monospace',
-      fontSize: 20,
-      fontWeight: '800',
-      stroke: { color: 0x020609, width: 5 },
-    }),
-  });
-  badge.anchor.set(0.5, 1);
-  badge.y = -174;
-  anim.view.addChild(badge);
-}
-addPlayerBadge(humanAnim, 'YOU', 0x7dffb2);
-addPlayerBadge(aiAnim, 'RIVAL', 0xffc857);
 
 const ballLayer = new Container();
 ballLayer.zIndex = 40;
@@ -563,6 +579,11 @@ const pendingHits: Partial<Record<PlayerId, PendingHit>> = {};
 const scores: Record<PlayerId, number> = { you: 0, ai: 0 };
 const impacts: Impact[] = [];
 const trail: TrailPoint[] = [];
+type GameMode = 'play' | 'watch';
+let gameMode: GameMode = 'play';
+let aiLevel: AiLevel = 'normal';
+let matchSpeed = 1;
+let gameNow = performance.now();
 let server: PlayerId = 'you';
 let rally = 0;
 let targetWallX = -1.2;
@@ -641,7 +662,7 @@ function shotEnergyCost(kind: ShotKind): number {
 }
 
 function queueHit(id: PlayerId, kind: ShotKind, targetX: number): void {
-  const now = performance.now();
+  const now = gameNow;
   if (matchWinner || pointPauseUntil > now || pendingHits[id]) return;
   const player = players[id];
   if (now - player.lastSwingAt < SWING_COOLDOWN_MS) return;
@@ -666,7 +687,7 @@ function queueHit(id: PlayerId, kind: ShotKind, targetX: number): void {
     ball.z = 0.9;
   }
   const quality = serving ? 0.92 : contactQuality(player, now);
-  lastQuality = id === 'you' ? quality : lastQuality;
+  lastQuality = quality;
   const action = serving ? 'forehand' : swingAction(id, quality);
   playerAnim(id).action(action, player.facing);
   pendingHits[id] = {
@@ -695,7 +716,7 @@ function firePendingHits(now: number): void {
     sfx.hit(pending.kind, pending.quality);
     spawnImpact(ball.x, ball.y, pending.quality < 0.55 ? 0xff7a59 : 0x9fffe2, false);
     playerAnim(otherPlayer(id)).action('splitstep', players[otherPlayer(id)].facing);
-    if (id === 'you') {
+    if (id === 'you' && gameMode === 'play') {
       const label = pending.quality >= 0.82 ? 'PURE' : pending.quality >= 0.55 ? 'SOLID' : 'STRETCHED';
       showFlash(`${label} · ${pending.kind.toUpperCase()}`, 520);
     }
@@ -713,14 +734,22 @@ function awardPoint(winner: PlayerId, reason: string, now: number): void {
   playerAnim(otherPlayer(winner)).action('dejected', players[otherPlayer(winner)].facing);
   crowdExcitedUntil = now + 1750;
   sfx.point(winner === 'you');
-  showFlash(`${winner === 'you' ? '你得分' : '對手得分'}\n${reason}`, 1100);
+  const winnerName = gameMode === 'watch'
+    ? winner === 'you' ? '藍方 AI' : '金方 AI'
+    : winner === 'you' ? '你' : '對手';
+  showFlash(`${winnerName}得分\n${reason}`, 1100);
 
   const leader = Math.max(scores.you, scores.ai);
   const margin = Math.abs(scores.you - scores.ai);
   if (leader >= 11 && margin >= 2) {
     matchWinner = winner;
     pointPauseUntil = Infinity;
-    window.setTimeout(() => showFlash(`${winner === 'you' ? '比賽勝利' : '惜敗'}\n按 Enter 再戰`, 4000), 650);
+    window.setTimeout(() => {
+      const result = gameMode === 'watch'
+        ? `${winner === 'you' ? '藍方 AI' : '金方 AI'} 勝出`
+        : winner === 'you' ? '比賽勝利' : '惜敗';
+      showFlash(`${result}\n按 Enter 再戰`, 4000);
+    }, 650);
     return;
   }
   pointPauseUntil = now + POINT_PAUSE_MS;
@@ -752,7 +781,8 @@ function movementVector(): { x: number; y: number } {
 }
 
 function dash(): void {
-  const now = performance.now();
+  if (gameMode === 'watch') return;
+  const now = gameNow;
   const player = players.you;
   const movement = movementVector();
   if (player.energy < DASH_COST || (!movement.x && !movement.y) || now < player.dashUntil) return;
@@ -771,12 +801,13 @@ function resetMatch(): void {
   server = 'you';
   matchWinner = null;
   lastQuality = 1;
-  resetRally(performance.now());
+  resetRally(gameNow);
 }
 
 window.addEventListener('keydown', (event) => {
   sfx.unlock();
   const key = event.key.toLowerCase();
+  if (gameMode === 'watch' && key !== 'enter') return;
   held.add(key);
   if (event.repeat && ['j', 'k', 'l', ' ', 'shift'].includes(key)) return;
   if (key === 'j') queueHit('you', 'drive', targetWallX);
@@ -815,21 +846,61 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('#touch-shots 
   });
 }
 
+function setGameMode(mode: GameMode): void {
+  gameMode = mode;
+  held.clear();
+  document.body.classList.toggle('watch-mode', mode === 'watch');
+  document.querySelector('#mode-play')?.classList.toggle('active', mode === 'play');
+  document.querySelector('#mode-watch')?.classList.toggle('active', mode === 'watch');
+  modeBadgeEl.textContent = mode === 'watch' ? 'AI VS AI · LIVE' : 'PLAYER VS AI';
+  leftNameEl.textContent = mode === 'watch' ? 'BLUE AI' : 'YOU';
+  rightNameEl.textContent = mode === 'watch' ? 'GOLD AI' : 'RIVAL AI';
+  resetMatch();
+}
+
+document.querySelector('#mode-play')?.addEventListener('click', () => setGameMode('play'));
+document.querySelector('#mode-watch')?.addEventListener('click', () => setGameMode('watch'));
+for (const button of document.querySelectorAll<HTMLButtonElement>('[data-level]')) {
+  button.addEventListener('click', () => {
+    aiLevel = button.dataset.level as AiLevel;
+    for (const peer of document.querySelectorAll('[data-level]')) {
+      peer.classList.toggle('active', peer === button);
+    }
+  });
+}
+for (const button of document.querySelectorAll<HTMLButtonElement>('[data-speed]')) {
+  button.addEventListener('click', () => {
+    matchSpeed = Number(button.dataset.speed);
+    humanAnim.setPlaybackRate(matchSpeed);
+    aiAnim.setPlaybackRate(matchSpeed);
+    for (const peer of document.querySelectorAll('[data-speed]')) {
+      peer.classList.toggle('active', peer === button);
+    }
+  });
+}
+
 function updatePlayers(dtSeconds: number, now: number): void {
   const human = players.you;
-  const movement = movementVector();
-  const speed = now < human.dashUntil ? DASH_SPEED : PLAYER_SPEED;
-  human.x = clamp(human.x + movement.x * speed * dtSeconds, -COURT_WIDTH / 2 + 0.36, COURT_WIDTH / 2 - 0.36);
-  human.y = clamp(human.y + movement.y * speed * dtSeconds, 0.72, COURT_LENGTH - 0.42);
-  if (Math.abs(movement.x) > 0.05) human.facing = Math.sign(movement.x);
+  if (gameMode === 'play') {
+    const movement = movementVector();
+    const speed = now < human.dashUntil ? DASH_SPEED : PLAYER_SPEED;
+    human.x = clamp(human.x + movement.x * speed * dtSeconds, -COURT_WIDTH / 2 + 0.36, COURT_WIDTH / 2 - 0.36);
+    human.y = clamp(human.y + movement.y * speed * dtSeconds, 0.72, COURT_LENGTH - 0.42);
+    if (Math.abs(movement.x) > 0.05) human.facing = Math.sign(movement.x);
+    humanAnim.setLocomotion(Math.hypot(movement.x, movement.y) > 0.05, human.facing);
+  } else {
+    const blueDecision = decideAi(human, players.ai, ball, 'you', now, aiLevel);
+    moveAi(human, blueDecision, dtSeconds, aiLevel);
+    humanAnim.setLocomotion(Math.hypot(blueDecision.moveX, blueDecision.moveY) > 0.05, human.facing);
+    if (blueDecision.shot) queueHit('you', blueDecision.shot, aiTargetWallX(players.ai, aiLevel));
+  }
   human.energy = clamp(human.energy + ENERGY_REGEN_PER_SECOND * dtSeconds, 0, 100);
-  humanAnim.setLocomotion(Math.hypot(movement.x, movement.y) > 0.05, human.facing);
 
-  const decision = decideAi(players.ai, human, ball, now);
-  moveAi(players.ai, decision, dtSeconds);
+  const decision = decideAi(players.ai, human, ball, 'ai', now, aiLevel);
+  moveAi(players.ai, decision, dtSeconds, aiLevel);
   players.ai.energy = clamp(players.ai.energy + ENERGY_REGEN_PER_SECOND * dtSeconds, 0, 100);
   aiAnim.setLocomotion(Math.hypot(decision.moveX, decision.moveY) > 0.05, players.ai.facing);
-  if (decision.shot) queueHit('ai', decision.shot, aiTargetWallX(human));
+  if (decision.shot) queueHit('ai', decision.shot, aiTargetWallX(human, aiLevel));
 
   const separation = distance(human.x, human.y, players.ai.x, players.ai.y);
   if (separation < 0.68 && separation > 0.001) {
@@ -843,8 +914,9 @@ function updatePlayers(dtSeconds: number, now: number): void {
 }
 
 function updateAiServe(now: number): void {
-  if (server !== 'ai' || ball.active || pendingHits.ai || now < nextServeAt || pointPauseUntil > now) return;
-  queueHit('ai', 'drive', aiTargetWallX(players.you));
+  const automaticServer = server === 'ai' || gameMode === 'watch';
+  if (!automaticServer || ball.active || pendingHits[server] || now < nextServeAt || pointPauseUntil > now) return;
+  queueHit(server, 'drive', aiTargetWallX(players[otherPlayer(server)], aiLevel));
 }
 
 function updateActorVisual(id: PlayerId): void {
@@ -994,9 +1066,11 @@ function updateArena(now: number): void {
     : 0;
   const glassLight = clamp(scheduledGlassPulse + scorePulse, 0, 1);
   glassPulseGraphics.alpha = 0.03 + glassLight * 0.72;
-  leftGlassTexture.alpha = 0.28 + glassLight * 0.18;
-  rightGlassTexture.alpha = 0.28 + glassLight * 0.18;
+  leftWallTexture.alpha = 0.94 + glassLight * 0.06;
+  rightWallTexture.alpha = 0.94 + glassLight * 0.06;
   backGlassTexture.alpha = 0.22 + glassLight * 0.2;
+  rearGlassReflection.alpha = 0.1 + glassLight * 0.16;
+  rearGlassFrame.alpha = 0.74 + glassLight * 0.26;
 
   ambientGraphics.clear();
   const beamCenter = 640 + Math.sin(now * 0.00032) * 250;
@@ -1038,10 +1112,16 @@ function updateArena(now: number): void {
 }
 
 function updateHud(now: number): void {
-  pointsEl.textContent = `${scores.you} : ${scores.ai}`;
-  const serveText = server === 'you' ? '你發球' : '對手發球';
+  pointsLeftEl.textContent = `${scores.you}`;
+  pointsRightEl.textContent = `${scores.ai}`;
+  const serveText = gameMode === 'watch'
+    ? `${server === 'you' ? '藍方' : '金方'}發球`
+    : server === 'you' ? '你發球' : '對手發球';
+  const winnerText = gameMode === 'watch'
+    ? `${matchWinner === 'you' ? '藍方 AI' : '金方 AI'}勝出`
+    : matchWinner === 'you' ? '比賽勝利' : '對手獲勝';
   scoreMetaEl.textContent = matchWinner
-    ? `${matchWinner === 'you' ? '比賽勝利' : '對手獲勝'} · Enter 再戰`
+    ? `${winnerText} · Enter 再戰`
     : `${serveText} · ${ball.active ? `第 ${Math.max(1, rally)} 拍` : '準備發球'}`;
   energyFillEl.style.width = `${players.you.energy}%`;
   energyValueEl.textContent = `${Math.round(players.you.energy)}`;
@@ -1053,18 +1133,22 @@ function updateHud(now: number): void {
   rallyEl.textContent = `回合 ${rally}`;
   const humanT = distance(players.you.x, players.you.y, T_X, T_Y);
   const aiT = distance(players.ai.x, players.ai.y, T_X, T_Y);
+  const leftTName = gameMode === 'watch' ? '藍方' : '你';
+  const rightTName = gameMode === 'watch' ? '金方' : '對手';
   tControlEl.textContent =
-    Math.abs(humanT - aiT) < 0.35 ? 'T 區纏鬥' : humanT < aiT ? '你控制 T 區' : '對手控制 T 區';
+    Math.abs(humanT - aiT) < 0.35 ? 'T 區纏鬥' : humanT < aiT ? `${leftTName}控制 T 區` : `${rightTName}控制 T 區`;
   if (pointPauseUntil > 0 && pointPauseUntil <= now && !matchWinner) resetRally(now);
 }
 
-resetRally(performance.now());
+resetRally(gameNow);
 loadingEl.classList.add('hide');
 window.setTimeout(() => loadingEl.remove(), 600);
 
 app.ticker.add((ticker) => {
-  const dtSeconds = Math.min(0.033, ticker.deltaMS / 1000);
-  const now = performance.now();
+  const realDtSeconds = Math.min(0.033, ticker.deltaMS / 1000);
+  const dtSeconds = realDtSeconds * matchSpeed;
+  gameNow += realDtSeconds * 1000 * matchSpeed;
+  const now = gameNow;
 
   if (!matchWinner && pointPauseUntil <= now) {
     updatePlayers(dtSeconds, now);
