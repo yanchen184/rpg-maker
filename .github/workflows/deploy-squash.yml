@@ -126,10 +126,23 @@ jobs:
             curl -fsS \
               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               -H "Content-Type: application/json" \
-              --data '{"type":"CNAME","name":"squash.yanchen.app","content":"squash.pages.dev","proxied":true}' \
+              --data '{"type":"CNAME","name":"squash.yanchen.app","content":"squash.pages.dev","proxied":false}' \
               "https://api.cloudflare.com/client/v4/zones/${zone_tag}/dns_records" \
               | tee /tmp/squash-dns-create.json
             jq -e '.success == true' /tmp/squash-dns-create.json >/dev/null
+          else
+            record_id=$(printf '%s' "$records" | jq -er '.result[0].id')
+            content=$(printf '%s' "$records" | jq -er '.result[0].content')
+            proxied=$(printf '%s' "$records" | jq -er '.result[0].proxied')
+            if [ "$content" != "squash.pages.dev" ] || [ "$proxied" != "false" ]; then
+              curl -fsS -X PATCH \
+                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                --data '{"type":"CNAME","name":"squash.yanchen.app","content":"squash.pages.dev","proxied":false}' \
+                "https://api.cloudflare.com/client/v4/zones/${zone_tag}/dns_records/${record_id}" \
+                | tee /tmp/squash-dns-update.json
+              jq -e '.success == true' /tmp/squash-dns-update.json >/dev/null
+            fi
           fi
 
       - name: Retry custom domain validation after DNS exists
