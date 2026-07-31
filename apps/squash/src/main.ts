@@ -48,6 +48,7 @@ const HIT_HEIGHT = 1.6;
 const SWING_COOLDOWN_MS = 430;
 const CONTACT_DELAY_MS = (6 / 36) * 1000;
 const POINT_PAUSE_MS = 1900;
+const MIN_PLAYER_SEPARATION = 0.94;
 const T_X = 0;
 const T_Y = 5.55;
 
@@ -978,13 +979,18 @@ function updatePlayers(dtSeconds: number, now: number): void {
   }
 
   const separation = distance(human.x, human.y, players.ai.x, players.ai.y);
-  if (separation < 0.68 && separation > 0.001) {
-    const pushX = (human.x - players.ai.x) / separation;
-    const pushY = (human.y - players.ai.y) / separation;
-    human.x += pushX * 0.035;
-    human.y += pushY * 0.035;
-    players.ai.x -= pushX * 0.035;
-    players.ai.y -= pushY * 0.035;
+  if (separation < MIN_PLAYER_SEPARATION) {
+    const pushX = separation > 0.001 ? (human.x - players.ai.x) / separation : -1;
+    const pushY = separation > 0.001 ? (human.y - players.ai.y) / separation : 0;
+    const correction = (MIN_PLAYER_SEPARATION - separation) / 2;
+    human.x = clamp(human.x + pushX * correction, -COURT_WIDTH / 2 + 0.36, COURT_WIDTH / 2 - 0.36);
+    human.y = clamp(human.y + pushY * correction, 0.72, COURT_LENGTH - 0.42);
+    players.ai.x = clamp(
+      players.ai.x - pushX * correction,
+      -COURT_WIDTH / 2 + 0.36,
+      COURT_WIDTH / 2 - 0.36,
+    );
+    players.ai.y = clamp(players.ai.y - pushY * correction, 0.72, COURT_LENGTH - 0.42);
   }
 }
 
