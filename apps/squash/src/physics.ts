@@ -83,6 +83,31 @@ export class SquashBall {
       COURT_WIDTH * 0.43,
     );
 
+    if (spec.kind === 'glass') {
+      const rearSpeed = 14.2 * pace * (weak ? 0.9 : 1);
+      const secondsToBack = Math.max(0.045, (COURT_LENGTH - this.y) / rearSpeed);
+      const secondsBackToFront = COURT_LENGTH / (rearSpeed * WALL_RESTITUTION);
+      const desiredFrontHeight = weak ? 0.86 : 1.18;
+      const verticalSpeedAtGlass =
+        (
+          desiredFrontHeight -
+          this.z -
+          0.5 * GRAVITY * secondsToBack ** 2 +
+          0.5 * GRAVITY * secondsBackToFront ** 2
+        ) /
+        (secondsToBack + secondsBackToFront);
+
+      this.vy = rearSpeed;
+      this.vx = clamp((randomizedTarget - this.x) / secondsToBack, -5.8, 5.8);
+      this.vz = verticalSpeedAtGlass + GRAVITY * secondsToBack;
+      this.lastHitter = by;
+      this.floorBounces = 0;
+      this.frontHit = false;
+      this.active = true;
+      this.ageSeconds = 0;
+      return;
+    }
+
     let frontSpeed = 9.75;
     let wallHeight = 1.28;
     let lateralBoost = 0;
@@ -252,7 +277,7 @@ export class SquashBall {
         clone.z = 0;
         clone.vz = Math.abs(clone.vz) * FLOOR_RESTITUTION;
       }
-      if (clone.frontHit && clone.z <= 1.15 && clone.y >= 1.1) {
+      if (clone.frontHit && clone.z <= 1.15 && clone.y >= 6.2) {
         return {
           x: clamp(clone.x, -COURT_WIDTH / 2 + 0.35, COURT_WIDTH / 2 - 0.35),
           y: clamp(clone.y, 1, COURT_LENGTH - 0.35),

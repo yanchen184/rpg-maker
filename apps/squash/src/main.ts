@@ -482,27 +482,33 @@ drawCourt();
 
 const [
   blueActionFrames,
+  blueBackhandFrames,
   blueLoopFrames,
   blueReactionFrames,
   goldActionFrames,
+  goldBackhandFrames,
   goldLoopFrames,
   goldReactionFrames,
 ] = await Promise.all([
   loadFrames('char-squash-blue-actions', manifest.assets['char-squash-blue-actions']),
+  loadFrames('char-squash-blue-backhand', manifest.assets['char-squash-blue-backhand']),
   loadFrames('char-squash-blue-loops', manifest.assets['char-squash-blue-loops']),
   loadFrames('char-squash-blue-reactions', manifest.assets['char-squash-blue-reactions']),
   loadFrames('char-squash-gold-actions', manifest.assets['char-squash-gold-actions']),
+  loadFrames('char-squash-gold-backhand', manifest.assets['char-squash-gold-backhand']),
   loadFrames('char-squash-gold-loops', manifest.assets['char-squash-gold-loops']),
   loadFrames('char-squash-gold-reactions', manifest.assets['char-squash-gold-reactions']),
 ]);
 
 const blueAnimationAssets = {
   actions: blueActionFrames,
+  backhand: blueBackhandFrames,
   rearLoops: blueLoopFrames,
   reactions: blueReactionFrames,
 };
 const goldAnimationAssets = {
   actions: goldActionFrames,
+  backhand: goldBackhandFrames,
   rearLoops: goldLoopFrames,
   reactions: goldReactionFrames,
 };
@@ -673,6 +679,7 @@ function shotEnergyCost(kind: ShotKind): number {
   if (kind === 'drop') return 12;
   if (kind === 'lob') return 16;
   if (kind === 'boast') return 14;
+  if (kind === 'glass') return 18;
   return 0;
 }
 
@@ -840,10 +847,11 @@ window.addEventListener('keydown', (event) => {
   const key = event.key.toLowerCase();
   if (gameMode === 'watch' && key !== 'enter') return;
   held.add(key);
-  if (event.repeat && ['j', 'k', 'l', ' ', 'shift'].includes(key)) return;
+  if (event.repeat && ['j', 'k', 'l', 'i', ' ', 'shift'].includes(key)) return;
   if (key === 'j') queueHit('you', 'drive', targetWallX);
   else if (key === 'k') queueHit('you', 'drop', targetWallX);
   else if (key === 'l') queueHit('you', 'boast', targetWallX);
+  else if (key === 'i') queueHit('you', 'glass', targetWallX);
   else if (event.key === ' ') queueHit('you', ball.active ? 'lob' : 'drive', targetWallX);
   else if (key === 'shift') dash();
   else if (key === 'arrowleft') targetWallX = clamp(targetWallX - 0.45, -2.65, 2.65);
@@ -998,15 +1006,17 @@ function updateBallVisual(): void {
 
   ballShadow
     .clear()
-    .ellipse(floor.x, floor.y + 2, 9 * floor.scale, 3.5 * floor.scale)
-    .fill({ color: 0x020406, alpha: 0.32 });
-  const radius = 6.2 * projected.scale + 2.2;
+    .ellipse(floor.x, floor.y + 2, 12.5 * floor.scale, 5 * floor.scale)
+    .fill({ color: 0x020406, alpha: 0.38 });
+  const radius = 8.4 * projected.scale + 3;
   ballGraphics
     .clear()
-    .circle(projected.x, projected.y, radius + 3)
-    .fill({ color: 0x7eeaff, alpha: 0.16 })
+    .circle(projected.x, projected.y, radius + 4.5)
+    .fill({ color: 0x7eeaff, alpha: 0.2 })
     .circle(projected.x, projected.y, radius)
-    .fill({ color: 0x020406 })
+    .fill({ color: 0x010304 })
+    .circle(projected.x, projected.y, radius)
+    .stroke({ color: 0xb8f5ff, width: 1.2, alpha: 0.62 })
     .circle(projected.x - radius * 0.28, projected.y - radius * 0.3, Math.max(1.2, radius * 0.2))
     .fill({ color: 0x56dffc, alpha: 0.9 });
 

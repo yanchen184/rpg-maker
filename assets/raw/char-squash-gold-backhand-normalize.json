@@ -1,0 +1,100 @@
+{
+  "input": "assets/raw/char-squash-gold-backhand-chroma.png",
+  "output": "assets/sheets/char-squash-gold-backhand_sheet.png",
+  "grid": [
+    4,
+    3
+  ],
+  "frame_size": [
+    256,
+    256
+  ],
+  "frames": 12,
+  "empty_frames": [],
+  "frame_reports": [
+    {
+      "frame": 0,
+      "components": 20,
+      "retained_components": 1,
+      "subject_width": 195,
+      "subject_height": 214
+    },
+    {
+      "frame": 1,
+      "components": 11,
+      "retained_components": 1,
+      "subject_width": 203,
+      "subject_height": 214
+    },
+    {
+      "frame": 2,
+      "components": 7,
+      "retained_components": 1,
+      "subject_width": 219,
+      "subject_height": 214
+    },
+    {
+      "frame": 3,
+      "components": 17,
+      "retained_components": 1,
+      "subject_width": 174,
+      "subject_height": 214
+    },
+    {
+      "frame": 4,
+      "components": 13,
+      "retained_components": 1,
+      "subject_width": 196,
+      "subject_height": 214
+    },
+    {
+      "frame": 5,
+      "components": 17,
+      "retained_components": 2,
+      "subject_width": 254,
+      "subject_height": 214
+    },
+    {
+      "frame": 6,
+      "components": 2,
+      "retained_components": 1,
+      "subject_width": 215,
+      "subject_height": 214
+    },
+    {
+      "frame": 7,
+      "components": 8,
+      "retained_components": 1,
+      "subject_width": 145,
+      "subject_height": 214
+    },
+    {
+      "frame": 8,
+      "components": 19,
+      "retained_components": 1,
+      "subject_width": 122,
+      "subject_height": 214
+    },
+    {
+      "frame": 9,
+      "components": 13,
+      "retained_components": 1,
+      "subject_width": 184,
+      "subject_height": 214
+    },
+    {
+      "frame": 10,
+      "components": 14,
+      "retained_components": 1,
+      "subject_width": 194,
+      "subject_height": 214
+    },
+    {
+      "frame": 11,
+      "components": 22,
+      "retained_components": 1,
+      "subject_width": 179,
+      "subject_height": 214
+    }
+  ]
+}

@@ -11,6 +11,7 @@ export type SquashAction =
 
 interface SquashAnimationAssets {
   actions: Texture[];
+  backhand: Texture[];
   rearLoops: Texture[];
   reactions: Texture[];
 }
@@ -107,7 +108,7 @@ export class SquashCharacterAnim {
 
   private framesFor(kind: SquashAction): Texture[] {
     if (kind === 'forehand') return this.assets.actions.slice(0, 12);
-    if (kind === 'backhand') return this.assets.actions.slice(12, 24);
+    if (kind === 'backhand') return this.assets.backhand;
     if (kind === 'reach') return this.assets.actions.slice(24, 36);
     if (kind === 'celebrate') return this.assets.reactions.slice(0, 12);
     if (kind === 'dejected') return this.assets.reactions.slice(12, 24);

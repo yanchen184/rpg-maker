@@ -1,5 +1,5 @@
 export type PlayerId = 'you' | 'ai';
-export type ShotKind = 'drive' | 'drop' | 'lob' | 'boast';
+export type ShotKind = 'drive' | 'drop' | 'lob' | 'boast' | 'glass';
 
 export interface CourtPlayer {
   id: PlayerId;

@@ -714,6 +714,12 @@
       "fps": 36,
       "kind": "character-layer"
     },
+    "char-squash-blue-backhand": {
+      "sheet": "sheets/char-squash-blue-backhand_sheet.png",
+      "grid": [4, 3],
+      "fps": 36,
+      "kind": "character-layer"
+    },
     "char-squash-blue-loops": {
       "sheet": "sheets/char-squash-blue-loops_sheet.png",
       "grid": [6, 4],
@@ -729,6 +735,12 @@
     "char-squash-gold-actions": {
       "sheet": "sheets/char-squash-gold-actions_sheet.png",
       "grid": [6, 6],
+      "fps": 36,
+      "kind": "character-layer"
+    },
+    "char-squash-gold-backhand": {
+      "sheet": "sheets/char-squash-gold-backhand_sheet.png",
+      "grid": [4, 3],
       "fps": 36,
       "kind": "character-layer"
     },

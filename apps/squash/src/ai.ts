@@ -107,6 +107,16 @@ function planShot(
     { shot: 'lob', targetX: right * 2.42, pace: 0.76, intent: 'change', label: '右後高吊', safety: 1 },
     { shot: 'boast', targetX: -ownSide * 1.25, pace: 0.88, intent: 'change', label: '側牆變線', safety: 0.58 },
   ];
+  if (self.y > 5.4 && ball.y > 5.7) {
+    candidates.push({
+      shot: 'glass',
+      targetX: clamp(-opponent.x * 0.35, -1.2, 1.2),
+      pace: 0.98,
+      intent: 'defend',
+      label: '後玻璃解圍',
+      safety: 0.96,
+    });
+  }
   const previousShot = memory.recentShots.at(-1);
   const previousTarget = memory.recentTargets.at(-1) ?? 0;
   const ownRecoveryCost = distance(self.x, self.y, T_X, T_Y);
@@ -136,6 +146,8 @@ function planShot(
 
     if (opponentDeep && candidate.shot === 'drop') score += 4.2;
     if (opponentForward && candidate.shot === 'lob') score += 4.1;
+    if (opponentForward && candidate.shot === 'glass') score += 2.4;
+    if (candidate.shot === 'glass') score += 6.2;
     if (opponentOffT && candidate.intent === 'pressure') score += 2.8;
     if (context.rally < 4 && candidate.shot === 'drive') score += 1.6;
     if (lateRally && ['drop', 'boast'].includes(candidate.shot)) score += 3.2;
@@ -145,6 +157,7 @@ function planShot(
       score += candidate.safety * 4;
       if (['drop', 'boast'].includes(candidate.shot)) score -= 4.8;
       if (candidate.shot === 'lob') score += 2.5;
+      if (candidate.shot === 'glass') score += 5.2;
     }
     if (previousShot === candidate.shot) score -= 1.5;
     score += (Math.random() * 2 - 1) * noise;
@@ -156,9 +169,17 @@ function planShot(
   if (stretched) {
     return {
       ...selected,
-      pace: Math.min(selected.pace, selected.shot === 'lob' ? 0.76 : 0.84),
+      pace:
+        selected.shot === 'glass'
+          ? selected.pace
+          : Math.min(selected.pace, selected.shot === 'lob' ? 0.76 : 0.84),
       intent: 'defend',
-      label: selected.shot === 'lob' ? '高吊重整' : '保守解圍',
+      label:
+        selected.shot === 'glass'
+          ? '後玻璃解圍'
+          : selected.shot === 'lob'
+            ? '高吊重整'
+            : '保守解圍',
     };
   }
   return selected;
@@ -189,8 +210,10 @@ export function decideAi(
       COURT_LENGTH - 0.45,
     );
     const close = distance(self.x, self.y, ball.x, ball.y);
+    const insideInterceptionWindow = distance(targetX, targetY, ball.x, ball.y) <= 0.58;
     if (
       close <= tuning.reach &&
+      insideInterceptionWindow &&
       ball.z <= 1.55 &&
       ball.floorBounces <= 1 &&
       ball.ageSeconds >= tuning.reactionMs / 1000 &&

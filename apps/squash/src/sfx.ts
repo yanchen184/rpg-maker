@@ -15,7 +15,8 @@ export class SquashSfx {
   }
 
   hit(kind: ShotKind, quality: number): void {
-    const base = kind === 'drop' ? 760 : kind === 'lob' ? 280 : kind === 'boast' ? 460 : 560;
+    const base =
+      kind === 'drop' ? 760 : kind === 'lob' ? 280 : kind === 'boast' ? 460 : kind === 'glass' ? 390 : 560;
     this.noise(0.045, 0.45 + quality * 0.4, 2300);
     this.tone(base, 'square', 0.07, 0.2 + quality * 0.18, base * 0.38);
   }

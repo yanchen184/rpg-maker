@@ -8,13 +8,13 @@ const ACTIONS = [
   { title: '偶發左側注視', detail: '只有頭眼短暫看左側，身體仍面向前牆。', source: 'loops', from: 6, count: 6, fps: 12 },
   { title: '跑位與回 T', detail: '前進、交叉步、橫移與恢復準備。', source: 'loops', from: 12, count: 12, fps: 24 },
   { title: '正手平抽', detail: '第 7 幀接觸，肩髖完整傳力。', source: 'actions', from: 0, count: 12, fps: 36 },
-  { title: '反手穿越', detail: '反向肩髖旋轉，第 7 幀接觸。', source: 'actions', from: 12, count: 12, fps: 36 },
+  { title: '獨立反手穿越', detail: '全新右手反拍；第 7 幀在身體左側接觸，沒有鏡像正手。', source: 'backhand', from: 0, count: 12, fps: 36 },
   { title: '勉強低角救球', detail: '晚到、失衡、伸拍與艱難恢復。', source: 'actions', from: 24, count: 12, fps: 30 },
   { title: '得分慶祝', detail: '表情、拳頭、跳躍與落地收束。', source: 'reactions', from: 0, count: 12, fps: 24 },
   { title: '失分重整', detail: '視線下沉、肩背垮落，再重新站穩。', source: 'reactions', from: 12, count: 12, fps: 18 },
 ] as const;
 
-type SheetSet = Record<'actions' | 'loops' | 'reactions', Texture[]>;
+type SheetSet = Record<'actions' | 'backhand' | 'loops' | 'reactions', Texture[]>;
 
 const grid = document.querySelector<HTMLElement>('#grid')!;
 const status = document.querySelector<HTMLElement>('#status')!;
@@ -82,16 +82,17 @@ async function addCharacter(name: string, accent: string, sheets: SheetSet): Pro
 void (async () => {
   const manifest = await loadManifest();
   const loadSet = async (color: 'blue' | 'gold'): Promise<SheetSet> => {
-    const [actions, loops, reactions] = await Promise.all([
+    const [actions, backhand, loops, reactions] = await Promise.all([
       loadFrames(`char-squash-${color}-actions`, manifest.assets[`char-squash-${color}-actions`]),
+      loadFrames(`char-squash-${color}-backhand`, manifest.assets[`char-squash-${color}-backhand`]),
       loadFrames(`char-squash-${color}-loops`, manifest.assets[`char-squash-${color}-loops`]),
       loadFrames(`char-squash-${color}-reactions`, manifest.assets[`char-squash-${color}-reactions`]),
     ]);
-    return { actions, loops, reactions };
+    return { actions, backhand, loops, reactions };
   };
 
   const [blueSheets, goldSheets] = await Promise.all([loadSet('blue'), loadSet('gold')]);
   await addCharacter('BLUE ATHLETE · 藍衣選手', '#65e8ff', blueSheets);
   await addCharacter('GOLD ATHLETE · 黃衣選手', '#ffc857', goldSheets);
-  status.textContent = '168 / 168 幀載入完成 · 兩名角色、十六套動作可暫停逐幀檢查';
+  status.textContent = '192 / 192 幀素材載入完成 · 兩名角色、十六套動作可暫停逐幀檢查';
 })();
