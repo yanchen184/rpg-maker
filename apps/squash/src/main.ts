@@ -10,7 +10,15 @@ import {
   TextStyle,
   type Texture,
 } from 'pixi.js';
-import { aiTargetWallX, decideAi, moveAi, type AiLevel } from './ai';
+import {
+  aiServeTarget,
+  clearAiMemory,
+  createAiMemory,
+  decideAi,
+  moveAi,
+  rememberAiDecision,
+  type AiLevel,
+} from './ai';
 import { SquashCharacterAnim, type SquashAction } from './character-anim';
 import {
   BACK_OUT_HEIGHT,
@@ -37,9 +45,9 @@ const DASH_COST = 28;
 const ENERGY_REGEN_PER_SECOND = 20;
 const HIT_REACH = 1.28;
 const HIT_HEIGHT = 1.6;
-const SWING_COOLDOWN_MS = 360;
+const SWING_COOLDOWN_MS = 430;
 const CONTACT_DELAY_MS = (6 / 36) * 1000;
-const POINT_PAUSE_MS = 1450;
+const POINT_PAUSE_MS = 1900;
 const T_X = 0;
 const T_Y = 5.55;
 
@@ -48,6 +56,7 @@ interface PendingHit {
   kind: ShotKind;
   targetX: number;
   quality: number;
+  pace: number;
   fireAt: number;
   serving: boolean;
 }
@@ -79,6 +88,7 @@ const qualityFillEl = document.querySelector<HTMLElement>('#quality-fill')!;
 const qualityLabelEl = document.querySelector<HTMLElement>('#quality-label')!;
 const rallyEl = document.querySelector<HTMLElement>('#rally')!;
 const tControlEl = document.querySelector<HTMLElement>('#t-control')!;
+const strategyFeedEl = document.querySelector<HTMLElement>('#strategy-feed')!;
 const flashEl = document.querySelector<HTMLElement>('#flash')!;
 const loadingEl = document.querySelector<HTMLElement>('#loading')!;
 
@@ -577,6 +587,10 @@ const sfx = new SquashSfx();
 const held = new Set<string>();
 const pendingHits: Partial<Record<PlayerId, PendingHit>> = {};
 const scores: Record<PlayerId, number> = { you: 0, ai: 0 };
+const aiMemories = {
+  you: createAiMemory(),
+  ai: createAiMemory(),
+};
 const impacts: Impact[] = [];
 const trail: TrailPoint[] = [];
 type GameMode = 'play' | 'watch';
@@ -593,6 +607,7 @@ let nextServeAt = 0;
 let matchWinner: PlayerId | null = null;
 let flashTimer = 0;
 let crowdExcitedUntil = 0;
+let lastStrategy = '雙方試探站位';
 
 function playerAnim(id: PlayerId): SquashCharacterAnim {
   return id === 'you' ? humanAnim : aiAnim;
@@ -611,7 +626,7 @@ function resetRally(now: number): void {
   const servingPlayer = players[server];
   ball.reset(servingPlayer.x, servingPlayer.y - 0.25);
   pointPauseUntil = 0;
-  nextServeAt = now + 720;
+  nextServeAt = now + 1050;
   humanAnim.setLocomotion(false, 1);
   aiAnim.setLocomotion(false, -1);
 }
@@ -661,23 +676,29 @@ function shotEnergyCost(kind: ShotKind): number {
   return 0;
 }
 
-function queueHit(id: PlayerId, kind: ShotKind, targetX: number): void {
+function queueHit(
+  id: PlayerId,
+  kind: ShotKind,
+  targetX: number,
+  pace = 1,
+  strategyLabel = '',
+): boolean {
   const now = gameNow;
-  if (matchWinner || pointPauseUntil > now || pendingHits[id]) return;
+  if (matchWinner || pointPauseUntil > now || pendingHits[id]) return false;
   const player = players[id];
-  if (now - player.lastSwingAt < SWING_COOLDOWN_MS) return;
+  if (now - player.lastSwingAt < SWING_COOLDOWN_MS) return false;
   const serving = !ball.active && server === id;
   if (!serving && !canHit(id)) {
     player.lastSwingAt = now;
     playerAnim(id).action('reach', player.facing);
     sfx.hit(kind, 0.2);
-    return;
+    return false;
   }
 
   const cost = shotEnergyCost(kind);
   if (player.energy < cost) {
     if (id === 'you') showFlash('氣力不足');
-    return;
+    return false;
   }
   player.energy -= cost;
   player.lastSwingAt = now;
@@ -695,9 +716,15 @@ function queueHit(id: PlayerId, kind: ShotKind, targetX: number): void {
     kind,
     targetX,
     quality,
+    pace,
     serving,
     fireAt: now + CONTACT_DELAY_MS,
   };
+  if (strategyLabel && gameMode === 'watch') {
+    const side = id === 'you' ? '藍方' : '金方';
+    lastStrategy = `${side} · ${strategyLabel}`;
+  }
+  return true;
 }
 
 function firePendingHits(now: number): void {
@@ -711,6 +738,7 @@ function firePendingHits(now: number): void {
       kind: pending.kind,
       targetX: pending.targetX,
       quality: pending.quality,
+      pace: pending.pace,
     });
     rally += 1;
     sfx.hit(pending.kind, pending.quality);
@@ -801,6 +829,9 @@ function resetMatch(): void {
   server = 'you';
   matchWinner = null;
   lastQuality = 1;
+  lastStrategy = '雙方試探站位';
+  clearAiMemory(aiMemories.you);
+  clearAiMemory(aiMemories.ai);
   resetRally(gameNow);
 }
 
@@ -889,18 +920,46 @@ function updatePlayers(dtSeconds: number, now: number): void {
     if (Math.abs(movement.x) > 0.05) human.facing = Math.sign(movement.x);
     humanAnim.setLocomotion(Math.hypot(movement.x, movement.y) > 0.05, human.facing);
   } else {
-    const blueDecision = decideAi(human, players.ai, ball, 'you', now, aiLevel);
+    const blueDecision = decideAi(
+      human,
+      players.ai,
+      ball,
+      'you',
+      now,
+      aiLevel,
+      aiMemories.you,
+      { rally, selfScore: scores.you, opponentScore: scores.ai },
+    );
     moveAi(human, blueDecision, dtSeconds, aiLevel);
     humanAnim.setLocomotion(Math.hypot(blueDecision.moveX, blueDecision.moveY) > 0.05, human.facing);
-    if (blueDecision.shot) queueHit('you', blueDecision.shot, aiTargetWallX(players.ai, aiLevel));
+    if (
+      blueDecision.shot &&
+      queueHit('you', blueDecision.shot, blueDecision.targetX, blueDecision.pace, blueDecision.label)
+    ) {
+      rememberAiDecision(aiMemories.you, blueDecision);
+    }
   }
   human.energy = clamp(human.energy + ENERGY_REGEN_PER_SECOND * dtSeconds, 0, 100);
 
-  const decision = decideAi(players.ai, human, ball, 'ai', now, aiLevel);
+  const decision = decideAi(
+    players.ai,
+    human,
+    ball,
+    'ai',
+    now,
+    aiLevel,
+    aiMemories.ai,
+    { rally, selfScore: scores.ai, opponentScore: scores.you },
+  );
   moveAi(players.ai, decision, dtSeconds, aiLevel);
   players.ai.energy = clamp(players.ai.energy + ENERGY_REGEN_PER_SECOND * dtSeconds, 0, 100);
   aiAnim.setLocomotion(Math.hypot(decision.moveX, decision.moveY) > 0.05, players.ai.facing);
-  if (decision.shot) queueHit('ai', decision.shot, aiTargetWallX(human, aiLevel));
+  if (
+    decision.shot &&
+    queueHit('ai', decision.shot, decision.targetX, decision.pace, decision.label)
+  ) {
+    rememberAiDecision(aiMemories.ai, decision);
+  }
 
   const separation = distance(human.x, human.y, players.ai.x, players.ai.y);
   if (separation < 0.68 && separation > 0.001) {
@@ -916,7 +975,7 @@ function updatePlayers(dtSeconds: number, now: number): void {
 function updateAiServe(now: number): void {
   const automaticServer = server === 'ai' || gameMode === 'watch';
   if (!automaticServer || ball.active || pendingHits[server] || now < nextServeAt || pointPauseUntil > now) return;
-  queueHit(server, 'drive', aiTargetWallX(players[otherPlayer(server)], aiLevel));
+  queueHit(server, 'drive', aiServeTarget(players[otherPlayer(server)], aiLevel), 0.88, '保守開球');
 }
 
 function updateActorVisual(id: PlayerId): void {
@@ -1137,6 +1196,7 @@ function updateHud(now: number): void {
   const rightTName = gameMode === 'watch' ? '金方' : '對手';
   tControlEl.textContent =
     Math.abs(humanT - aiT) < 0.35 ? 'T 區纏鬥' : humanT < aiT ? `${leftTName}控制 T 區` : `${rightTName}控制 T 區`;
+  strategyFeedEl.textContent = gameMode === 'watch' ? lastStrategy : '觀察三方位置再選球';
   if (pointPauseUntil > 0 && pointPauseUntil <= now && !matchWinner) resetRally(now);
 }
 

@@ -16,6 +16,7 @@ export interface ShotSpec {
   kind: ShotKind;
   targetX: number;
   quality: number;
+  pace?: number;
 }
 
 export const COURT_WIDTH = 6.4;

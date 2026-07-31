@@ -73,6 +73,7 @@ export class SquashBall {
 
   strike(by: PlayerId, spec: ShotSpec): void {
     const quality = clamp(spec.quality, 0.12, 1);
+    const pace = clamp(spec.pace ?? 1, 0.72, 1.12);
     const weak = quality < 0.55;
     const targetX = weak ? spec.targetX * 0.25 : spec.targetX;
     const spread = (1 - quality) * 0.7;
@@ -82,25 +83,29 @@ export class SquashBall {
       COURT_WIDTH * 0.43,
     );
 
-    let frontSpeed = 11.3;
+    let frontSpeed = 9.75;
     let wallHeight = 1.28;
     let lateralBoost = 0;
     if (spec.kind === 'drop') {
-      frontSpeed = 7.2;
+      frontSpeed = 6.25;
       wallHeight = 0.64;
     } else if (spec.kind === 'lob') {
-      frontSpeed = 8.8;
+      frontSpeed = 7.55;
       wallHeight = 3.55;
     } else if (spec.kind === 'boast') {
-      frontSpeed = 8.9;
+      frontSpeed = 7.7;
       wallHeight = 1.12;
-      lateralBoost = this.x >= 0 ? -10.5 : 10.5;
+      lateralBoost = this.x >= 0 ? -9.15 : 9.15;
     }
     if (weak) {
       frontSpeed *= 0.74;
       wallHeight = 1.52;
       lateralBoost *= 0.55;
     }
+    frontSpeed *= pace;
+    lateralBoost *= pace;
+    if (spec.kind === 'lob') wallHeight += (1 - pace) * 0.9;
+    if (spec.kind === 'drop') wallHeight += (pace - 0.72) * 0.18;
 
     const secondsToFront = Math.max(0.16, this.y / frontSpeed);
     this.vy = -frontSpeed;
@@ -114,6 +119,29 @@ export class SquashBall {
     this.frontHit = false;
     this.active = true;
     this.ageSeconds = 0;
+  }
+
+  previewStrike(by: PlayerId, spec: ShotSpec, maxSeconds = 4.5): PredictedBounce | null {
+    const preview = new SquashBall();
+    preview.x = this.x;
+    preview.y = this.y;
+    preview.z = this.z;
+    preview.strike(by, { ...spec, quality: 1 });
+    const dt = 1 / 120;
+    for (let seconds = dt; seconds <= maxSeconds; seconds += dt) {
+      for (const event of preview.update(dt)) {
+        if (event.type === 'fault') return null;
+        if (event.type === 'floor') {
+          return {
+            x: event.x,
+            y: event.y,
+            seconds,
+            bounce: event.bounce,
+          };
+        }
+      }
+    }
+    return null;
   }
 
   update(dtSeconds: number): BallEvent[] {
