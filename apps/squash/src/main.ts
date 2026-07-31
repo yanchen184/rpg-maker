@@ -35,7 +35,7 @@ import {
   type PlayerId,
   type ShotKind,
 } from './game-types';
-import { SquashBall, type BallEvent } from './physics';
+import { SquashBall, type BallEvent, type PredictedBounce } from './physics';
 import { SquashSfx } from './sfx';
 
 void (async () => {
@@ -44,7 +44,7 @@ const DESIGN_HEIGHT = 720;
 const PLAYER_SPEED = 3.85;
 const DASH_SPEED = 7.6;
 const DASH_COST = 28;
-const ENERGY_REGEN_PER_SECOND = 20;
+const ENERGY_REGEN_PER_SECOND = 7.5;
 const HIT_REACH = 1.28;
 const HIT_HEIGHT = 1.6;
 const SWING_COOLDOWN_MS = 430;
@@ -83,10 +83,15 @@ type WallSurface = 'front' | 'side' | 'back';
 interface LandingSample {
   x: number;
   y: number;
+  kind: ShotKind;
+  quality: number;
+  actual: boolean;
 }
 
 interface PlayerMatchStats {
   shots: number;
+  qualityTotal: number;
+  lowQuality: number;
   twoWall: number;
   threeWall: number;
   glass: number;
@@ -100,8 +105,10 @@ interface PlayerMatchStats {
 interface ActiveShot {
   by: PlayerId;
   kind: ShotKind;
+  quality: number;
   walls: WallSurface[];
   landed: boolean;
+  landingIndex: number | null;
 }
 
 interface PointRecord {
@@ -144,8 +151,11 @@ const reportAverageRallyEl = document.querySelector<HTMLElement>('#report-averag
 const reportLongestRallyEl = document.querySelector<HTMLElement>('#report-longest-rally')!;
 const reportServeWinRateEl = document.querySelector<HTMLElement>('#report-serve-win-rate')!;
 const reportShotVarietyEl = document.querySelector<HTMLElement>('#report-shot-variety')!;
+const reportBackCourtRateEl = document.querySelector<HTMLElement>('#report-back-court-rate')!;
+const reportFrontCourtRateEl = document.querySelector<HTMLElement>('#report-front-court-rate')!;
 const reportBalanceNoteEl = document.querySelector<HTMLElement>('#report-balance-note')!;
 const landingMapEl = document.querySelector<HTMLCanvasElement>('#landing-map')!;
+const landingDepthSummaryEl = document.querySelector<HTMLElement>('#landing-depth-summary')!;
 const reportRematchEl = document.querySelector<HTMLButtonElement>('#report-rematch')!;
 const reportExportEl = document.querySelector<HTMLButtonElement>('#report-export')!;
 
@@ -665,6 +675,8 @@ const impacts: Impact[] = [];
 const trail: TrailPoint[] = [];
 const createPlayerMatchStats = (): PlayerMatchStats => ({
   shots: 0,
+  qualityTotal: 0,
+  lowQuality: 0,
   twoWall: 0,
   threeWall: 0,
   glass: 0,
@@ -721,13 +733,30 @@ function finalizeActiveShot(): void {
   activeShot = null;
 }
 
-function beginActiveShot(by: PlayerId, kind: ShotKind, volley: boolean): void {
+function beginActiveShot(
+  by: PlayerId,
+  kind: ShotKind,
+  volley: boolean,
+  quality: number,
+  predictedBounce: PredictedBounce | null,
+): void {
   const stats = matchStats[by];
   stats.shots += 1;
+  stats.qualityTotal += quality;
+  if (quality < 0.55) stats.lowQuality += 1;
   stats.shotKinds[kind] += 1;
   if (kind === 'glass') stats.glass += 1;
   if (volley) stats.volley += 1;
-  activeShot = { by, kind, walls: [], landed: false };
+  const landingIndex = predictedBounce === null
+    ? null
+    : stats.landings.push({
+        x: predictedBounce.x,
+        y: predictedBounce.y,
+        kind,
+        quality,
+        actual: false,
+      }) - 1;
+  activeShot = { by, kind, quality, walls: [], landed: false, landingIndex };
 }
 
 function trackWall(surface: WallSurface): void {
@@ -737,7 +766,23 @@ function trackWall(surface: WallSurface): void {
 function trackFirstLanding(x: number, y: number): void {
   if (!activeShot || activeShot.landed) return;
   activeShot.landed = true;
-  matchStats[activeShot.by].landings.push({ x, y });
+  const landings = matchStats[activeShot.by].landings;
+  const sample = activeShot.landingIndex === null
+    ? null
+    : landings[activeShot.landingIndex];
+  if (sample) {
+    sample.x = x;
+    sample.y = y;
+    sample.actual = true;
+  } else {
+    landings.push({
+      x,
+      y,
+      kind: activeShot.kind,
+      quality: activeShot.quality,
+      actual: true,
+    });
+  }
 }
 
 function constrainServerToServiceBox(now = gameNow): void {
@@ -789,11 +834,16 @@ function spawnImpact(worldX: number, worldY: number, color: number, wall: boolea
 
 function contactQuality(player: CourtPlayer, now: number): number {
   const contactDistance = distance(player.x, player.y, ball.x, ball.y);
-  const reachPenalty = clamp((contactDistance - 0.42) / (HIT_REACH - 0.42), 0, 1) * 0.62;
+  const reachPenalty = clamp((contactDistance - 0.42) / (HIT_REACH - 0.42), 0, 1) * 0.48;
   const heightPenalty = clamp((ball.z - 0.82) / 0.9, 0, 1) * 0.18;
   const dashPenalty = now < player.dashTailUntil ? 0.18 : 0;
-  const fatiguePenalty = clamp((30 - player.energy) / 30, 0, 1) * 0.1;
-  return clamp(1 - reachPenalty - heightPenalty - dashPenalty - fatiguePenalty, 0.12, 1);
+  const fatiguePenalty = clamp((55 - player.energy) / 55, 0, 1) * 0.18;
+  const rallyPressurePenalty = clamp((rally - 8) / 24, 0, 1) * 0.12;
+  return clamp(
+    1 - reachPenalty - heightPenalty - dashPenalty - fatiguePenalty - rallyPressurePenalty,
+    0.12,
+    1,
+  );
 }
 
 function canHit(id: PlayerId): boolean {
@@ -814,11 +864,11 @@ function swingAction(id: PlayerId, quality: number): SquashAction {
 }
 
 function shotEnergyCost(kind: ShotKind): number {
-  if (kind === 'drop') return 12;
-  if (kind === 'lob') return 16;
-  if (kind === 'boast') return 14;
-  if (kind === 'glass') return 18;
-  return 0;
+  if (kind === 'drop') return 10;
+  if (kind === 'lob') return 12;
+  if (kind === 'boast') return 12;
+  if (kind === 'glass') return 15;
+  return 4;
 }
 
 function queueHit(
@@ -857,7 +907,19 @@ function queueHit(
       showFlash('發球：正面牆發球線以上\n第一落點進對角後場', 1250);
     }
   }
-  const quality = serving ? 0.92 : contactQuality(player, now);
+  // The receiver can still attack a well-read serve, but a first contact made
+  // under the serve's side-wall pressure has less control than a neutral rally
+  // ball. The continuous quality model turns that pressure into a shallower,
+  // more scattered return rather than a scripted miss.
+  const serveReturnPenalty = !serving && rally === 1 && ball.lastHitter === server ? 0.35 : 0;
+  const serveInitiativeBonus = !serving && rally === 2 && id === server ? 0.18 : 0;
+  const quality = serving
+    ? 0.92
+    : clamp(
+        contactQuality(player, now) - serveReturnPenalty + serveInitiativeBonus,
+        0.12,
+        1,
+      );
   lastQuality = quality;
   const action =
     resolvedKind === 'glass' ? 'glass' : serving ? 'forehand' : swingAction(id, quality);
@@ -887,15 +949,21 @@ function firePendingHits(now: number): void {
     if (!pending.serving && (!ball.active || ball.lastHitter === id)) continue;
     const volley = ball.active && ball.floorBounces === 0;
     finalizeActiveShot();
-    ball.strike(id, {
+    const shotSpec = {
       kind: pending.kind,
       targetX: pending.targetX,
       quality: pending.quality,
       pace: pending.pace,
       serving: pending.serving,
       serveSide: pending.serving ? serveSide : undefined,
-    });
-    if (!pending.serving) beginActiveShot(id, pending.kind, volley);
+    };
+    const predictedBounce = pending.serving
+      ? null
+      : ball.previewStrike(id, shotSpec);
+    ball.strike(id, shotSpec);
+    if (!pending.serving) {
+      beginActiveShot(id, pending.kind, volley, pending.quality, predictedBounce);
+    }
     rally += 1;
     sfx.hit(pending.kind, pending.quality);
     spawnImpact(ball.x, ball.y, pending.quality < 0.55 ? 0xff7a59 : 0x9fffe2, false);
@@ -1008,12 +1076,19 @@ function populatePlayerStats(id: PlayerId): void {
   const stats = matchStats[id];
   const values: Record<string, number> = {
     shots: stats.shots,
+    'average-quality': stats.shots ? Math.round((stats.qualityTotal / stats.shots) * 100) : 0,
+    'low-quality': stats.lowQuality,
     'two-wall': stats.twoWall,
     'three-wall': stats.threeWall,
     glass: stats.glass,
     volley: stats.volley,
     'direct-front': stats.directFront,
     'side-front': stats.sideFront,
+    'kind-drive': stats.shotKinds.drive,
+    'kind-drop': stats.shotKinds.drop,
+    'kind-lob': stats.shotKinds.lob,
+    'kind-boast': stats.shotKinds.boast,
+    'kind-glass': stats.shotKinds.glass,
   };
   for (const [key, value] of Object.entries(values)) {
     const target = card.querySelector<HTMLElement>(`[data-stat="${key}"]`);
@@ -1024,9 +1099,20 @@ function populatePlayerStats(id: PlayerId): void {
 function drawLandingMap(): void {
   const context = landingMapEl.getContext('2d');
   if (!context) return;
-  const width = landingMapEl.width;
-  const height = landingMapEl.height;
-  const court = { x: 132, y: 18, width: 296, height: 304 };
+  const cssWidth = Math.max(280, landingMapEl.clientWidth || 560);
+  const cssHeight = Math.round(cssWidth * (340 / 560));
+  const density = Math.min(2.5, Math.max(1, window.devicePixelRatio || 1));
+  landingMapEl.width = Math.round(cssWidth * density);
+  landingMapEl.height = Math.round(cssHeight * density);
+  const width = cssWidth;
+  const height = cssHeight;
+  context.setTransform(density, 0, 0, density, 0, 0);
+  const court = {
+    x: width * 0.17,
+    y: 22,
+    width: width * 0.66,
+    height: height - 42,
+  };
   const mapX = (x: number): number =>
     court.x + ((x + COURT_WIDTH / 2) / COURT_WIDTH) * court.width;
   const mapY = (y: number): number =>
@@ -1041,6 +1127,17 @@ function drawLandingMap(): void {
 
   context.fillStyle = '#153c45';
   context.fillRect(court.x, court.y, court.width, court.height);
+  context.fillStyle = '#173b42';
+  context.fillRect(court.x, court.y, court.width, mapY(3.05) - court.y);
+  context.fillStyle = '#17454a';
+  context.fillRect(court.x, mapY(3.05), court.width, mapY(SHORT_LINE_Y) - mapY(3.05));
+  context.fillStyle = '#1c5253';
+  context.fillRect(
+    court.x,
+    mapY(SHORT_LINE_Y),
+    court.width,
+    court.y + court.height - mapY(SHORT_LINE_Y),
+  );
   context.strokeStyle = '#d7fbff';
   context.lineWidth = 2;
   context.strokeRect(court.x, court.y, court.width, court.height);
@@ -1054,11 +1151,19 @@ function drawLandingMap(): void {
   context.lineWidth = 1.5;
   context.stroke();
 
-  context.font = '700 10px monospace';
+  context.font = '800 11px system-ui';
   context.textAlign = 'center';
-  context.fillStyle = '#81a8af';
-  context.fillText('正面牆', court.x + court.width / 2, 12);
-  context.fillText('後方玻璃', court.x + court.width / 2, height - 5);
+  context.fillStyle = '#b8dce1';
+  context.fillText('正面牆・前場', court.x + court.width / 2, 14);
+  context.fillText('後場・後方玻璃', court.x + court.width / 2, height - 5);
+  context.save();
+  context.textAlign = 'left';
+  context.fillStyle = '#8fb5b9';
+  context.font = '800 9px system-ui';
+  context.fillText('前場', court.x + 5, mapY(1.5));
+  context.fillText('中場', court.x + 5, mapY(4.2));
+  context.fillText('後場', court.x + 5, mapY(7.5));
+  context.restore();
 
   const sets = [
     { points: matchStats.you.landings, color: '#65e8ff' },
@@ -1069,24 +1174,24 @@ function drawLandingMap(): void {
     for (const point of set.points) {
       const x = mapX(point.x);
       const y = mapY(point.y);
-      const halo = context.createRadialGradient(x, y, 1, x, y, 20);
+      const halo = context.createRadialGradient(x, y, 1, x, y, 16);
       halo.addColorStop(0, `${set.color}8f`);
       halo.addColorStop(0.35, `${set.color}42`);
       halo.addColorStop(1, `${set.color}00`);
       context.fillStyle = halo;
       context.beginPath();
-      context.arc(x, y, 20, 0, Math.PI * 2);
+      context.arc(x, y, 16, 0, Math.PI * 2);
       context.fill();
     }
   }
   context.globalCompositeOperation = 'source-over';
   for (const set of sets) {
     for (const point of set.points) {
-      context.fillStyle = set.color;
-      context.strokeStyle = '#031015';
-      context.lineWidth = 1.5;
+      context.fillStyle = point.actual ? set.color : '#0a2931';
+      context.strokeStyle = point.actual ? '#031015' : set.color;
+      context.lineWidth = point.actual ? 1.5 : 2.5;
       context.beginPath();
-      context.arc(mapX(point.x), mapY(point.y), 4.2, 0, Math.PI * 2);
+      context.arc(mapX(point.x), mapY(point.y), 5, 0, Math.PI * 2);
       context.fill();
       context.stroke();
     }
@@ -1138,6 +1243,37 @@ function renderMatchRhythm(): void {
   const longestRally = Math.max(0, ...pointRecords.map((point) => point.rally));
   const serveWins = pointRecords.filter((point) => point.winner === point.server).length;
   const serveWinRate = pointRecords.length ? (serveWins / pointRecords.length) * 100 : 0;
+  const landings = [...matchStats.you.landings, ...matchStats.ai.landings];
+  const backCourtLandings = landings.filter((point) => point.y >= SHORT_LINE_Y).length;
+  const frontCourtLandings = landings.filter((point) => point.y <= 3.05).length;
+  const backCourtRate = landings.length ? (backCourtLandings / landings.length) * 100 : 0;
+  const frontCourtRate = landings.length ? (frontCourtLandings / landings.length) * 100 : 0;
+  const depthByKind = new Map<ShotKind, number[]>();
+  for (const landing of landings) {
+    const depths = depthByKind.get(landing.kind) ?? [];
+    depths.push(landing.y);
+    depthByKind.set(landing.kind, depths);
+  }
+  const averageDepth = (kind: ShotKind): number | null => {
+    const depths = depthByKind.get(kind);
+    return depths?.length
+      ? depths.reduce((sum, depth) => sum + depth, 0) / depths.length
+      : null;
+  };
+  const kindLabels: Record<ShotKind, string> = {
+    drive: '平抽',
+    drop: '小球',
+    lob: '高吊',
+    boast: '側牆',
+    glass: '玻璃',
+  };
+  landingDepthSummaryEl.replaceChildren();
+  for (const kind of ['drive', 'drop', 'lob', 'boast', 'glass'] as const) {
+    const item = document.createElement('span');
+    const depth = averageDepth(kind);
+    item.textContent = `${kindLabels[kind]} ${depth === null ? '—' : `${depth.toFixed(1)}m`}`;
+    landingDepthSummaryEl.appendChild(item);
+  }
   const kinds = new Set<ShotKind>();
   for (const id of ['you', 'ai'] as const) {
     for (const [kind, count] of Object.entries(matchStats[id].shotKinds) as [ShotKind, number][]) {
@@ -1149,14 +1285,48 @@ function renderMatchRhythm(): void {
   reportLongestRallyEl.textContent = `${longestRally}`;
   reportServeWinRateEl.textContent = `${Math.round(serveWinRate)}%`;
   reportShotVarietyEl.textContent = `${kinds.size} / 5`;
+  reportBackCourtRateEl.textContent = `${Math.round(backCourtRate)}%`;
+  reportFrontCourtRateEl.textContent = `${Math.round(frontCourtRate)}%`;
 
   const notes: string[] = [];
-  if (averageRally < 2.6) notes.push('回合偏短：接發與攔截仍需放寬');
-  if (serveWinRate < 20 || serveWinRate > 80) notes.push('發球優勢失衡');
+  if (averageRally < 5) notes.push('平均回合偏短');
+  if (longestRally < 10) notes.push('缺少長回合');
+  if (averageRally > 11) notes.push('平均回合過長');
+  if (serveWinRate < 52 || serveWinRate > 68) notes.push('發球優勢失衡');
   if (kinds.size < 4) notes.push('球路變化不足');
+  if (backCourtRate < 35 || backCourtRate > 72) notes.push('後場落點比例失衡');
+  if (frontCourtRate < 18 || frontCourtRate > 55) notes.push('前場落點比例失衡');
+  const driveDepth = averageDepth('drive');
+  const dropDepth = averageDepth('drop');
+  const lobDepth = averageDepth('lob');
+  const boastDepth = averageDepth('boast');
+  const glassDepth = averageDepth('glass');
+  if (driveDepth !== null && driveDepth < 5.4) notes.push('平抽落點過淺');
+  if (lobDepth !== null && lobDepth < 6.4) notes.push('高吊落點過淺');
+  if (dropDepth !== null && dropDepth > 2.2) notes.push('小球落點過深');
+  if (boastDepth !== null && (boastDepth < 2.7 || boastDepth > 5.2)) {
+    notes.push('側牆落點失衡');
+  }
+  if (glassDepth !== null && glassDepth > 3.1) notes.push('後玻璃落點過深');
   const totalShots = matchStats.you.shots + matchStats.ai.shots;
   const glassShots = matchStats.you.glass + matchStats.ai.glass;
-  if (totalShots && glassShots / totalShots > 0.32) notes.push('後玻璃使用率過高');
+  const lowQualityShots = matchStats.you.lowQuality + matchStats.ai.lowQuality;
+  const dropShots = matchStats.you.shotKinds.drop + matchStats.ai.shotKinds.drop;
+  const boastShots = matchStats.you.shotKinds.boast + matchStats.ai.shotKinds.boast;
+  const lengthShots =
+    matchStats.you.shotKinds.drive +
+    matchStats.ai.shotKinds.drive +
+    matchStats.you.shotKinds.lob +
+    matchStats.ai.shotKinds.lob;
+  if (totalShots && glassShots / totalShots > 0.18) notes.push('後玻璃使用率過高');
+  if (totalShots && dropShots / totalShots > 0.3) notes.push('小球使用率過高');
+  if (totalShots && boastShots / totalShots < 0.06) notes.push('側牆球使用率過低');
+  if (totalShots && lengthShots / totalShots < 0.45) notes.push('深球使用率過低');
+  if (totalShots && lowQualityShots / totalShots > 0.3) notes.push('勉強回球比例過高');
+  const tinFaults = pointRecords.filter((point) => point.reason === '下界板').length;
+  if (pointRecords.length && tinFaults / pointRecords.length > 0.25) {
+    notes.push('下界板失分比例過高');
+  }
   reportBalanceNoteEl.textContent = notes.length
     ? `平衡觀察｜${notes.join(' · ')}`
     : '平衡觀察｜節奏、發球權與球路多樣性落在健康區間';
@@ -1174,13 +1344,15 @@ function renderPointLog(): void {
     winner.className = point.winner === 'you' ? 'point-blue' : 'point-gold';
     const loser = document.createElement('td');
     loser.textContent = reportPlayerName(point.loser);
+    const servingPlayer = document.createElement('td');
+    servingPlayer.textContent = reportPlayerName(point.server);
     const reason = document.createElement('td');
     reason.textContent = point.reason === '第二次落地'
       ? '未能在第二次落地前回擊'
       : point.reason;
     const rallyCount = document.createElement('td');
     rallyCount.textContent = `${point.rally}`;
-    row.append(number, winner, loser, reason, rallyCount);
+    row.append(number, servingPlayer, winner, loser, reason, rallyCount);
     pointLogBodyEl.appendChild(row);
   }
 }
@@ -1226,6 +1398,18 @@ function exportMatchData(): void {
       serveWinRate: pointRecords.length
         ? pointRecords.filter((point) => point.winner === point.server).length / pointRecords.length
         : 0,
+      backCourtLandingRate: (() => {
+        const landings = [...matchStats.you.landings, ...matchStats.ai.landings];
+        return landings.length
+          ? landings.filter((point) => point.y >= SHORT_LINE_Y).length / landings.length
+          : 0;
+      })(),
+      frontCourtLandingRate: (() => {
+        const landings = [...matchStats.you.landings, ...matchStats.ai.landings];
+        return landings.length
+          ? landings.filter((point) => point.y <= 3.05).length / landings.length
+          : 0;
+      })(),
     },
     points: pointRecords,
   };

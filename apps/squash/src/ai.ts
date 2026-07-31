@@ -15,6 +15,7 @@ export type AiIntent = 'probe' | 'pressure' | 'defend' | 'finish' | 'change';
 export interface AiDecision {
   moveX: number;
   moveY: number;
+  speedScale: number;
   shot: ShotKind | null;
   targetX: number;
   pace: number;
@@ -57,7 +58,7 @@ const T_Y = 5.55;
 
 const AI_TUNING: Record<AiLevel, AiTuning> = {
   easy: { speed: 3.25, reach: 1.08, reactionMs: 610, predictionError: 0.44 },
-  normal: { speed: 4.05, reach: 1.28, reactionMs: 440, predictionError: 0.2 },
+  normal: { speed: 4.1, reach: 1.28, reactionMs: 420, predictionError: 0.2 },
   hard: { speed: 4.45, reach: 1.3, reactionMs: 410, predictionError: 0.08 },
 };
 
@@ -125,6 +126,7 @@ function planShot(
   const previousShot = memory.recentShots.at(-1);
   const previousTarget = memory.recentTargets.at(-1) ?? 0;
   const ownRecoveryCost = distance(self.x, self.y, T_X, T_Y);
+  const lowBallPressure = clamp((0.55 - ball.z) / 0.42, 0, 1);
   const noise = tuning.predictionError * 2.4;
   let best: { candidate: ShotCandidate; score: number } | null = null;
 
@@ -150,26 +152,33 @@ function planShot(
       recentUses * 1.1 +
       (sideChange ? 0.7 : -0.25);
 
-    if (opponentDeep && candidate.shot === 'drop') score += 5.1;
+    if (candidate.shot === 'drop') score += opponentDeep ? 0.2 : -1.5;
     if (opponentForward && candidate.shot === 'lob') score += 4.1;
-    if (opponentForward && candidate.shot === 'glass') score += 2.4;
-    if (candidate.shot === 'glass') score += opponentForward ? 2.2 : 0.8;
+    if (candidate.shot === 'glass') score += opponentForward ? 1.8 : -1.8;
     if (opponentOffT && candidate.intent === 'pressure') score += 2.8;
-    if (context.rally < 4 && candidate.shot === 'drive') score += 1.6;
-    if (lateRally && ['drop', 'boast'].includes(candidate.shot)) score += 4.1;
+    if (candidate.shot === 'drive') score += 4.7;
+    if (candidate.shot === 'lob') score += 3.7;
+    if (lowBallPressure > 0) {
+      if (candidate.shot === 'drive') score -= lowBallPressure * 5.2;
+      if (candidate.shot === 'lob') score += lowBallPressure * 2.1;
+    }
+    if (lateRally && candidate.shot === 'boast') score += 4.5;
     if (lateRally && candidate.shot === 'lob') score -= 1.15;
+    if (context.rally >= 8 && candidate.intent === 'finish') score += 1.2;
+    if (context.rally >= 8 && candidate.intent === 'pressure') score += 1.4;
     if (underScorePressure && ['drive', 'lob'].includes(candidate.shot)) score += 1.15;
     if (stretched) {
       score += candidate.safety * 4;
       if (['drop', 'boast'].includes(candidate.shot)) score -= 4.8;
       if (candidate.shot === 'lob') score += 2.5;
-      if (candidate.shot === 'glass') score += 3.2;
+      if (candidate.shot === 'glass') score += 2;
     }
     if (previousShot === candidate.shot) score -= 1.5;
-    if (lateRally && freshTactic && candidate.shot === 'drop') score += 1.8;
+    if (lateRally && freshTactic && candidate.shot === 'drop') score += 0.3;
+    if (lateRally && freshTactic && candidate.shot === 'boast') score += 2.5;
     // Legal low contacts should visibly surface this rare tactic at least
     // once in a typical match. The rolling memory removes this bonus after use.
-    if (freshTactic && candidate.shot === 'glass') score += 9;
+    if (freshTactic && candidate.shot === 'glass') score += 3;
     score += (Math.random() * 2 - 1) * noise;
 
     if (!best || score > best.score) best = { candidate, score };
@@ -192,7 +201,11 @@ function planShot(
             : '保守解圍',
     };
   }
-  return selected;
+  const closingPace =
+    context.rally >= 5 && ['finish', 'pressure'].includes(selected.intent)
+      ? clamp((context.rally - 4) * 0.035, 0, 0.18)
+      : 0;
+  return { ...selected, pace: Math.min(1.12, selected.pace + closingPace) };
 }
 
 export function decideAi(
@@ -220,12 +233,22 @@ export function decideAi(
       COURT_LENGTH - 0.45,
     );
     const close = distance(self.x, self.y, ball.x, ball.y);
+    const nextBounce = ball.predictNextBounce();
+    const contactIsUrgent =
+      nextBounce !== null &&
+      nextBounce.seconds <= (ball.floorBounces === 0 ? 0.24 : 0.34);
+    const rallyReachScale = clamp(1 - Math.max(0, context.rally - 4) * 0.05, 0.58, 1);
+    const preferredContactReach =
+      (contactIsUrgent ? tuning.reach : tuning.reach * 0.62) * rallyReachScale;
+    const fatigueReaction =
+      clamp((50 - self.energy) / 50, 0, 1) * 170 +
+      clamp((context.rally - 4) * 24, 0, 260);
     if (
-      close <= tuning.reach &&
+      close <= preferredContactReach &&
       ball.z <= 1.55 &&
       ball.floorBounces <= 1 &&
-      ball.ageSeconds >= tuning.reactionMs / 1000 &&
-      now - self.lastSwingAt >= tuning.reactionMs
+      ball.ageSeconds >= (tuning.reactionMs + fatigueReaction) / 1000 &&
+      now - self.lastSwingAt >= tuning.reactionMs + fatigueReaction
     ) {
       plan = planShot(self, opponent, ball, close, tuning, memory, context);
     }
@@ -237,6 +260,7 @@ export function decideAi(
   return {
     moveX: length > 0.08 ? deltaX / length : 0,
     moveY: length > 0.08 ? deltaY / length : 0,
+    speedScale: clamp(1 - Math.max(0, context.rally - 4) * 0.07, 0.4, 1),
     shot: plan?.shot ?? null,
     targetX: plan?.targetX ?? 0,
     pace: plan?.pace ?? 1,
@@ -251,7 +275,7 @@ export function moveAi(
   dtSeconds: number,
   level: AiLevel,
 ): void {
-  const speed = AI_TUNING[level].speed;
+  const speed = AI_TUNING[level].speed * decision.speedScale;
   player.x = clamp(
     player.x + decision.moveX * speed * dtSeconds,
     -COURT_WIDTH / 2 + 0.38,

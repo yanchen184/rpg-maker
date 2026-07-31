@@ -90,9 +90,15 @@ export class SquashBall {
     );
 
     if (spec.serving && spec.serveSide) {
-      const frontSpeed = 13;
-      const desiredBounceX = -spec.serveSide * 2.08;
-      const desiredBounceY = 7.25;
+      // A serve is deliberately a little firmer than a neutral drive. This
+      // creates a real, engine-level initiative for the server without making
+      // the receiver artificially miss.
+      const frontSpeed = 14;
+      // Aim through the receiver's back quarter and closer to the side wall.
+      // A legal serve should begin the positional contest, not arrive as a
+      // neutral ball directly beside the receiver.
+      const desiredBounceX = -spec.serveSide * 2.48;
+      const desiredBounceY = 7.55;
       const secondsToFront = this.y / frontSpeed;
       const secondsFrontToBounce = desiredBounceY / (frontSpeed * WALL_RESTITUTION);
       const secondsToBounce = secondsToFront + secondsFrontToBounce;
@@ -143,37 +149,73 @@ export class SquashBall {
       return;
     }
 
-    let frontSpeed = 9.75;
-    let wallHeight = 1.28;
+    let frontSpeed = 13.3;
+    let desiredBounceY = 6.8;
+    let shallowBounceY = 2.9;
     let lateralBoost = 0;
     if (spec.kind === 'drop') {
-      frontSpeed = 6.25;
-      wallHeight = 0.64;
+      frontSpeed = 7.75;
+      desiredBounceY = 1.3;
+      shallowBounceY = 1.8;
     } else if (spec.kind === 'lob') {
-      frontSpeed = 7.55;
-      wallHeight = 3.55;
+      frontSpeed = 15.1;
+      desiredBounceY = 8.25;
+      shallowBounceY = 3.2;
     } else if (spec.kind === 'boast') {
-      frontSpeed = 7.7;
-      wallHeight = 1.12;
+      frontSpeed = 10.2;
+      desiredBounceY = 4.25;
+      shallowBounceY = 2.2;
       lateralBoost = this.x >= 0 ? -9.15 : 9.15;
     }
-    if (weak) {
-      frontSpeed *= 0.74;
-      wallHeight = 1.52;
-      lateralBoost *= 0.55;
-    }
+    const depthRetention = clamp((quality - 0.15) / 0.42, 0, 1);
+    desiredBounceY =
+      shallowBounceY + (desiredBounceY - shallowBounceY) * depthRetention;
+    frontSpeed *= 0.86 + depthRetention * 0.14;
+    lateralBoost *= 0.65 + depthRetention * 0.35;
     frontSpeed *= pace;
     lateralBoost *= pace;
-    if (spec.kind === 'lob') wallHeight += (1 - pace) * 0.9;
-    if (spec.kind === 'drop') wallHeight += (pace - 0.72) * 0.18;
 
     const secondsToFront = Math.max(0.16, this.y / frontSpeed);
+    const secondsFrontToBounce =
+      desiredBounceY / (frontSpeed * WALL_RESTITUTION);
+    const secondsToBounce = secondsToFront + secondsFrontToBounce;
     this.vy = -frontSpeed;
     this.vx =
       spec.kind === 'boast'
         ? lateralBoost
         : (randomizedTarget - this.x) / secondsToFront;
-    this.vz = (wallHeight - this.z + 0.5 * GRAVITY * secondsToFront ** 2) / secondsToFront;
+    // Solve the vertical launch speed from the intended first-bounce depth.
+    // This keeps length drives and lobs deep while preserving genuinely short
+    // drops; contact quality can still force any shot into the shallow zone.
+    this.vz =
+      (-this.z + 0.5 * GRAVITY * secondsToBounce ** 2) /
+      secondsToBounce;
+    if (spec.kind === 'drive') {
+      // Drives trade clearance for pace. Poor contact and an aggressive pace
+      // both raise the chance of clipping the tin. Trying to drive a ball below
+      // roughly knee height is the dominant risk; a lob remains the safer
+      // tactical answer. Solve the miss as a real trajectory so the normal
+      // wall-fault engine and match log handle it.
+      const lowBallPressure = clamp((0.55 - this.z) / 0.42, 0, 1);
+      const tinRisk = clamp(
+        0.015 +
+          (1 - quality) * 0.07 +
+          Math.max(0, pace - 0.9) * 0.06 +
+          lowBallPressure * 0.12,
+        0.02,
+        0.18,
+      );
+      if (Math.random() < tinRisk) {
+        const tinImpactHeight = TIN_HEIGHT - 0.04 - Math.random() * 0.07;
+        this.vz =
+          (
+            tinImpactHeight -
+            this.z +
+            0.5 * GRAVITY * secondsToFront ** 2
+          ) /
+          secondsToFront;
+      }
+    }
     this.lastHitter = by;
     this.floorBounces = 0;
     this.frontHit = false;
@@ -186,7 +228,7 @@ export class SquashBall {
     preview.x = this.x;
     preview.y = this.y;
     preview.z = this.z;
-    preview.strike(by, { ...spec, quality: 1 });
+    preview.strike(by, spec);
     const dt = 1 / 120;
     for (let seconds = dt; seconds <= maxSeconds; seconds += dt) {
       for (const event of preview.update(dt)) {
