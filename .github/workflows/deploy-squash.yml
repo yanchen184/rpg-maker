@@ -116,6 +116,13 @@ jobs:
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/squash/domains/squash.yanchen.app")
           zone_tag=$(printf '%s' "$domain" | jq -er '.result.zone_tag')
+          project=$(curl -fsS \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/squash")
+          pages_host=$(printf '%s' "$project" | jq -er '.result.subdomain')
+          payload=$(jq -cn --arg content "$pages_host" \
+            '{type:"CNAME",name:"squash.yanchen.app",content:$content,proxied:false}')
+          echo "Pages project hostname: $pages_host"
 
           records=$(curl -fsS \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
@@ -126,7 +133,7 @@ jobs:
             curl -fsS \
               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               -H "Content-Type: application/json" \
-              --data '{"type":"CNAME","name":"squash.yanchen.app","content":"squash.pages.dev","proxied":false}' \
+              --data "$payload" \
               "https://api.cloudflare.com/client/v4/zones/${zone_tag}/dns_records" \
               | tee /tmp/squash-dns-create.json
             jq -e '.success == true' /tmp/squash-dns-create.json >/dev/null
@@ -134,11 +141,11 @@ jobs:
             record_id=$(printf '%s' "$records" | jq -er '.result[0].id')
             content=$(printf '%s' "$records" | jq -er '.result[0].content')
             proxied=$(printf '%s' "$records" | jq -r '.result[0].proxied')
-            if [ "$content" != "squash.pages.dev" ] || [ "$proxied" != "false" ]; then
+            if [ "$content" != "$pages_host" ] || [ "$proxied" != "false" ]; then
               curl -fsS -X PATCH \
                 -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
                 -H "Content-Type: application/json" \
-                --data '{"type":"CNAME","name":"squash.yanchen.app","content":"squash.pages.dev","proxied":false}' \
+                --data "$payload" \
                 "https://api.cloudflare.com/client/v4/zones/${zone_tag}/dns_records/${record_id}" \
                 | tee /tmp/squash-dns-update.json
               jq -e '.success == true' /tmp/squash-dns-update.json >/dev/null
