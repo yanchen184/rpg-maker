@@ -483,19 +483,23 @@ drawCourt();
 const [
   blueActionFrames,
   blueBackhandFrames,
+  blueGlassFrames,
   blueLoopFrames,
   blueReactionFrames,
   goldActionFrames,
   goldBackhandFrames,
+  goldGlassFrames,
   goldLoopFrames,
   goldReactionFrames,
 ] = await Promise.all([
   loadFrames('char-squash-blue-actions', manifest.assets['char-squash-blue-actions']),
   loadFrames('char-squash-blue-backhand', manifest.assets['char-squash-blue-backhand']),
+  loadFrames('char-squash-blue-glass', manifest.assets['char-squash-blue-glass']),
   loadFrames('char-squash-blue-loops', manifest.assets['char-squash-blue-loops']),
   loadFrames('char-squash-blue-reactions', manifest.assets['char-squash-blue-reactions']),
   loadFrames('char-squash-gold-actions', manifest.assets['char-squash-gold-actions']),
   loadFrames('char-squash-gold-backhand', manifest.assets['char-squash-gold-backhand']),
+  loadFrames('char-squash-gold-glass', manifest.assets['char-squash-gold-glass']),
   loadFrames('char-squash-gold-loops', manifest.assets['char-squash-gold-loops']),
   loadFrames('char-squash-gold-reactions', manifest.assets['char-squash-gold-reactions']),
 ]);
@@ -503,12 +507,14 @@ const [
 const blueAnimationAssets = {
   actions: blueActionFrames,
   backhand: blueBackhandFrames,
+  glass: blueGlassFrames,
   rearLoops: blueLoopFrames,
   reactions: blueReactionFrames,
 };
 const goldAnimationAssets = {
   actions: goldActionFrames,
   backhand: goldBackhandFrames,
+  glass: goldGlassFrames,
   rearLoops: goldLoopFrames,
   reactions: goldReactionFrames,
 };
@@ -702,7 +708,8 @@ function queueHit(
     return false;
   }
 
-  const cost = shotEnergyCost(kind);
+  const resolvedKind: ShotKind = serving ? 'drive' : kind;
+  const cost = shotEnergyCost(resolvedKind);
   if (player.energy < cost) {
     if (id === 'you') showFlash('氣力不足');
     return false;
@@ -716,11 +723,12 @@ function queueHit(
   }
   const quality = serving ? 0.92 : contactQuality(player, now);
   lastQuality = quality;
-  const action = serving ? 'forehand' : swingAction(id, quality);
+  const action =
+    resolvedKind === 'glass' ? 'glass' : serving ? 'forehand' : swingAction(id, quality);
   playerAnim(id).action(action, player.facing);
   pendingHits[id] = {
     by: id,
-    kind,
+    kind: resolvedKind,
     targetX,
     quality,
     pace,

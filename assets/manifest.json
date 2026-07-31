@@ -720,6 +720,12 @@
       "fps": 36,
       "kind": "character-layer"
     },
+    "char-squash-blue-glass": {
+      "sheet": "sheets/char-squash-blue-glass_sheet.png",
+      "grid": [4, 3],
+      "fps": 36,
+      "kind": "character-layer"
+    },
     "char-squash-blue-loops": {
       "sheet": "sheets/char-squash-blue-loops_sheet.png",
       "grid": [6, 4],
@@ -740,6 +746,12 @@
     },
     "char-squash-gold-backhand": {
       "sheet": "sheets/char-squash-gold-backhand_sheet.png",
+      "grid": [4, 3],
+      "fps": 36,
+      "kind": "character-layer"
+    },
+    "char-squash-gold-glass": {
+      "sheet": "sheets/char-squash-gold-glass_sheet.png",
       "grid": [4, 3],
       "fps": 36,
       "kind": "character-layer"

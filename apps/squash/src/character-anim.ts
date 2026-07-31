@@ -3,6 +3,7 @@ import { AnimatedSprite, Container, Graphics, type Texture } from 'pixi.js';
 export type SquashAction =
   | 'forehand'
   | 'backhand'
+  | 'glass'
   | 'reach'
   | 'celebrate'
   | 'dejected'
@@ -12,6 +13,7 @@ export type SquashAction =
 interface SquashAnimationAssets {
   actions: Texture[];
   backhand: Texture[];
+  glass: Texture[];
   rearLoops: Texture[];
   reactions: Texture[];
 }
@@ -19,6 +21,7 @@ interface SquashAnimationAssets {
 const ACTION_FPS: Record<SquashAction, number> = {
   forehand: 36,
   backhand: 36,
+  glass: 36,
   reach: 30,
   celebrate: 24,
   dejected: 18,
@@ -29,6 +32,7 @@ const ACTION_FPS: Record<SquashAction, number> = {
 const CONTACT_FRAME: Record<SquashAction, number> = {
   forehand: 6,
   backhand: 6,
+  glass: 6,
   reach: 6,
   celebrate: 0,
   dejected: 0,
@@ -109,6 +113,7 @@ export class SquashCharacterAnim {
   private framesFor(kind: SquashAction): Texture[] {
     if (kind === 'forehand') return this.assets.actions.slice(0, 12);
     if (kind === 'backhand') return this.assets.backhand;
+    if (kind === 'glass') return this.assets.glass;
     if (kind === 'reach') return this.assets.actions.slice(24, 36);
     if (kind === 'celebrate') return this.assets.reactions.slice(0, 12);
     if (kind === 'dejected') return this.assets.reactions.slice(12, 24);
@@ -139,7 +144,13 @@ export class SquashCharacterAnim {
 
   private shouldMirror(kind: SquashAction, facing: number): boolean {
     if (kind === 'glance') return false;
-    if (kind === 'forehand' || kind === 'backhand' || kind === 'reach' || kind === 'splitstep') {
+    if (
+      kind === 'forehand' ||
+      kind === 'backhand' ||
+      kind === 'glass' ||
+      kind === 'reach' ||
+      kind === 'splitstep'
+    ) {
       return false;
     }
     return facing < 0;
