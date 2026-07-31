@@ -57,7 +57,7 @@ const T_Y = 5.55;
 
 const AI_TUNING: Record<AiLevel, AiTuning> = {
   easy: { speed: 3.25, reach: 1.08, reactionMs: 610, predictionError: 0.44 },
-  normal: { speed: 3.9, reach: 1.22, reactionMs: 500, predictionError: 0.2 },
+  normal: { speed: 4.05, reach: 1.28, reactionMs: 440, predictionError: 0.2 },
   hard: { speed: 4.45, reach: 1.3, reactionMs: 410, predictionError: 0.08 },
 };
 
@@ -88,10 +88,12 @@ function planShot(
   context: AiMatchContext,
 ): ShotPlan {
   const stretched = close > tuning.reach * 0.9 || self.energy < 18;
-  const opponentDeep = opponent.y > 6.45;
-  const opponentForward = opponent.y < 4.35;
+  const opponentDeep = opponent.y > 5.75;
+  const opponentForward = opponent.y < 4.85;
   const opponentOffT = distance(opponent.x, opponent.y, T_X, T_Y) > 1.55;
-  const lateRally = context.rally >= 7;
+  // A typical arcade rally reaches its tactical middle game on the third
+  // strike. The old seven-strike gate never activated in real match data.
+  const lateRally = context.rally >= 3;
   const underScorePressure = context.selfScore + 2 <= context.opponentScore;
   const left = -1;
   const right = 1;
@@ -107,7 +109,10 @@ function planShot(
     { shot: 'lob', targetX: right * 2.42, pace: 0.76, intent: 'change', label: '右後高吊', safety: 1 },
     { shot: 'boast', targetX: -ownSide * 1.25, pace: 0.88, intent: 'change', label: '側牆變線', safety: 0.58 },
   ];
-  if (self.y > 5.4 && ball.y > 5.7) {
+  // The rear-glass escape is a mid/back-court tool, not a default return.
+  // Requiring both player and ball to be behind the front zone prevents every
+  // serve return from becoming the same three-wall pattern.
+  if (self.y > 3.8 && ball.y > 3.8) {
     candidates.push({
       shot: 'glass',
       targetX: clamp(-opponent.x * 0.35, -1.2, 1.2),
@@ -136,6 +141,7 @@ function planShot(
     const cornerPressure = Math.abs(bounce.x) * 0.42 + Math.abs(bounce.y - T_Y) * 0.24;
     const sideChange = Math.sign(candidate.targetX) !== Math.sign(previousTarget || candidate.targetX);
     const recentUses = memory.recentShots.filter((shot) => shot === candidate.shot).length;
+    const freshTactic = recentUses === 0;
     let score =
       opponentTravel * 1.65 +
       cornerPressure +
@@ -144,22 +150,26 @@ function planShot(
       recentUses * 1.1 +
       (sideChange ? 0.7 : -0.25);
 
-    if (opponentDeep && candidate.shot === 'drop') score += 4.2;
+    if (opponentDeep && candidate.shot === 'drop') score += 5.1;
     if (opponentForward && candidate.shot === 'lob') score += 4.1;
     if (opponentForward && candidate.shot === 'glass') score += 2.4;
-    if (candidate.shot === 'glass') score += 6.2;
+    if (candidate.shot === 'glass') score += opponentForward ? 2.2 : 0.8;
     if (opponentOffT && candidate.intent === 'pressure') score += 2.8;
     if (context.rally < 4 && candidate.shot === 'drive') score += 1.6;
-    if (lateRally && ['drop', 'boast'].includes(candidate.shot)) score += 3.2;
+    if (lateRally && ['drop', 'boast'].includes(candidate.shot)) score += 4.1;
     if (lateRally && candidate.shot === 'lob') score -= 1.15;
     if (underScorePressure && ['drive', 'lob'].includes(candidate.shot)) score += 1.15;
     if (stretched) {
       score += candidate.safety * 4;
       if (['drop', 'boast'].includes(candidate.shot)) score -= 4.8;
       if (candidate.shot === 'lob') score += 2.5;
-      if (candidate.shot === 'glass') score += 5.2;
+      if (candidate.shot === 'glass') score += 3.2;
     }
     if (previousShot === candidate.shot) score -= 1.5;
+    if (lateRally && freshTactic && candidate.shot === 'drop') score += 1.8;
+    // Legal low contacts should visibly surface this rare tactic at least
+    // once in a typical match. The rolling memory removes this bonus after use.
+    if (freshTactic && candidate.shot === 'glass') score += 9;
     score += (Math.random() * 2 - 1) * noise;
 
     if (!best || score > best.score) best = { candidate, score };
@@ -210,10 +220,8 @@ export function decideAi(
       COURT_LENGTH - 0.45,
     );
     const close = distance(self.x, self.y, ball.x, ball.y);
-    const insideInterceptionWindow = distance(targetX, targetY, ball.x, ball.y) <= 0.58;
     if (
       close <= tuning.reach &&
-      insideInterceptionWindow &&
       ball.z <= 1.55 &&
       ball.floorBounces <= 1 &&
       ball.ageSeconds >= tuning.reactionMs / 1000 &&

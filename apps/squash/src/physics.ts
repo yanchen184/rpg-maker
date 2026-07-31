@@ -116,22 +116,25 @@ export class SquashBall {
     this.serveAwaitingBounce = false;
 
     if (spec.kind === 'glass') {
-      const rearSpeed = 14.2 * pace * (weak ? 0.9 : 1);
+      // A rear-glass boast has to cover two court lengths while staying below
+      // the 2.13 m rear out line. Solve one ballistic arc across the complete
+      // back-to-front journey; the previous split-time formula launched every
+      // otherwise valid attempt over the rear out line.
+      const rearSpeed = 20.8 * pace * (weak ? 0.94 : 1);
       const secondsToBack = Math.max(0.045, (COURT_LENGTH - this.y) / rearSpeed);
       const secondsBackToFront = COURT_LENGTH / (rearSpeed * WALL_RESTITUTION);
-      const desiredFrontHeight = weak ? 0.86 : 1.18;
-      const verticalSpeedAtGlass =
-        (
-          desiredFrontHeight -
-          this.z -
-          0.5 * GRAVITY * secondsToBack ** 2 +
-          0.5 * GRAVITY * secondsBackToFront ** 2
-        ) /
-        (secondsToBack + secondsBackToFront);
+      const totalFlightSeconds = secondsToBack + secondsBackToFront;
+      const desiredFrontHeight = weak ? 0.8 : 1.05;
 
       this.vy = rearSpeed;
       this.vx = clamp((randomizedTarget - this.x) / secondsToBack, -5.8, 5.8);
-      this.vz = verticalSpeedAtGlass + GRAVITY * secondsToBack;
+      this.vz =
+        (
+          desiredFrontHeight -
+          this.z +
+          0.5 * GRAVITY * totalFlightSeconds ** 2
+        ) /
+        totalFlightSeconds;
       this.lastHitter = by;
       this.floorBounces = 0;
       this.frontHit = false;
@@ -287,7 +290,9 @@ export class SquashBall {
         this.vy *= 0.96;
         events.push({ type: 'floor', x: this.x, y: this.y, bounce: this.floorBounces });
         if (this.floorBounces >= 2) {
-          events.push(this.fail('第二次落地', this.lastHitter));
+          const winner = this.lastHitter;
+          this.active = false;
+          events.push({ type: 'fault', winner, reason: '第二次落地' });
         }
       }
 
@@ -331,7 +336,10 @@ export class SquashBall {
         clone.z = 0;
         clone.vz = Math.abs(clone.vz) * FLOOR_RESTITUTION;
       }
-      if (clone.frontHit && clone.z <= 1.15 && clone.y >= 6.2) {
+      // Pick the first practical mid/back-court contact window. Waiting until
+      // the ball is almost on the rear floor leaves less time than the
+      // character's contact animation and turns every rally into two shots.
+      if (clone.frontHit && clone.z <= 1.5 && clone.y >= 4.65) {
         return {
           x: clamp(clone.x, -COURT_WIDTH / 2 + 0.35, COURT_WIDTH / 2 - 0.35),
           y: clamp(clone.y, 1, COURT_LENGTH - 0.35),

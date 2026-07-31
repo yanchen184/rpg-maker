@@ -78,6 +78,41 @@ interface TrailPoint {
   y: number;
 }
 
+type WallSurface = 'front' | 'side' | 'back';
+
+interface LandingSample {
+  x: number;
+  y: number;
+}
+
+interface PlayerMatchStats {
+  shots: number;
+  twoWall: number;
+  threeWall: number;
+  glass: number;
+  volley: number;
+  directFront: number;
+  sideFront: number;
+  shotKinds: Record<ShotKind, number>;
+  landings: LandingSample[];
+}
+
+interface ActiveShot {
+  by: PlayerId;
+  kind: ShotKind;
+  walls: WallSurface[];
+  landed: boolean;
+}
+
+interface PointRecord {
+  number: number;
+  winner: PlayerId;
+  loser: PlayerId;
+  reason: string;
+  rally: number;
+  server: PlayerId;
+}
+
 const appRoot = document.querySelector<HTMLDivElement>('#app')!;
 const pointsLeftEl = document.querySelector<HTMLElement>('#points-left')!;
 const pointsRightEl = document.querySelector<HTMLElement>('#points-right')!;
@@ -94,6 +129,25 @@ const tControlEl = document.querySelector<HTMLElement>('#t-control')!;
 const strategyFeedEl = document.querySelector<HTMLElement>('#strategy-feed')!;
 const flashEl = document.querySelector<HTMLElement>('#flash')!;
 const loadingEl = document.querySelector<HTMLElement>('#loading')!;
+const matchReportEl = document.querySelector<HTMLElement>('#match-report')!;
+const reportScoreEl = document.querySelector<HTMLElement>('#report-score')!;
+const reportBlueNameEl = document.querySelector<HTMLElement>('#report-blue-name')!;
+const reportGoldNameEl = document.querySelector<HTMLElement>('#report-gold-name')!;
+const reportBlueResultEl = document.querySelector<HTMLElement>('#report-blue-result')!;
+const reportGoldResultEl = document.querySelector<HTMLElement>('#report-gold-result')!;
+const pointLogBodyEl = document.querySelector<HTMLTableSectionElement>('#point-log-body')!;
+const blueWinReasonsEl = document.querySelector<HTMLElement>('#blue-win-reasons')!;
+const goldWinReasonsEl = document.querySelector<HTMLElement>('#gold-win-reasons')!;
+const blueLossReasonsEl = document.querySelector<HTMLElement>('#blue-loss-reasons')!;
+const goldLossReasonsEl = document.querySelector<HTMLElement>('#gold-loss-reasons')!;
+const reportAverageRallyEl = document.querySelector<HTMLElement>('#report-average-rally')!;
+const reportLongestRallyEl = document.querySelector<HTMLElement>('#report-longest-rally')!;
+const reportServeWinRateEl = document.querySelector<HTMLElement>('#report-serve-win-rate')!;
+const reportShotVarietyEl = document.querySelector<HTMLElement>('#report-shot-variety')!;
+const reportBalanceNoteEl = document.querySelector<HTMLElement>('#report-balance-note')!;
+const landingMapEl = document.querySelector<HTMLCanvasElement>('#landing-map')!;
+const reportRematchEl = document.querySelector<HTMLButtonElement>('#report-rematch')!;
+const reportExportEl = document.querySelector<HTMLButtonElement>('#report-export')!;
 
 setAssetBase(import.meta.env.BASE_URL);
 
@@ -609,6 +663,22 @@ const aiMemories = {
 };
 const impacts: Impact[] = [];
 const trail: TrailPoint[] = [];
+const createPlayerMatchStats = (): PlayerMatchStats => ({
+  shots: 0,
+  twoWall: 0,
+  threeWall: 0,
+  glass: 0,
+  volley: 0,
+  directFront: 0,
+  sideFront: 0,
+  shotKinds: { drive: 0, drop: 0, lob: 0, boast: 0, glass: 0 },
+  landings: [],
+});
+const matchStats: Record<PlayerId, PlayerMatchStats> = {
+  you: createPlayerMatchStats(),
+  ai: createPlayerMatchStats(),
+};
+const pointRecords: PointRecord[] = [];
 type GameMode = 'play' | 'watch';
 let gameMode: GameMode = 'play';
 let aiLevel: AiLevel = 'normal';
@@ -625,9 +695,49 @@ let matchWinner: PlayerId | null = null;
 let flashTimer = 0;
 let crowdExcitedUntil = 0;
 let lastStrategy = '雙方試探站位';
+let activeShot: ActiveShot | null = null;
 
 function playerAnim(id: PlayerId): SquashCharacterAnim {
   return id === 'you' ? humanAnim : aiAnim;
+}
+
+function resetMatchStats(): void {
+  for (const id of ['you', 'ai'] as const) {
+    Object.assign(matchStats[id], createPlayerMatchStats());
+  }
+  pointRecords.length = 0;
+  activeShot = null;
+}
+
+function finalizeActiveShot(): void {
+  if (!activeShot) return;
+  const stats = matchStats[activeShot.by];
+  if (activeShot.walls.length === 2) stats.twoWall += 1;
+  if (activeShot.walls.length >= 3) stats.threeWall += 1;
+  if (activeShot.walls[0] === 'front') stats.directFront += 1;
+  if (activeShot.walls[0] === 'side' && activeShot.walls.includes('front')) {
+    stats.sideFront += 1;
+  }
+  activeShot = null;
+}
+
+function beginActiveShot(by: PlayerId, kind: ShotKind, volley: boolean): void {
+  const stats = matchStats[by];
+  stats.shots += 1;
+  stats.shotKinds[kind] += 1;
+  if (kind === 'glass') stats.glass += 1;
+  if (volley) stats.volley += 1;
+  activeShot = { by, kind, walls: [], landed: false };
+}
+
+function trackWall(surface: WallSurface): void {
+  if (activeShot) activeShot.walls.push(surface);
+}
+
+function trackFirstLanding(x: number, y: number): void {
+  if (!activeShot || activeShot.landed) return;
+  activeShot.landed = true;
+  matchStats[activeShot.by].landings.push({ x, y });
 }
 
 function constrainServerToServiceBox(now = gameNow): void {
@@ -775,6 +885,8 @@ function firePendingHits(now: number): void {
     delete pendingHits[id];
     if (matchWinner || pointPauseUntil > now) continue;
     if (!pending.serving && (!ball.active || ball.lastHitter === id)) continue;
+    const volley = ball.active && ball.floorBounces === 0;
+    finalizeActiveShot();
     ball.strike(id, {
       kind: pending.kind,
       targetX: pending.targetX,
@@ -783,6 +895,7 @@ function firePendingHits(now: number): void {
       serving: pending.serving,
       serveSide: pending.serving ? serveSide : undefined,
     });
+    if (!pending.serving) beginActiveShot(id, pending.kind, volley);
     rally += 1;
     sfx.hit(pending.kind, pending.quality);
     spawnImpact(ball.x, ball.y, pending.quality < 0.55 ? 0xff7a59 : 0x9fffe2, false);
@@ -796,6 +909,15 @@ function firePendingHits(now: number): void {
 
 function awardPoint(winner: PlayerId, reason: string, now: number): void {
   if (pointPauseUntil > now || matchWinner) return;
+  finalizeActiveShot();
+  pointRecords.push({
+    number: pointRecords.length + 1,
+    winner,
+    loser: otherPlayer(winner),
+    reason,
+    rally,
+    server,
+  });
   scores[winner] += 1;
   const previousServer = server;
   server = winner;
@@ -824,6 +946,7 @@ function awardPoint(winner: PlayerId, reason: string, now: number): void {
         ? `${winner === 'you' ? '藍方 AI' : '金方 AI'} 勝出`
         : winner === 'you' ? '比賽勝利' : '惜敗';
       showFlash(`${result}\n按 Enter 再戰`, 4000);
+      showMatchReport(winner);
     }, 650);
     return;
   }
@@ -834,15 +957,19 @@ function handleBallEvent(event: BallEvent, now: number): void {
   if (event.type === 'fault') {
     awardPoint(event.winner, event.reason, now);
   } else if (event.type === 'front') {
+    trackWall('front');
     sfx.wall(true);
     spawnImpact(event.x, 0, 0x8de9ff, true);
   } else if (event.type === 'side') {
+    trackWall('side');
     sfx.wall(false);
     spawnImpact(event.x, event.y, 0xb0f4ff, true);
   } else if (event.type === 'back') {
+    trackWall('back');
     sfx.wall(false);
     spawnImpact(event.x, COURT_LENGTH, 0xc9f8ff, true);
   } else {
+    if (event.bounce === 1) trackFirstLanding(event.x, event.y);
     sfx.floor();
     spawnImpact(event.x, event.y, event.bounce === 1 ? 0xffc857 : 0xff6b52, false);
   }
@@ -871,6 +998,246 @@ function dash(): void {
   showFlash('閃身', 360);
 }
 
+function reportPlayerName(id: PlayerId): string {
+  if (gameMode === 'watch') return id === 'you' ? '藍方 AI' : '金方 AI';
+  return id === 'you' ? '你' : '對手';
+}
+
+function populatePlayerStats(id: PlayerId): void {
+  const card = matchReportEl.querySelector<HTMLElement>(`[data-report-player="${id}"]`)!;
+  const stats = matchStats[id];
+  const values: Record<string, number> = {
+    shots: stats.shots,
+    'two-wall': stats.twoWall,
+    'three-wall': stats.threeWall,
+    glass: stats.glass,
+    volley: stats.volley,
+    'direct-front': stats.directFront,
+    'side-front': stats.sideFront,
+  };
+  for (const [key, value] of Object.entries(values)) {
+    const target = card.querySelector<HTMLElement>(`[data-stat="${key}"]`);
+    if (target) target.textContent = `${value}`;
+  }
+}
+
+function drawLandingMap(): void {
+  const context = landingMapEl.getContext('2d');
+  if (!context) return;
+  const width = landingMapEl.width;
+  const height = landingMapEl.height;
+  const court = { x: 132, y: 18, width: 296, height: 304 };
+  const mapX = (x: number): number =>
+    court.x + ((x + COURT_WIDTH / 2) / COURT_WIDTH) * court.width;
+  const mapY = (y: number): number =>
+    court.y + (y / COURT_LENGTH) * court.height;
+
+  context.clearRect(0, 0, width, height);
+  const background = context.createLinearGradient(0, 0, 0, height);
+  background.addColorStop(0, '#071b24');
+  background.addColorStop(1, '#0b3037');
+  context.fillStyle = background;
+  context.fillRect(0, 0, width, height);
+
+  context.fillStyle = '#153c45';
+  context.fillRect(court.x, court.y, court.width, court.height);
+  context.strokeStyle = '#d7fbff';
+  context.lineWidth = 2;
+  context.strokeRect(court.x, court.y, court.width, court.height);
+  const shortY = mapY(SHORT_LINE_Y);
+  context.beginPath();
+  context.moveTo(court.x, shortY);
+  context.lineTo(court.x + court.width, shortY);
+  context.moveTo(court.x + court.width / 2, shortY);
+  context.lineTo(court.x + court.width / 2, court.y + court.height);
+  context.strokeStyle = '#8bc5ce';
+  context.lineWidth = 1.5;
+  context.stroke();
+
+  context.font = '700 10px monospace';
+  context.textAlign = 'center';
+  context.fillStyle = '#81a8af';
+  context.fillText('正面牆', court.x + court.width / 2, 12);
+  context.fillText('後方玻璃', court.x + court.width / 2, height - 5);
+
+  const sets = [
+    { points: matchStats.you.landings, color: '#65e8ff' },
+    { points: matchStats.ai.landings, color: '#ffc857' },
+  ];
+  context.globalCompositeOperation = 'lighter';
+  for (const set of sets) {
+    for (const point of set.points) {
+      const x = mapX(point.x);
+      const y = mapY(point.y);
+      const halo = context.createRadialGradient(x, y, 1, x, y, 20);
+      halo.addColorStop(0, `${set.color}8f`);
+      halo.addColorStop(0.35, `${set.color}42`);
+      halo.addColorStop(1, `${set.color}00`);
+      context.fillStyle = halo;
+      context.beginPath();
+      context.arc(x, y, 20, 0, Math.PI * 2);
+      context.fill();
+    }
+  }
+  context.globalCompositeOperation = 'source-over';
+  for (const set of sets) {
+    for (const point of set.points) {
+      context.fillStyle = set.color;
+      context.strokeStyle = '#031015';
+      context.lineWidth = 1.5;
+      context.beginPath();
+      context.arc(mapX(point.x), mapY(point.y), 4.2, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+    }
+  }
+}
+
+function reportReason(reason: string, outcome: 'win' | 'loss'): string {
+  if (reason === '第二次落地') {
+    return outcome === 'win' ? '逼出二次落地' : '未及回擊';
+  }
+  return reason;
+}
+
+function renderReasonBars(
+  container: HTMLElement,
+  player: PlayerId,
+  outcome: 'win' | 'loss',
+): void {
+  const counts = new Map<string, number>();
+  for (const point of pointRecords) {
+    if (point[outcome === 'win' ? 'winner' : 'loser'] !== player) continue;
+    counts.set(point.reason, (counts.get(point.reason) ?? 0) + 1);
+  }
+  container.replaceChildren();
+  const entries = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const maximum = Math.max(1, ...entries.map(([, count]) => count));
+  for (const [reason, count] of entries) {
+    const row = document.createElement('div');
+    row.className = 'reason-row';
+    const label = document.createElement('span');
+    label.textContent = reportReason(reason, outcome);
+    const track = document.createElement('span');
+    track.className = 'reason-track';
+    const fill = document.createElement('span');
+    fill.className = 'reason-fill';
+    fill.style.width = `${(count / maximum) * 100}%`;
+    track.appendChild(fill);
+    const value = document.createElement('span');
+    value.className = 'reason-count';
+    value.textContent = `${count}`;
+    row.append(label, track, value);
+    container.appendChild(row);
+  }
+}
+
+function renderMatchRhythm(): void {
+  const totalRallies = pointRecords.reduce((sum, point) => sum + point.rally, 0);
+  const averageRally = pointRecords.length ? totalRallies / pointRecords.length : 0;
+  const longestRally = Math.max(0, ...pointRecords.map((point) => point.rally));
+  const serveWins = pointRecords.filter((point) => point.winner === point.server).length;
+  const serveWinRate = pointRecords.length ? (serveWins / pointRecords.length) * 100 : 0;
+  const kinds = new Set<ShotKind>();
+  for (const id of ['you', 'ai'] as const) {
+    for (const [kind, count] of Object.entries(matchStats[id].shotKinds) as [ShotKind, number][]) {
+      if (count > 0) kinds.add(kind);
+    }
+  }
+
+  reportAverageRallyEl.textContent = averageRally.toFixed(1);
+  reportLongestRallyEl.textContent = `${longestRally}`;
+  reportServeWinRateEl.textContent = `${Math.round(serveWinRate)}%`;
+  reportShotVarietyEl.textContent = `${kinds.size} / 5`;
+
+  const notes: string[] = [];
+  if (averageRally < 2.6) notes.push('回合偏短：接發與攔截仍需放寬');
+  if (serveWinRate < 20 || serveWinRate > 80) notes.push('發球優勢失衡');
+  if (kinds.size < 4) notes.push('球路變化不足');
+  const totalShots = matchStats.you.shots + matchStats.ai.shots;
+  const glassShots = matchStats.you.glass + matchStats.ai.glass;
+  if (totalShots && glassShots / totalShots > 0.32) notes.push('後玻璃使用率過高');
+  reportBalanceNoteEl.textContent = notes.length
+    ? `平衡觀察｜${notes.join(' · ')}`
+    : '平衡觀察｜節奏、發球權與球路多樣性落在健康區間';
+  reportBalanceNoteEl.classList.toggle('warning', notes.length > 0);
+}
+
+function renderPointLog(): void {
+  pointLogBodyEl.replaceChildren();
+  for (const point of pointRecords) {
+    const row = document.createElement('tr');
+    const number = document.createElement('td');
+    number.textContent = `#${point.number}`;
+    const winner = document.createElement('td');
+    winner.textContent = reportPlayerName(point.winner);
+    winner.className = point.winner === 'you' ? 'point-blue' : 'point-gold';
+    const loser = document.createElement('td');
+    loser.textContent = reportPlayerName(point.loser);
+    const reason = document.createElement('td');
+    reason.textContent = point.reason === '第二次落地'
+      ? '未能在第二次落地前回擊'
+      : point.reason;
+    const rallyCount = document.createElement('td');
+    rallyCount.textContent = `${point.rally}`;
+    row.append(number, winner, loser, reason, rallyCount);
+    pointLogBodyEl.appendChild(row);
+  }
+}
+
+function showMatchReport(winner: PlayerId): void {
+  reportScoreEl.textContent = `${scores.you} : ${scores.ai}`;
+  reportBlueNameEl.textContent = reportPlayerName('you');
+  reportGoldNameEl.textContent = reportPlayerName('ai');
+  reportBlueResultEl.textContent = winner === 'you' ? 'WIN' : 'LOSE';
+  reportGoldResultEl.textContent = winner === 'ai' ? 'WIN' : 'LOSE';
+  populatePlayerStats('you');
+  populatePlayerStats('ai');
+  renderMatchRhythm();
+  drawLandingMap();
+  renderReasonBars(blueWinReasonsEl, 'you', 'win');
+  renderReasonBars(blueLossReasonsEl, 'you', 'loss');
+  renderReasonBars(goldWinReasonsEl, 'ai', 'win');
+  renderReasonBars(goldLossReasonsEl, 'ai', 'loss');
+  renderPointLog();
+  matchReportEl.setAttribute('aria-hidden', 'false');
+  matchReportEl.classList.add('show');
+  reportRematchEl.focus();
+}
+
+function exportMatchData(): void {
+  const payload = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    mode: gameMode,
+    difficulty: aiLevel,
+    ballSpeed,
+    score: { ...scores },
+    winner: matchWinner,
+    players: {
+      you: { name: reportPlayerName('you'), ...matchStats.you },
+      ai: { name: reportPlayerName('ai'), ...matchStats.ai },
+    },
+    rhythm: {
+      averageRally: pointRecords.length
+        ? pointRecords.reduce((sum, point) => sum + point.rally, 0) / pointRecords.length
+        : 0,
+      longestRally: Math.max(0, ...pointRecords.map((point) => point.rally)),
+      serveWinRate: pointRecords.length
+        ? pointRecords.filter((point) => point.winner === point.server).length / pointRecords.length
+        : 0,
+    },
+    points: pointRecords,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `squash-match-${scores.you}-${scores.ai}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 function resetMatch(): void {
   scores.you = 0;
   scores.ai = 0;
@@ -879,10 +1246,16 @@ function resetMatch(): void {
   matchWinner = null;
   lastQuality = 1;
   lastStrategy = '雙方試探站位';
+  matchReportEl.setAttribute('aria-hidden', 'true');
+  matchReportEl.classList.remove('show');
+  resetMatchStats();
   clearAiMemory(aiMemories.you);
   clearAiMemory(aiMemories.ai);
   resetRally(gameNow);
 }
+
+reportRematchEl.addEventListener('click', resetMatch);
+reportExportEl.addEventListener('click', exportMatchData);
 
 window.addEventListener('keydown', (event) => {
   sfx.unlock();
