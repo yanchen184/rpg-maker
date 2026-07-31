@@ -75,6 +75,8 @@ HUD 只負責轉播資訊，不遮住球場。比分置中、戰術資料貼邊�
 
 [`squash-ai-duel-full-match.mp4`](../../assets/concepts/squash-ai-duel-full-match.mp4) 是一次未預演的完整 AI 對戰。比賽以 Easy、2× 進行，金方中段曾以 7:5 領先，藍方最後以 11:9 逆轉勝出。影片保留完整 HUD、落點、撞牆影、玻璃反光、觀眾動作與勝出畫面。
 
+[`squash-ai-positional-highlight.mp4`](../../assets/concepts/squash-ai-positional-highlight.mp4) 是位置棋局 AI 改版後的 75 秒實機片段，以 Normal、1× 錄製。影片包含兩次得分、20 拍以上長回合、前場小球、高吊重整、勉強救球與攻守轉換，戰術 feed 會顯示當拍選擇。
+
 ## 驗收方式
 
 瀏覽器實際切換到「AI 對戰」、速度 2×，讓比賽自動進行。判分驗收先看到 24 拍連續回合，之後金方因第二次落地取得 1 分並自動接續發球，畫面與 DOM 比分同步顯示 `BLUE AI 0 : 1 GOLD AI`。最後素材版再跑到第 51 拍並截取上方實機圖；角色驗收室顯示 `168 / 168` 幀載入完成，兩個頁面的 console error 都是 0。
