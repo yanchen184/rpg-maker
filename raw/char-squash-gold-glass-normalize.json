@@ -1,0 +1,100 @@
+{
+  "input": "assets/raw/char-squash-gold-glass-chroma.png",
+  "output": "assets/sheets/char-squash-gold-glass_sheet.png",
+  "grid": [
+    4,
+    3
+  ],
+  "frame_size": [
+    256,
+    256
+  ],
+  "frames": 12,
+  "empty_frames": [],
+  "frame_reports": [
+    {
+      "frame": 0,
+      "components": 4,
+      "retained_components": 1,
+      "subject_width": 188,
+      "subject_height": 214
+    },
+    {
+      "frame": 1,
+      "components": 1,
+      "retained_components": 1,
+      "subject_width": 133,
+      "subject_height": 214
+    },
+    {
+      "frame": 2,
+      "components": 2,
+      "retained_components": 1,
+      "subject_width": 177,
+      "subject_height": 214
+    },
+    {
+      "frame": 3,
+      "components": 2,
+      "retained_components": 1,
+      "subject_width": 202,
+      "subject_height": 214
+    },
+    {
+      "frame": 4,
+      "components": 4,
+      "retained_components": 1,
+      "subject_width": 190,
+      "subject_height": 214
+    },
+    {
+      "frame": 5,
+      "components": 1,
+      "retained_components": 1,
+      "subject_width": 151,
+      "subject_height": 214
+    },
+    {
+      "frame": 6,
+      "components": 2,
+      "retained_components": 1,
+      "subject_width": 210,
+      "subject_height": 214
+    },
+    {
+      "frame": 7,
+      "components": 4,
+      "retained_components": 1,
+      "subject_width": 227,
+      "subject_height": 214
+    },
+    {
+      "frame": 8,
+      "components": 6,
+      "retained_components": 1,
+      "subject_width": 189,
+      "subject_height": 214
+    },
+    {
+      "frame": 9,
+      "components": 13,
+      "retained_components": 1,
+      "subject_width": 204,
+      "subject_height": 214
+    },
+    {
+      "frame": 10,
+      "components": 5,
+      "retained_components": 1,
+      "subject_width": 189,
+      "subject_height": 214
+    },
+    {
+      "frame": 11,
+      "components": 5,
+      "retained_components": 1,
+      "subject_width": 189,
+      "subject_height": 214
+    }
+  ]
+}

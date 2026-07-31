@@ -680,6 +680,102 @@
       ],
       "fps": 24,
       "kind": "character-layer"
+    },
+    "char-squash-actions-flagship": {
+      "sheet": "sheets/char-squash-actions-flagship_sheet.png",
+      "grid": [
+        6,
+        6
+      ],
+      "fps": 36,
+      "kind": "character-layer"
+    },
+    "char-squash-actions-rear-flagship": {
+      "sheet": "sheets/char-squash-actions-rear-flagship_sheet.png",
+      "grid": [
+        6,
+        6
+      ],
+      "fps": 36,
+      "kind": "character-layer"
+    },
+    "char-squash-rear-loops-flagship": {
+      "sheet": "sheets/char-squash-rear-loops-flagship_sheet.png",
+      "grid": [
+        6,
+        4
+      ],
+      "fps": 24,
+      "kind": "character-layer"
+    },
+    "char-squash-blue-actions": {
+      "sheet": "sheets/char-squash-blue-actions_sheet.png",
+      "grid": [6, 6],
+      "fps": 36,
+      "kind": "character-layer"
+    },
+    "char-squash-blue-backhand": {
+      "sheet": "sheets/char-squash-blue-backhand_sheet.png",
+      "grid": [4, 3],
+      "fps": 36,
+      "kind": "character-layer"
+    },
+    "char-squash-blue-glass": {
+      "sheet": "sheets/char-squash-blue-glass_sheet.png",
+      "grid": [4, 3],
+      "fps": 36,
+      "kind": "character-layer"
+    },
+    "char-squash-blue-loops": {
+      "sheet": "sheets/char-squash-blue-loops_sheet.png",
+      "grid": [6, 4],
+      "fps": 24,
+      "kind": "character-layer"
+    },
+    "char-squash-blue-reactions": {
+      "sheet": "sheets/char-squash-blue-reactions_sheet.png",
+      "grid": [6, 4],
+      "fps": 24,
+      "kind": "character-layer"
+    },
+    "char-squash-gold-actions": {
+      "sheet": "sheets/char-squash-gold-actions_sheet.png",
+      "grid": [6, 6],
+      "fps": 36,
+      "kind": "character-layer"
+    },
+    "char-squash-gold-backhand": {
+      "sheet": "sheets/char-squash-gold-backhand_sheet.png",
+      "grid": [4, 3],
+      "fps": 36,
+      "kind": "character-layer"
+    },
+    "char-squash-gold-glass": {
+      "sheet": "sheets/char-squash-gold-glass_sheet.png",
+      "grid": [4, 3],
+      "fps": 36,
+      "kind": "character-layer"
+    },
+    "char-squash-gold-loops": {
+      "sheet": "sheets/char-squash-gold-loops_sheet.png",
+      "grid": [6, 4],
+      "fps": 24,
+      "kind": "character-layer"
+    },
+    "char-squash-gold-reactions": {
+      "sheet": "sheets/char-squash-gold-reactions_sheet.png",
+      "grid": [6, 4],
+      "fps": 24,
+      "kind": "character-layer"
+    },
+    "crowd-squash-animated": {
+      "sheet": "sheets/crowd-squash-animated_sheet.png",
+      "grid": [
+        6,
+        4
+      ],
+      "fps": 8,
+      "kind": "character-layer"
     }
   }
 }
