@@ -1,0 +1,105 @@
+name: Deploy squash to Cloudflare Pages
+
+# 壁球使用獨立的 Pages project 與 custom domain，不覆蓋網球站。
+# 需要的 repo secrets:
+#   CLOUDFLARE_API_TOKEN   — Pages:Edit + DNS:Edit(yanchen.app zone)
+#   CLOUDFLARE_ACCOUNT_ID
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/squash/**"
+      - "packages/engine/**"
+      - "assets/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/deploy-squash.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: squash-pages-deploy
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build squash
+        run: npm run build -w squash
+
+      - name: Ensure independent Cloudflare Pages project
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          project_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/squash"
+          status=$(curl -sS -o /tmp/squash-project.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "$project_url")
+
+          if [ "$status" = "404" ]; then
+            curl -fsS \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data '{"name":"squash","production_branch":"master"}' \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects" \
+              | tee /tmp/squash-project-create.json
+            jq -e '.success == true' /tmp/squash-project-create.json >/dev/null
+          elif [ "$status" != "200" ]; then
+            cat /tmp/squash-project.json
+            exit 1
+          fi
+
+      - name: Deploy squash
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/squash/dist --project-name=squash --branch=master
+
+      - name: Ensure squash.yanchen.app custom domain
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          domain_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/squash/domains/squash.yanchen.app"
+          status=$(curl -sS -o /tmp/squash-domain.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "$domain_url")
+
+          if [ "$status" = "404" ]; then
+            curl -fsS \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data '{"name":"squash.yanchen.app"}' \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/squash/domains" \
+              | tee /tmp/squash-domain-create.json
+            jq -e '.success == true' /tmp/squash-domain-create.json >/dev/null
+          elif [ "$status" != "200" ]; then
+            cat /tmp/squash-domain.json
+            exit 1
+          fi
+
+      - name: Round-trip verify public game
+        run: |
+          for attempt in $(seq 1 30); do
+            html=$(curl -fsS https://squash.yanchen.app/ 2>/dev/null || true)
+            if printf '%s' "$html" | grep -q '<title>玻璃禁區・壁球</title>'; then
+              echo "https://squash.yanchen.app/ is serving the squash game"
+              exit 0
+            fi
+            echo "Waiting for custom domain (attempt ${attempt}/30)"
+            sleep 10
+          done
+
+          echo "Custom domain did not serve the squash game in time"
+          exit 1

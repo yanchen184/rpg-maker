@@ -2,7 +2,7 @@
 
 RPG Maker 概念的 2D 房間引擎:場景由「獨立模組化素材」以 JSON 資料拼裝而成,每一張素材都是連續幀動畫(沒有靜止圖),角色走紙娃娃分層系統。
 
-🎮 **線上試玩**:<https://yanchen184.github.io/rpg-maker/> · 📖 **操作手冊**:<https://html.yanchen.app/rpg-maker-manual/>
+🎮 **線上試玩**:<https://yanchen184.github.io/rpg-maker/> · 🟡 **壁球**:<https://squash.yanchen.app/> · 📖 **操作手冊**:<https://html.yanchen.app/rpg-maker-manual/>
 
 ![Village map](docs/images/village.png)
 
