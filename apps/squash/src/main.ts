@@ -106,9 +106,36 @@ interface ActiveShot {
   by: PlayerId;
   kind: ShotKind;
   quality: number;
+  volley: boolean;
+  contactZ: number;
+  opponentStartX: number;
+  opponentStartY: number;
+  predictedX: number | null;
+  predictedY: number | null;
+  firstLandingX: number | null;
+  firstLandingY: number | null;
   walls: WallSurface[];
   landed: boolean;
   landingIndex: number | null;
+}
+
+type PointAnalysisType =
+  | '死角致勝'
+  | '調動致勝'
+  | '直接致勝球'
+  | '壓迫得分'
+  | '受迫失誤'
+  | '非受迫失誤'
+  | '低球硬抽失誤'
+  | '發球直接得分'
+  | '發球失誤'
+  | '規則失誤'
+  | '對手規則失誤';
+
+interface PointAnalysis {
+  type: PointAnalysisType;
+  detail: string;
+  finishingShot: ShotKind | null;
 }
 
 interface PointRecord {
@@ -118,6 +145,7 @@ interface PointRecord {
   reason: string;
   rally: number;
   server: PlayerId;
+  analysis: PointAnalysis;
 }
 
 const appRoot = document.querySelector<HTMLDivElement>('#app')!;
@@ -747,6 +775,7 @@ function beginActiveShot(
   stats.shotKinds[kind] += 1;
   if (kind === 'glass') stats.glass += 1;
   if (volley) stats.volley += 1;
+  const opponent = players[otherPlayer(by)];
   const landingIndex = predictedBounce === null
     ? null
     : stats.landings.push({
@@ -756,7 +785,22 @@ function beginActiveShot(
         quality,
         actual: false,
       }) - 1;
-  activeShot = { by, kind, quality, walls: [], landed: false, landingIndex };
+  activeShot = {
+    by,
+    kind,
+    quality,
+    volley,
+    contactZ: ball.z,
+    opponentStartX: opponent.x,
+    opponentStartY: opponent.y,
+    predictedX: predictedBounce?.x ?? null,
+    predictedY: predictedBounce?.y ?? null,
+    firstLandingX: null,
+    firstLandingY: null,
+    walls: [],
+    landed: false,
+    landingIndex,
+  };
 }
 
 function trackWall(surface: WallSurface): void {
@@ -766,6 +810,8 @@ function trackWall(surface: WallSurface): void {
 function trackFirstLanding(x: number, y: number): void {
   if (!activeShot || activeShot.landed) return;
   activeShot.landed = true;
+  activeShot.firstLandingX = x;
+  activeShot.firstLandingY = y;
   const landings = matchStats[activeShot.by].landings;
   const sample = activeShot.landingIndex === null
     ? null
@@ -783,6 +829,105 @@ function trackFirstLanding(x: number, y: number): void {
       actual: true,
     });
   }
+}
+
+const shotKindLabel = (kind: ShotKind): string => ({
+  drive: '平抽',
+  drop: '小球',
+  lob: '高吊',
+  boast: '側牆球',
+  glass: '後玻璃球',
+})[kind];
+
+function analyzePoint(
+  winner: PlayerId,
+  reason: string,
+  shot: ActiveShot | null,
+): PointAnalysis {
+  const loser = otherPlayer(winner);
+  if (!shot) {
+    const serveFault = reason.startsWith('發球');
+    const serveWinner = reason === '第二次落地' && winner === server;
+    return {
+      type: serveFault ? '發球失誤' : serveWinner ? '發球直接得分' : '規則失誤',
+      detail: serveFault
+        ? `發球違例：${reason}`
+        : serveWinner
+          ? '接發者未能在第二次落地前完成回擊'
+          : reason,
+      finishingShot: null,
+    };
+  }
+
+  const shotLabel = shotKindLabel(shot.kind);
+  const qualityPercent = Math.round(shot.quality * 100);
+  if (shot.by === loser) {
+    if (reason === '下界板' && shot.kind === 'drive' && shot.contactZ < 0.55) {
+      return {
+        type: '低球硬抽失誤',
+        detail: `球僅 ${Math.round(shot.contactZ * 100)}cm 高仍選平抽，撞下界板`,
+        finishingShot: shot.kind,
+      };
+    }
+    if (shot.quality < 0.55) {
+      return {
+        type: '受迫失誤',
+        detail: `勉強回出 ${qualityPercent}% 品質的${shotLabel}，最終${reason}`,
+        finishingShot: shot.kind,
+      };
+    }
+    return {
+      type: '非受迫失誤',
+      detail: `${qualityPercent}% 品質的${shotLabel}仍發生「${reason}」`,
+      finishingShot: shot.kind,
+    };
+  }
+
+  const landingX = shot.firstLandingX ?? shot.predictedX;
+  const landingY = shot.firstLandingY ?? shot.predictedY;
+  const opponentTravel = landingX === null || landingY === null
+    ? 0
+    : distance(shot.opponentStartX, shot.opponentStartY, landingX, landingY);
+  const opponentOffT = distance(shot.opponentStartX, shot.opponentStartY, T_X, T_Y);
+  const isFrontCorner = landingX !== null && landingY !== null
+    && Math.abs(landingX) >= 1.85 && landingY <= 2.2;
+  const isBackCorner = landingX !== null && landingY !== null
+    && Math.abs(landingX) >= 2.05 && landingY >= 7.1;
+
+  if (reason === '第二次落地' && (isFrontCorner || isBackCorner)) {
+    const corner = isFrontCorner ? '前場死角' : '後場死角';
+    return {
+      type: '死角致勝',
+      detail: `${shotLabel}落入${corner}，對手需移動 ${opponentTravel.toFixed(1)}m`,
+      finishingShot: shot.kind,
+    };
+  }
+  if (reason === '第二次落地' && opponentOffT >= 1.45 && opponentTravel >= 2.7) {
+    return {
+      type: '調動致勝',
+      detail: `對手已離開 T 區 ${opponentOffT.toFixed(1)}m，再被迫移動 ${opponentTravel.toFixed(1)}m`,
+      finishingShot: shot.kind,
+    };
+  }
+  if (reason === '第二次落地' && (shot.quality >= 0.82 || shot.volley)) {
+    return {
+      type: '直接致勝球',
+      detail: `${shot.volley ? '凌空' : '高品質'}${shotLabel}讓對手未能在第二次落地前回擊`,
+      finishingShot: shot.kind,
+    };
+  }
+  if (reason === '第二次落地') {
+    return {
+      type: '壓迫得分',
+      detail: `${shotLabel}持續施壓，對手未能在第二次落地前回擊`,
+      finishingShot: shot.kind,
+    };
+  }
+  return {
+    type: '對手規則失誤',
+    detail: `對手回擊發生「${reason}」`,
+    finishingShot: shot.kind,
+  };
 }
 
 function constrainServerToServiceBox(now = gameNow): void {
@@ -977,6 +1122,7 @@ function firePendingHits(now: number): void {
 
 function awardPoint(winner: PlayerId, reason: string, now: number): void {
   if (pointPauseUntil > now || matchWinner) return;
+  const analysis = analyzePoint(winner, reason, activeShot);
   finalizeActiveShot();
   pointRecords.push({
     number: pointRecords.length + 1,
@@ -985,6 +1131,7 @@ function awardPoint(winner: PlayerId, reason: string, now: number): void {
     reason,
     rally,
     server,
+    analysis,
   });
   scores[winner] += 1;
   const previousServer = server;
@@ -1002,7 +1149,7 @@ function awardPoint(winner: PlayerId, reason: string, now: number): void {
   const winnerName = gameMode === 'watch'
     ? winner === 'you' ? '藍方 AI' : '金方 AI'
     : winner === 'you' ? '你' : '對手';
-  showFlash(`${winnerName}得分\n${reason}`, 1100);
+  showFlash(`${winnerName}得分\n${analysis.type}`, 1100);
 
   const leader = Math.max(scores.you, scores.ai);
   const margin = Math.abs(scores.you - scores.ai);
@@ -1198,13 +1345,6 @@ function drawLandingMap(): void {
   }
 }
 
-function reportReason(reason: string, outcome: 'win' | 'loss'): string {
-  if (reason === '第二次落地') {
-    return outcome === 'win' ? '逼出二次落地' : '未及回擊';
-  }
-  return reason;
-}
-
 function renderReasonBars(
   container: HTMLElement,
   player: PlayerId,
@@ -1213,7 +1353,8 @@ function renderReasonBars(
   const counts = new Map<string, number>();
   for (const point of pointRecords) {
     if (point[outcome === 'win' ? 'winner' : 'loser'] !== player) continue;
-    counts.set(point.reason, (counts.get(point.reason) ?? 0) + 1);
+    const label = point.analysis.type;
+    counts.set(label, (counts.get(label) ?? 0) + 1);
   }
   container.replaceChildren();
   const entries = [...counts.entries()].sort((a, b) => b[1] - a[1]);
@@ -1222,7 +1363,7 @@ function renderReasonBars(
     const row = document.createElement('div');
     row.className = 'reason-row';
     const label = document.createElement('span');
-    label.textContent = reportReason(reason, outcome);
+    label.textContent = reason;
     const track = document.createElement('span');
     track.className = 'reason-track';
     const fill = document.createElement('span');
@@ -1347,12 +1488,14 @@ function renderPointLog(): void {
     const servingPlayer = document.createElement('td');
     servingPlayer.textContent = reportPlayerName(point.server);
     const reason = document.createElement('td');
-    reason.textContent = point.reason === '第二次落地'
-      ? '未能在第二次落地前回擊'
-      : point.reason;
+    reason.textContent = point.analysis.type;
+    reason.className = 'point-analysis-type';
+    const detail = document.createElement('td');
+    detail.textContent = point.analysis.detail;
+    detail.className = 'point-analysis-detail';
     const rallyCount = document.createElement('td');
     rallyCount.textContent = `${point.rally}`;
-    row.append(number, servingPlayer, winner, loser, reason, rallyCount);
+    row.append(number, servingPlayer, winner, loser, reason, detail, rallyCount);
     pointLogBodyEl.appendChild(row);
   }
 }
@@ -1379,7 +1522,7 @@ function showMatchReport(winner: PlayerId): void {
 
 function exportMatchData(): void {
   const payload = {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     mode: gameMode,
     difficulty: aiLevel,

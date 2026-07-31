@@ -191,6 +191,7 @@
       }
       .point-log-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; }
       .point-log-head h3 { margin: 0; font: 900 13px/1 system-ui; letter-spacing: 1px; }
+      .point-log-scroll { overflow-x: auto; border-radius: 4px; }
       #point-log { width: 100%; border-collapse: collapse; font-size: 10px; }
       #point-log th {
         padding: 7px 8px; color: #78969d; text-align: left; border-bottom: 1px solid #6cd7ed35;
@@ -200,12 +201,17 @@
       #point-log tr:last-child td { border-bottom: 0; }
       #point-log .point-blue { color: #9df1ff; font-weight: 900; }
       #point-log .point-gold { color: #ffe09a; font-weight: 900; }
+      #point-log .point-analysis-type { color: #dcf9ff; font-weight: 900; white-space: nowrap; }
+      #point-log .point-analysis-detail { min-width: 230px; color: #89aab1; line-height: 1.45; }
       .reason-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
       .reason-group { padding: 9px; border: 1px solid #ffffff12; border-radius: 5px; }
       .reason-group h4 { margin: 0 0 8px; color: #93adb4; font: 800 9px/1 system-ui; letter-spacing: 1px; }
       .reason-row { display: grid; grid-template-columns: 100px 1fr 24px; gap: 7px; align-items: center; min-height: 22px; font-size: 9px; }
       .reason-track { height: 5px; overflow: hidden; background: #02080c; }
-      .reason-fill { height: 100%; background: linear-gradient(90deg, #40d5ec, #ffd166); }
+      .reason-fill {
+        display: block; height: 100%; border-radius: inherit;
+        background: linear-gradient(90deg, #40d5ec, #ffd166);
+      }
       .reason-count { text-align: right; color: #effcff; font-weight: 900; }
       .report-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
       .report-action {
@@ -395,31 +401,33 @@
         </div>
         <section class="point-log-card">
           <div class="point-log-head">
-            <h3>逐分得失紀錄</h3>
-            <span class="landing-note">每一分保留得分方、失分原因與回合拍數</span>
+            <h3>逐分得分分析</h3>
+            <span class="landing-note">以致勝拍落點、對手站位、擊球品質與失誤類型解釋每一分</span>
           </div>
           <div class="reason-bars">
             <div class="reason-group">
-              <h4>藍方得分原因</h4>
+              <h4>藍方得分方式</h4>
               <div id="blue-win-reasons"></div>
             </div>
             <div class="reason-group">
-              <h4>藍方失分原因</h4>
+              <h4>藍方失分方式</h4>
               <div id="blue-loss-reasons"></div>
             </div>
             <div class="reason-group">
-              <h4>金方得分原因</h4>
+              <h4>金方得分方式</h4>
               <div id="gold-win-reasons"></div>
             </div>
             <div class="reason-group">
-              <h4>金方失分原因</h4>
+              <h4>金方失分方式</h4>
               <div id="gold-loss-reasons"></div>
             </div>
           </div>
-          <table id="point-log">
-            <thead><tr><th>POINT</th><th>發球方</th><th>得分方</th><th>失分方</th><th>失分原因</th><th>拍數</th></tr></thead>
-            <tbody id="point-log-body"></tbody>
-          </table>
+          <div class="point-log-scroll" tabindex="0" aria-label="逐分得分分析表，可水平捲動">
+            <table id="point-log">
+              <thead><tr><th>POINT</th><th>發球方</th><th>得分方</th><th>失分方</th><th>得分方式</th><th>判斷依據</th><th>拍數</th></tr></thead>
+              <tbody id="point-log-body"></tbody>
+            </table>
+          </div>
         </section>
         <div class="report-actions">
           <button id="report-export" class="report-action" type="button">下載 JSON 數據</button>
