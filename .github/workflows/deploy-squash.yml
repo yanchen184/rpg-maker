@@ -133,7 +133,7 @@ jobs:
           else
             record_id=$(printf '%s' "$records" | jq -er '.result[0].id')
             content=$(printf '%s' "$records" | jq -er '.result[0].content')
-            proxied=$(printf '%s' "$records" | jq -er '.result[0].proxied')
+            proxied=$(printf '%s' "$records" | jq -r '.result[0].proxied')
             if [ "$content" != "squash.pages.dev" ] || [ "$proxied" != "false" ]; then
               curl -fsS -X PATCH \
                 -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
