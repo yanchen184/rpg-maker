@@ -37,6 +37,13 @@ import {
 } from './game-types';
 import { SquashBall, type BallEvent, type PredictedBounce } from './physics';
 import { SquashSfx } from './sfx';
+import {
+  makeRoomCode,
+  sanitizeRoom,
+  SquashNet,
+  type OnlineInput,
+  type OnlineMatchSnapshot,
+} from './net-squash';
 
 void (async () => {
 const DESIGN_WIDTH = 1280;
@@ -186,6 +193,11 @@ const landingMapEl = document.querySelector<HTMLCanvasElement>('#landing-map')!;
 const landingDepthSummaryEl = document.querySelector<HTMLElement>('#landing-depth-summary')!;
 const reportRematchEl = document.querySelector<HTMLButtonElement>('#report-rematch')!;
 const reportExportEl = document.querySelector<HTMLButtonElement>('#report-export')!;
+const onlineLobbyEl = document.querySelector<HTMLElement>('#online-lobby')!;
+const onlineLobbyStatusEl = document.querySelector<HTMLElement>('#online-lobby-status')!;
+const onlineInviteEl = document.querySelector<HTMLInputElement>('#online-invite')!;
+const onlineCopyEl = document.querySelector<HTMLButtonElement>('#online-copy')!;
+const networkStatusEl = document.querySelector<HTMLElement>('#network-status')!;
 
 setAssetBase(import.meta.env.BASE_URL);
 
@@ -719,8 +731,10 @@ const matchStats: Record<PlayerId, PlayerMatchStats> = {
   ai: createPlayerMatchStats(),
 };
 const pointRecords: PointRecord[] = [];
-type GameMode = 'play' | 'watch';
-let gameMode: GameMode = 'play';
+type GameMode = 'play' | 'watch' | 'online';
+const initialUrl = new URL(location.href);
+const requestedMode = initialUrl.searchParams.get('mode');
+let gameMode: GameMode = requestedMode === 'watch' ? 'watch' : requestedMode === 'online' ? 'online' : 'play';
 let aiLevel: AiLevel = 'normal';
 let ballSpeed = 1;
 let gameNow = performance.now();
@@ -736,6 +750,61 @@ let flashTimer = 0;
 let crowdExcitedUntil = 0;
 let lastStrategy = '雙方試探站位';
 let activeShot: ActiveShot | null = null;
+let onlineRoom = '';
+let onlineSide: PlayerId | null = null;
+let onlinePeerConnected = false;
+let onlineNet: SquashNet | null = null;
+let remoteInput: OnlineInput | null = null;
+let localDashSeq = 0;
+let localHitSeq = 0;
+let localHitKind: ShotKind | null = null;
+let localRematchSeq = 0;
+let handledRemoteDashSeq = 0;
+let handledRemoteHitSeq = 0;
+let handledRemoteRematchSeq = 0;
+let networkSnapshotSeq = 0;
+let lastSnapshotSentAt = 0;
+let lastInputSentAt = 0;
+let lastHeartbeatAt = 0;
+let networkDelayMs = 0;
+let lastRemoteSnapshotRally = 0;
+let lastRemoteScore = '0:0';
+let hasRemoteSnapshot = false;
+
+function onlineInviteUrl(room: string): string {
+  const url = new URL(location.href);
+  url.search = '';
+  url.searchParams.set('mode', 'online');
+  url.searchParams.set('room', room);
+  return url.toString();
+}
+
+function navigateToMode(mode: GameMode): void {
+  const url = new URL(location.href);
+  url.search = '';
+  if (mode !== 'play') url.searchParams.set('mode', mode);
+  if (mode === 'online') url.searchParams.set('room', makeRoomCode());
+  location.href = url.toString();
+}
+
+if (gameMode === 'online') {
+  onlineRoom = sanitizeRoom(initialUrl.searchParams.get('room') ?? '') || makeRoomCode();
+  initialUrl.searchParams.set('mode', 'online');
+  initialUrl.searchParams.set('room', onlineRoom);
+  history.replaceState(null, '', initialUrl.toString());
+  onlineInviteEl.value = onlineInviteUrl(onlineRoom);
+  onlineLobbyEl.classList.add('show');
+  onlineNet = new SquashNet(onlineRoom);
+  try {
+    onlineSide = await onlineNet.join();
+    onlineLobbyStatusEl.textContent = onlineSide === 'you'
+      ? '你是藍方房主 · 等待金方加入'
+      : '你是金方 · 正在連接藍方房主';
+  } catch {
+    onlineLobbyStatusEl.textContent = '房間已有兩位選手，請建立新的對戰房間';
+    networkStatusEl.textContent = 'ROOM FULL';
+  }
+}
 
 function playerAnim(id: PlayerId): SquashCharacterAnim {
   return id === 'you' ? humanAnim : aiAnim;
@@ -961,7 +1030,9 @@ function resetRally(now: number): void {
   aiAnim.setLocomotion(false, players.ai.facing);
   const serverName = gameMode === 'watch'
     ? server === 'you' ? '藍方' : '金方'
-    : server === 'you' ? '你' : '對手';
+    : gameMode === 'online'
+      ? server === onlineSide ? '你' : '對手'
+      : server === 'you' ? '你' : '對手';
   lastStrategy = `${serverName}站${serveSide < 0 ? '左' : '右'}發球格 · 目標對角後場`;
 }
 
@@ -1145,10 +1216,12 @@ function awardPoint(winner: PlayerId, reason: string, now: number): void {
   playerAnim(winner).action('celebrate', players[winner].facing);
   playerAnim(otherPlayer(winner)).action('dejected', players[otherPlayer(winner)].facing);
   crowdExcitedUntil = now + 1750;
-  sfx.point(winner === 'you');
+  sfx.point(gameMode === 'online' ? winner === onlineSide : winner === 'you');
   const winnerName = gameMode === 'watch'
     ? winner === 'you' ? '藍方 AI' : '金方 AI'
-    : winner === 'you' ? '你' : '對手';
+    : gameMode === 'online'
+      ? winner === onlineSide ? '你' : '對手'
+      : winner === 'you' ? '你' : '對手';
   showFlash(`${winnerName}得分\n${analysis.type}`, 1100);
 
   const leader = Math.max(scores.you, scores.ai);
@@ -1159,7 +1232,9 @@ function awardPoint(winner: PlayerId, reason: string, now: number): void {
     window.setTimeout(() => {
       const result = gameMode === 'watch'
         ? `${winner === 'you' ? '藍方 AI' : '金方 AI'} 勝出`
-        : winner === 'you' ? '比賽勝利' : '惜敗';
+        : gameMode === 'online'
+          ? winner === onlineSide ? '比賽勝利' : '惜敗'
+          : winner === 'you' ? '比賽勝利' : '惜敗';
       showFlash(`${result}\n按 Enter 再戰`, 4000);
       showMatchReport(winner);
     }, 650);
@@ -1197,11 +1272,10 @@ function movementVector(): { x: number; y: number } {
   return length > 0 ? { x: x / length, y: y / length } : { x: 0, y: 0 };
 }
 
-function dash(): void {
+function dash(id: PlayerId = 'you', movement = movementVector()): void {
   if (gameMode === 'watch') return;
   const now = gameNow;
-  const player = players.you;
-  const movement = movementVector();
+  const player = players[id];
   if (player.energy < DASH_COST || (!movement.x && !movement.y) || now < player.dashUntil) return;
   player.energy -= DASH_COST;
   player.dashUntil = now + 210;
@@ -1210,11 +1284,27 @@ function dash(): void {
   player.y = clamp(player.y + movement.y * 1.1, 0.72, COURT_LENGTH - 0.4);
   constrainServerToServiceBox(now);
   sfx.dash();
-  showFlash('閃身', 360);
+  if (gameMode !== 'online' || id === onlineSide) showFlash('閃身', 360);
+}
+
+function moveControlledPlayer(
+  id: PlayerId,
+  movement: { x: number; y: number },
+  dtSeconds: number,
+  now: number,
+): void {
+  const player = players[id];
+  const speed = now < player.dashUntil ? DASH_SPEED : PLAYER_SPEED;
+  player.x = clamp(player.x + movement.x * speed * dtSeconds, -COURT_WIDTH / 2 + 0.36, COURT_WIDTH / 2 - 0.36);
+  player.y = clamp(player.y + movement.y * speed * dtSeconds, 0.72, COURT_LENGTH - 0.42);
+  if (Math.abs(movement.x) > 0.05) player.facing = Math.sign(movement.x);
+  player.energy = clamp(player.energy + ENERGY_REGEN_PER_SECOND * dtSeconds, 0, 100);
+  playerAnim(id).setLocomotion(Math.hypot(movement.x, movement.y) > 0.05, player.facing);
 }
 
 function reportPlayerName(id: PlayerId): string {
   if (gameMode === 'watch') return id === 'you' ? '藍方 AI' : '金方 AI';
+  if (gameMode === 'online') return id === onlineSide ? '你' : '對手';
   return id === 'you' ? '你' : '對手';
 }
 
@@ -1581,7 +1671,39 @@ function resetMatch(): void {
   resetRally(gameNow);
 }
 
-reportRematchEl.addEventListener('click', resetMatch);
+function requestRematch(): void {
+  if (gameMode === 'online' && onlineSide === 'ai') {
+    localRematchSeq += 1;
+    showFlash('已向房主送出再戰要求', 900);
+    return;
+  }
+  resetMatch();
+}
+
+function requestLocalHit(kind: ShotKind): void {
+  if (gameMode === 'online') {
+    if (!onlinePeerConnected || !onlineSide) return;
+    if (onlineSide === 'ai') {
+      localHitSeq += 1;
+      localHitKind = kind;
+      return;
+    }
+    queueHit('you', kind, targetWallX);
+    return;
+  }
+  queueHit('you', kind, targetWallX);
+}
+
+function requestLocalDash(): void {
+  if (gameMode === 'online' && onlineSide === 'ai') {
+    if (!onlinePeerConnected) return;
+    localDashSeq += 1;
+    return;
+  }
+  dash();
+}
+
+reportRematchEl.addEventListener('click', requestRematch);
 reportExportEl.addEventListener('click', exportMatchData);
 
 window.addEventListener('keydown', (event) => {
@@ -1590,15 +1712,15 @@ window.addEventListener('keydown', (event) => {
   if (gameMode === 'watch' && key !== 'enter') return;
   held.add(key);
   if (event.repeat && ['j', 'k', 'l', 'i', ' ', 'shift'].includes(key)) return;
-  if (key === 'j') queueHit('you', 'drive', targetWallX);
-  else if (key === 'k') queueHit('you', 'drop', targetWallX);
-  else if (key === 'l') queueHit('you', 'boast', targetWallX);
-  else if (key === 'i') queueHit('you', 'glass', targetWallX);
-  else if (event.key === ' ') queueHit('you', ball.active ? 'lob' : 'drive', targetWallX);
-  else if (key === 'shift') dash();
+  if (key === 'j') requestLocalHit('drive');
+  else if (key === 'k') requestLocalHit('drop');
+  else if (key === 'l') requestLocalHit('boast');
+  else if (key === 'i') requestLocalHit('glass');
+  else if (event.key === ' ') requestLocalHit(ball.active ? 'lob' : 'drive');
+  else if (key === 'shift') requestLocalDash();
   else if (key === 'arrowleft') targetWallX = clamp(targetWallX - 0.45, -2.65, 2.65);
   else if (key === 'arrowright') targetWallX = clamp(targetWallX + 0.45, -2.65, 2.65);
-  else if (key === 'enter' && matchWinner) resetMatch();
+  else if (key === 'enter' && matchWinner) requestRematch();
 });
 window.addEventListener('keyup', (event) => held.delete(event.key.toLowerCase()));
 window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
@@ -1623,24 +1745,47 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('#touch-shots 
     event.preventDefault();
     sfx.unlock();
     const kind = button.dataset.shot as ShotKind;
-    queueHit('you', kind, targetWallX);
+    requestLocalHit(kind);
   });
 }
 
-function setGameMode(mode: GameMode): void {
+function refreshModeUi(): void {
+  document.body.classList.toggle('watch-mode', gameMode === 'watch');
+  document.body.classList.toggle('online-mode', gameMode === 'online');
+  document.querySelector('#mode-play')?.classList.toggle('active', gameMode === 'play');
+  document.querySelector('#mode-watch')?.classList.toggle('active', gameMode === 'watch');
+  document.querySelector('#mode-online')?.classList.toggle('active', gameMode === 'online');
+  if (gameMode === 'watch') {
+    modeBadgeEl.textContent = 'AI VS AI · LIVE';
+    leftNameEl.textContent = 'BLUE AI';
+    rightNameEl.textContent = 'GOLD AI';
+  } else if (gameMode === 'online') {
+    modeBadgeEl.textContent = `ONLINE PVP · ${onlineRoom.toUpperCase()}`;
+    leftNameEl.textContent = onlineSide === 'you' ? 'YOU · BLUE' : 'BLUE · HOST';
+    rightNameEl.textContent = onlineSide === 'ai' ? 'YOU · GOLD' : 'GOLD · GUEST';
+  } else {
+    modeBadgeEl.textContent = 'PLAYER VS AI';
+    leftNameEl.textContent = 'YOU';
+    rightNameEl.textContent = 'RIVAL AI';
+  }
+}
+
+function setGameMode(mode: Exclude<GameMode, 'online'>): void {
   gameMode = mode;
   held.clear();
-  document.body.classList.toggle('watch-mode', mode === 'watch');
-  document.querySelector('#mode-play')?.classList.toggle('active', mode === 'play');
-  document.querySelector('#mode-watch')?.classList.toggle('active', mode === 'watch');
-  modeBadgeEl.textContent = mode === 'watch' ? 'AI VS AI · LIVE' : 'PLAYER VS AI';
-  leftNameEl.textContent = mode === 'watch' ? 'BLUE AI' : 'YOU';
-  rightNameEl.textContent = mode === 'watch' ? 'GOLD AI' : 'RIVAL AI';
+  refreshModeUi();
   resetMatch();
 }
 
-document.querySelector('#mode-play')?.addEventListener('click', () => setGameMode('play'));
-document.querySelector('#mode-watch')?.addEventListener('click', () => setGameMode('watch'));
+document.querySelector('#mode-play')?.addEventListener('click', () => {
+  if (gameMode === 'online') navigateToMode('play');
+  else setGameMode('play');
+});
+document.querySelector('#mode-watch')?.addEventListener('click', () => {
+  if (gameMode === 'online') navigateToMode('watch');
+  else setGameMode('watch');
+});
+document.querySelector('#mode-online')?.addEventListener('click', () => navigateToMode('online'));
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-level]')) {
   button.addEventListener('click', () => {
     aiLevel = button.dataset.level as AiLevel;
@@ -1660,13 +1805,33 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-speed]'
 
 function updatePlayers(dtSeconds: number, now: number): void {
   const human = players.you;
-  if (gameMode === 'play') {
+  if (gameMode === 'online') {
+    if (onlineSide !== 'you' || !onlinePeerConnected) {
+      humanAnim.setLocomotion(false, human.facing);
+      aiAnim.setLocomotion(false, players.ai.facing);
+      return;
+    }
+    const hostMovement = movementVector();
+    const guestMovement = remoteInput
+      ? { x: remoteInput.moveX, y: remoteInput.moveY }
+      : { x: 0, y: 0 };
+    moveControlledPlayer('you', hostMovement, dtSeconds, now);
+    moveControlledPlayer('ai', guestMovement, dtSeconds, now);
+    if (remoteInput && remoteInput.dashSeq > handledRemoteDashSeq) {
+      handledRemoteDashSeq = remoteInput.dashSeq;
+      dash('ai', guestMovement);
+    }
+    if (remoteInput && remoteInput.hitSeq > handledRemoteHitSeq && remoteInput.hitKind) {
+      handledRemoteHitSeq = remoteInput.hitSeq;
+      queueHit('ai', remoteInput.hitKind, remoteInput.targetX);
+    }
+    if (remoteInput && remoteInput.rematchSeq > handledRemoteRematchSeq) {
+      handledRemoteRematchSeq = remoteInput.rematchSeq;
+      if (matchWinner) resetMatch();
+    }
+  } else if (gameMode === 'play') {
     const movement = movementVector();
-    const speed = now < human.dashUntil ? DASH_SPEED : PLAYER_SPEED;
-    human.x = clamp(human.x + movement.x * speed * dtSeconds, -COURT_WIDTH / 2 + 0.36, COURT_WIDTH / 2 - 0.36);
-    human.y = clamp(human.y + movement.y * speed * dtSeconds, 0.72, COURT_LENGTH - 0.42);
-    if (Math.abs(movement.x) > 0.05) human.facing = Math.sign(movement.x);
-    humanAnim.setLocomotion(Math.hypot(movement.x, movement.y) > 0.05, human.facing);
+    moveControlledPlayer('you', movement, dtSeconds, now);
   } else {
     const blueDecision = decideAi(
       human,
@@ -1687,26 +1852,32 @@ function updatePlayers(dtSeconds: number, now: number): void {
       rememberAiDecision(aiMemories.you, blueDecision);
     }
   }
-  human.energy = clamp(human.energy + ENERGY_REGEN_PER_SECOND * dtSeconds, 0, 100);
+  if (gameMode === 'play') {
+    // play mode regeneration is handled by moveControlledPlayer above
+  } else if (gameMode === 'watch') {
+    human.energy = clamp(human.energy + ENERGY_REGEN_PER_SECOND * dtSeconds, 0, 100);
+  }
 
-  const decision = decideAi(
-    players.ai,
-    human,
-    ball,
-    'ai',
-    now,
-    aiLevel,
-    aiMemories.ai,
-    { rally, selfScore: scores.ai, opponentScore: scores.you },
-  );
-  moveAi(players.ai, decision, dtSeconds, aiLevel);
-  players.ai.energy = clamp(players.ai.energy + ENERGY_REGEN_PER_SECOND * dtSeconds, 0, 100);
-  aiAnim.setLocomotion(Math.hypot(decision.moveX, decision.moveY) > 0.05, players.ai.facing);
-  if (
-    decision.shot &&
-    queueHit('ai', decision.shot, decision.targetX, decision.pace, decision.label)
-  ) {
-    rememberAiDecision(aiMemories.ai, decision);
+  if (gameMode !== 'online') {
+    const decision = decideAi(
+      players.ai,
+      human,
+      ball,
+      'ai',
+      now,
+      aiLevel,
+      aiMemories.ai,
+      { rally, selfScore: scores.ai, opponentScore: scores.you },
+    );
+    moveAi(players.ai, decision, dtSeconds, aiLevel);
+    players.ai.energy = clamp(players.ai.energy + ENERGY_REGEN_PER_SECOND * dtSeconds, 0, 100);
+    aiAnim.setLocomotion(Math.hypot(decision.moveX, decision.moveY) > 0.05, players.ai.facing);
+    if (
+      decision.shot &&
+      queueHit('ai', decision.shot, decision.targetX, decision.pace, decision.label)
+    ) {
+      rememberAiDecision(aiMemories.ai, decision);
+    }
   }
 
   const separation = distance(human.x, human.y, players.ai.x, players.ai.y);
@@ -1727,7 +1898,7 @@ function updatePlayers(dtSeconds: number, now: number): void {
 }
 
 function updateAiServe(now: number): void {
-  const automaticServer = server === 'ai' || gameMode === 'watch';
+  const automaticServer = gameMode !== 'online' && (server === 'ai' || gameMode === 'watch');
   if (!automaticServer || ball.active || pendingHits[server] || now < nextServeAt || pointPauseUntil > now) return;
   queueHit(
     server,
@@ -1987,10 +2158,14 @@ function updateHud(now: number): void {
   pointsRightEl.textContent = `${scores.ai}`;
   const serveText = gameMode === 'watch'
     ? `${server === 'you' ? '藍方' : '金方'}發球`
-    : server === 'you' ? '你發球' : '對手發球';
+    : gameMode === 'online'
+      ? server === onlineSide ? '你發球' : '對手發球'
+      : server === 'you' ? '你發球' : '對手發球';
   const winnerText = gameMode === 'watch'
     ? `${matchWinner === 'you' ? '藍方 AI' : '金方 AI'}勝出`
-    : matchWinner === 'you' ? '比賽勝利' : '對手獲勝';
+    : gameMode === 'online'
+      ? matchWinner === onlineSide ? '比賽勝利' : '對手獲勝'
+      : matchWinner === 'you' ? '比賽勝利' : '對手獲勝';
   scoreMetaEl.textContent = matchWinner
     ? `${winnerText} · Enter 再戰`
     : !ball.active
@@ -1998,8 +2173,9 @@ function updateHud(now: number): void {
       : rally === 1
         ? `${serveText}進行中 · 發球線以上 → 對角後場`
         : `回合進行中 · 第 ${Math.max(1, rally)} 拍`;
-  energyFillEl.style.width = `${players.you.energy}%`;
-  energyValueEl.textContent = `${Math.round(players.you.energy)}`;
+  const hudPlayer = gameMode === 'online' && onlineSide ? players[onlineSide] : players.you;
+  energyFillEl.style.width = `${hudPlayer.energy}%`;
+  energyValueEl.textContent = `${Math.round(hudPlayer.energy)}`;
   qualityFillEl.style.width = `${lastQuality * 100}%`;
   qualityLabelEl.textContent =
     lastQuality >= 0.82 ? 'PURE' : lastQuality >= 0.55 ? 'SOLID' : 'STRETCHED';
@@ -2008,15 +2184,189 @@ function updateHud(now: number): void {
   rallyEl.textContent = `回合 ${rally}`;
   const humanT = distance(players.you.x, players.you.y, T_X, T_Y);
   const aiT = distance(players.ai.x, players.ai.y, T_X, T_Y);
-  const leftTName = gameMode === 'watch' ? '藍方' : '你';
-  const rightTName = gameMode === 'watch' ? '金方' : '對手';
+  const leftTName = gameMode === 'watch' ? '藍方' : gameMode === 'online' ? (onlineSide === 'you' ? '你' : '對手') : '你';
+  const rightTName = gameMode === 'watch' ? '金方' : gameMode === 'online' ? (onlineSide === 'ai' ? '你' : '對手') : '對手';
   tControlEl.textContent =
     Math.abs(humanT - aiT) < 0.35 ? 'T 區纏鬥' : humanT < aiT ? `${leftTName}控制 T 區` : `${rightTName}控制 T 區`;
-  strategyFeedEl.textContent = gameMode === 'watch' ? lastStrategy : '觀察三方位置再選球';
-  if (pointPauseUntil > 0 && pointPauseUntil <= now && !matchWinner) resetRally(now);
+  strategyFeedEl.textContent = gameMode === 'watch'
+    ? lastStrategy
+    : gameMode === 'online'
+      ? onlinePeerConnected ? `真人對戰 · 延遲約 ${networkDelayMs}ms` : '等待對手加入房間'
+      : '觀察三方位置再選球';
+  if (
+    pointPauseUntil > 0 &&
+    pointPauseUntil <= now &&
+    !matchWinner &&
+    (gameMode !== 'online' || onlineSide === 'you')
+  ) resetRally(now);
+}
+
+function applyOnlineSnapshot(snapshot: OnlineMatchSnapshot): void {
+  if (gameMode !== 'online' || onlineSide !== 'ai') return;
+  const previousPositions = {
+    you: { x: players.you.x, y: players.you.y },
+    ai: { x: players.ai.x, y: players.ai.y },
+  };
+  const previousWinner = matchWinner;
+  const scoreKey = `${snapshot.scores.you}:${snapshot.scores.ai}`;
+  const rallyAdvanced = snapshot.rally !== lastRemoteSnapshotRally;
+
+  Object.assign(players.you, snapshot.players.you);
+  Object.assign(players.ai, snapshot.players.ai);
+  Object.assign(ball, snapshot.ball);
+  scores.you = snapshot.scores.you;
+  scores.ai = snapshot.scores.ai;
+  server = snapshot.server;
+  serveSide = snapshot.serveSide;
+  rally = snapshot.rally;
+  lastQuality = snapshot.lastQuality;
+  pointPauseUntil = snapshot.pointPauseLeftMs > 0 ? gameNow + snapshot.pointPauseLeftMs : 0;
+  nextServeAt = gameNow + snapshot.nextServeLeftMs;
+  matchWinner = snapshot.matchWinner;
+  networkDelayMs = Math.round(clamp(onlineNet ? onlineNet.now() - snapshot.sentAt : 0, 0, 999));
+
+  for (const id of ['you', 'ai'] as const) {
+    const moved = distance(
+      previousPositions[id].x,
+      previousPositions[id].y,
+      players[id].x,
+      players[id].y,
+    ) > 0.025;
+    playerAnim(id).setLocomotion(moved, players[id].facing);
+  }
+  if (rallyAdvanced && ball.lastHitter) {
+    const hitter = ball.lastHitter;
+    playerAnim(hitter).action(swingAction(hitter, lastQuality), players[hitter].facing);
+    playerAnim(otherPlayer(hitter)).action('splitstep', players[otherPlayer(hitter)].facing);
+    sfx.hit('drive', lastQuality);
+  }
+  if (hasRemoteSnapshot && scoreKey !== lastRemoteScore) {
+    const [oldYou, oldAi] = lastRemoteScore.split(':').map(Number);
+    const pointWinner: PlayerId = scores.you > oldYou ? 'you' : scores.ai > oldAi ? 'ai' : server;
+    playerAnim(pointWinner).action('celebrate', players[pointWinner].facing);
+    playerAnim(otherPlayer(pointWinner)).action('dejected', players[otherPlayer(pointWinner)].facing);
+    crowdExcitedUntil = gameNow + 1750;
+    sfx.point(pointWinner === onlineSide);
+    showFlash(pointWinner === onlineSide ? '你得分' : '對手得分', 1000);
+  }
+  if (matchWinner && matchWinner !== previousWinner) {
+    showFlash(matchWinner === onlineSide ? '比賽勝利\n按 Enter 再戰' : '惜敗\n按 Enter 要求再戰', 4000);
+  }
+  lastRemoteSnapshotRally = snapshot.rally;
+  lastRemoteScore = scoreKey;
+  hasRemoteSnapshot = true;
+}
+
+function sendOnlineState(now: number): void {
+  if (!onlineNet || !onlineSide) return;
+  if (now - lastHeartbeatAt >= 4_000) {
+    lastHeartbeatAt = now;
+    onlineNet.heartbeat();
+  }
+  if (onlineSide === 'ai' && now - lastInputSentAt >= 50) {
+    lastInputSentAt = now;
+    const movement = movementVector();
+    onlineNet.sendInput({
+      moveX: movement.x,
+      moveY: movement.y,
+      targetX: targetWallX,
+      dashSeq: localDashSeq,
+      hitSeq: localHitSeq,
+      hitKind: localHitKind,
+      rematchSeq: localRematchSeq,
+    });
+  }
+  if (onlineSide === 'you' && onlinePeerConnected && now - lastSnapshotSentAt >= 80) {
+    lastSnapshotSentAt = now;
+    networkSnapshotSeq += 1;
+    onlineNet.sendSnapshot({
+      seq: networkSnapshotSeq,
+      players: {
+        you: {
+          x: players.you.x,
+          y: players.you.y,
+          energy: players.you.energy,
+          facing: players.you.facing,
+          dashUntil: players.you.dashUntil,
+          dashTailUntil: players.you.dashTailUntil,
+        },
+        ai: {
+          x: players.ai.x,
+          y: players.ai.y,
+          energy: players.ai.energy,
+          facing: players.ai.facing,
+          dashUntil: players.ai.dashUntil,
+          dashTailUntil: players.ai.dashTailUntil,
+        },
+      },
+      ball: {
+        active: ball.active,
+        x: ball.x,
+        y: ball.y,
+        z: ball.z,
+        vx: ball.vx,
+        vy: ball.vy,
+        vz: ball.vz,
+        lastHitter: ball.lastHitter,
+        floorBounces: ball.floorBounces,
+        frontHit: ball.frontHit,
+        ageSeconds: ball.ageSeconds,
+        serveSide: ball.serveSide,
+        serveAwaitingBounce: ball.serveAwaitingBounce,
+      },
+      scores: { you: scores.you, ai: scores.ai },
+      server,
+      serveSide,
+      rally,
+      lastQuality,
+      pointPauseLeftMs: Number.isFinite(pointPauseUntil) ? Math.max(0, pointPauseUntil - now) : 0,
+      nextServeLeftMs: Math.max(0, nextServeAt - now),
+      matchWinner,
+    });
+  }
+}
+
+onlineCopyEl.addEventListener('click', () => {
+  void navigator.clipboard.writeText(onlineInviteEl.value).then(() => {
+    onlineCopyEl.textContent = '已複製 ✓';
+    window.setTimeout(() => (onlineCopyEl.textContent = '複製邀請連結'), 1500);
+  });
+});
+document.querySelector('#online-exit')?.addEventListener('click', () => navigateToMode('play'));
+
+if (onlineNet && onlineSide) {
+  onlineNet.onPeer = (peer) => {
+    const wasConnected = onlinePeerConnected;
+    onlinePeerConnected = Boolean(peer);
+    if (peer) {
+      onlineLobbyEl.classList.remove('show');
+      onlineLobbyStatusEl.textContent = '雙方已連線，比賽開始';
+      networkStatusEl.classList.add('connected');
+      networkStatusEl.textContent = onlineSide === 'you' ? 'HOST · CONNECTED' : 'GUEST · CONNECTED';
+      if (!wasConnected) showFlash('雙方已連線\n比賽開始', 1200);
+    } else {
+      onlineLobbyEl.classList.add('show');
+      onlineLobbyStatusEl.textContent = onlineSide === 'you'
+        ? '你是藍方房主 · 等待金方加入'
+        : '與藍方房主失去連線 · 等待重連';
+      networkStatusEl.classList.remove('connected');
+      networkStatusEl.textContent = 'WAITING FOR RIVAL';
+      held.clear();
+    }
+  };
+  onlineNet.onRemoteInput = (input) => {
+    if (onlineSide === 'you') remoteInput = input;
+  };
+  onlineNet.onSnapshot = (snapshot) => {
+    if (snapshot) applyOnlineSnapshot(snapshot);
+  };
+  if (onlineSide === 'you') {
+    void onlineNet.clearRoomState().then(() => resetMatch());
+  }
 }
 
 resetRally(gameNow);
+refreshModeUi();
 loadingEl.classList.add('hide');
 window.setTimeout(() => loadingEl.remove(), 600);
 
@@ -2026,12 +2376,15 @@ app.ticker.add((ticker) => {
   gameNow += realDtSeconds * 1000;
   const now = gameNow;
 
-  if (!matchWinner && pointPauseUntil <= now) {
+  const authoritativeClient = gameMode !== 'online' || onlineSide === 'you';
+  const onlineCanPlay = gameMode !== 'online' || onlinePeerConnected;
+  if (authoritativeClient && onlineCanPlay && !matchWinner && pointPauseUntil <= now) {
     updatePlayers(realDtSeconds, now);
     firePendingHits(now);
     updateAiServe(now);
     for (const event of ball.update(ballDtSeconds)) handleBallEvent(event, now);
   }
+  sendOnlineState(now);
 
   humanAnim.update(realDtSeconds);
   aiAnim.update(realDtSeconds);

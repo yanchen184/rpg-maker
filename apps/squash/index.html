@@ -51,6 +51,17 @@
         background: #031116dc; color: var(--cyan); font: 800 10px/1 system-ui;
         letter-spacing: 1.5px; box-shadow: 0 0 18px #55dff322;
       }
+      #network-status {
+        position: fixed; z-index: 21; right: 16px; top: 47px;
+        display: none; min-width: 144px; padding: 6px 9px;
+        border: 1px solid #ffca5766; border-radius: 4px;
+        background: #171005df; color: #ffd77a; text-align: center;
+        font: 800 8px/1 system-ui; letter-spacing: 1.2px;
+      }
+      body.online-mode #network-status { display: block; }
+      #network-status.connected {
+        border-color: #55e8a777; background: #051a12df; color: #7dffb2;
+      }
       #status {
         left: 14px; bottom: 14px; width: 190px; padding: 10px 12px; border-radius: 7px;
       }
@@ -67,7 +78,7 @@
       }
       #radar strong { color: var(--cyan); letter-spacing: 1px; }
       #match-controls {
-        right: 14px; bottom: 14px; width: 252px; padding: 10px; border-radius: 7px;
+        right: 14px; bottom: 14px; width: 278px; padding: 10px; border-radius: 7px;
       }
       .control-row { display: grid; grid-template-columns: 62px 1fr; align-items: center; gap: 7px; }
       .control-row + .control-row { margin-top: 7px; }
@@ -92,6 +103,39 @@
       }
       body.watch-mode #hint { display: none; }
       body.watch-mode #touch-controls { display: none !important; }
+      body.online-mode .offline-only { display: none; }
+      #online-lobby {
+        position: fixed; inset: 0; z-index: 75; display: grid; place-items: center;
+        padding: 20px; background: #02080dcc; backdrop-filter: blur(10px);
+        opacity: 0; visibility: hidden; pointer-events: none;
+        transition: opacity .2s ease, visibility 0s linear .2s;
+      }
+      #online-lobby.show {
+        opacity: 1; visibility: visible; pointer-events: auto; transition-delay: 0s;
+      }
+      .online-card {
+        width: min(520px, 94vw); padding: 24px;
+        border: 1px solid #68e8ff88; border-radius: 12px;
+        background: linear-gradient(145deg, #081b22f7, #02090df9);
+        box-shadow: 0 28px 90px #000d, inset 0 1px #e9ffff12;
+        color: #eafcff; text-align: center;
+      }
+      .online-kicker { color: var(--cyan); font: 900 10px/1 system-ui; letter-spacing: 2.5px; }
+      .online-card h2 { margin: 8px 0 4px; font: 900 25px/1.2 system-ui; }
+      #online-lobby-status { margin: 8px 0 18px; color: #9bc3cc; font-size: 11px; }
+      .online-invite-row { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
+      #online-invite {
+        min-width: 0; height: 40px; padding: 0 11px;
+        border: 1px solid #456b75; border-radius: 5px; outline: none;
+        background: #02090d; color: #bfefff; font: 700 10px/1 monospace;
+      }
+      #online-invite:focus { border-color: var(--cyan); }
+      .online-action {
+        height: 40px; padding: 0 14px; border: 1px solid var(--cyan); border-radius: 5px;
+        background: #0b3038; color: #dffcff; font: 900 10px/1 system-ui; cursor: pointer;
+      }
+      #online-exit { margin-top: 10px; border-color: #50656b; background: #071218; color: #9db8bf; }
+      .online-note { margin: 15px 0 0; color: #63828a; font-size: 9px; line-height: 1.6; }
       #flash {
         position: fixed; z-index: 40; left: 50%; top: 35%; transform: translate(-50%, -50%);
         font: 900 32px/1.15 system-ui; color: #fff; text-align: center;
@@ -286,6 +330,7 @@
       <div id="score-meta" class="meta">你發球 · 準備發球</div>
     </div>
     <div id="mode-badge">PLAYER VS AI</div>
+    <div id="network-status">WAITING FOR RIVAL</div>
     <div id="status" class="panel">
       <div class="row"><span>ENERGY</span><span id="energy-value">100</span></div>
       <div class="bar"><div id="energy-fill" class="fill"></div></div>
@@ -302,10 +347,11 @@
         <span class="control-label">MODE</span>
         <div class="button-group">
           <button id="mode-play" class="control-button active">玩家</button>
+          <button id="mode-online" class="control-button">線上</button>
           <button id="mode-watch" class="control-button">AI 對戰</button>
         </div>
       </div>
-      <div class="control-row">
+      <div class="control-row offline-only">
         <span class="control-label">DIFFICULTY</span>
         <div class="button-group">
           <button class="control-button" data-level="easy">EASY</button>
@@ -313,7 +359,7 @@
           <button class="control-button" data-level="hard">HARD</button>
         </div>
       </div>
-      <div class="control-row">
+      <div class="control-row offline-only">
         <span class="control-label">BALL SPEED</span>
         <div class="button-group">
           <button class="control-button" data-speed="0.5">.5×</button>
@@ -325,6 +371,19 @@
     </div>
     <div id="hint" class="panel">WASD 移動 · Shift 閃身 · J 平抽 · K 小球 · L 側牆 · I 後玻璃 · Space 高吊</div>
     <div id="flash"></div>
+    <div id="online-lobby" role="dialog" aria-modal="true" aria-labelledby="online-title">
+      <section class="online-card">
+        <div class="online-kicker">ONLINE COURT · REAL PLAYER</div>
+        <h2 id="online-title">真人連線壁球</h2>
+        <p id="online-lobby-status">正在加入球場…</p>
+        <div class="online-invite-row">
+          <input id="online-invite" readonly aria-label="對戰邀請連結" />
+          <button id="online-copy" class="online-action" type="button">複製邀請連結</button>
+        </div>
+        <button id="online-exit" class="online-action" type="button">返回玩家對 AI</button>
+        <p class="online-note">第一位加入者為藍方房主，負責權威物理與計分；第二位為金方。<br />分享同一條連結即可加入，關閉分頁後槽位會自動釋放。</p>
+      </section>
+    </div>
     <div id="match-report" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="report-title">
       <section class="report-card">
         <header class="report-head">
