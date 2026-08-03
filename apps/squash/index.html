@@ -301,12 +301,30 @@
           background: #0b2634cc; color: #e8fbff; font: 800 14px system-ui;
           width: 58px; height: 58px; -webkit-tap-highlight-color: transparent;
         }
-        #touch-move { position: absolute; left: 14px; bottom: 76px; width: 174px; height: 174px; }
-        #touch-move button { position: absolute; }
-        #touch-move [data-key="w"] { left: 58px; top: 0; }
-        #touch-move [data-key="s"] { left: 58px; bottom: 0; }
-        #touch-move [data-key="a"] { left: 0; top: 58px; }
-        #touch-move [data-key="d"] { right: 0; top: 58px; }
+        #touch-move {
+          position: absolute; left: 18px; bottom: 82px; width: 148px; height: 148px;
+          box-sizing: border-box; border: 2px solid #7eeaff88; border-radius: 50%;
+          background:
+            radial-gradient(circle at center, #15394a99 0 22%, #0a2330bb 23% 59%, #06151dbb 60%),
+            linear-gradient(#7eeaff18, #7eeaff05);
+          box-shadow: inset 0 0 28px #63dff622, 0 6px 24px #0008;
+          pointer-events: auto; touch-action: none;
+        }
+        #touch-move::before, #touch-move::after {
+          content: ''; position: absolute; left: 50%; top: 50%; background: #8cecff25;
+          transform: translate(-50%, -50%); pointer-events: none;
+        }
+        #touch-move::before { width: 1px; height: 72%; }
+        #touch-move::after { width: 72%; height: 1px; }
+        #touch-stick-thumb {
+          position: absolute; left: 50%; top: 50%; width: 58px; height: 58px;
+          box-sizing: border-box; border: 2px solid #c8f9ffcc; border-radius: 50%;
+          background: radial-gradient(circle at 38% 32%, #bff8ffcc, #28849ba8 35%, #0b3444e8 72%);
+          box-shadow: 0 4px 16px #0009, 0 0 18px #65e8ff44;
+          transform: translate(-50%, -50%); pointer-events: none;
+          transition: transform 70ms linear;
+        }
+        #touch-move.active #touch-stick-thumb { transition: none; box-shadow: 0 4px 16px #0009, 0 0 25px #65e8ff88; }
         #touch-shots { position: absolute; right: 14px; bottom: 76px; display: grid; grid-template-columns: repeat(2, 64px); gap: 8px; }
         #touch-shots button { width: 64px; height: 64px; }
       }
@@ -504,10 +522,7 @@
     <div id="loading"><div class="brand"><div class="ball"></div><h1>玻璃禁區</h1><p>正在喚醒球場與對手…</p></div></div>
     <div id="touch-controls">
       <div id="touch-aim-hint">點擊或拖曳前牆瞄準 · 準星會鎖定</div>
-      <div id="touch-move">
-        <button data-key="w">▲</button><button data-key="a">◀</button>
-        <button data-key="s">▼</button><button data-key="d">▶</button>
-      </div>
+      <div id="touch-move" role="application" aria-label="圓形移動搖桿"><div id="touch-stick-thumb"></div></div>
       <div id="touch-shots">
         <button data-shot="drop">小球</button><button data-shot="lob">高吊</button>
         <button data-shot="boast">側牆</button><button data-shot="drive">平抽</button>

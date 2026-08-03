@@ -199,6 +199,8 @@ const onlineLobbyStatusEl = document.querySelector<HTMLElement>('#online-lobby-s
 const onlineInviteEl = document.querySelector<HTMLInputElement>('#online-invite')!;
 const onlineCopyEl = document.querySelector<HTMLButtonElement>('#online-copy')!;
 const networkStatusEl = document.querySelector<HTMLElement>('#network-status')!;
+const touchMoveEl = document.querySelector<HTMLElement>('#touch-move')!;
+const touchStickThumbEl = document.querySelector<HTMLElement>('#touch-stick-thumb')!;
 
 setAssetBase(import.meta.env.BASE_URL);
 
@@ -717,6 +719,7 @@ const players: Record<PlayerId, CourtPlayer> = {
 const ball = new SquashBall();
 const sfx = new SquashSfx();
 const held = new Set<string>();
+let touchMovement = { x: 0, y: 0 };
 const pendingHits: Partial<Record<PlayerId, PendingHit>> = {};
 const scores: Record<PlayerId, number> = { you: 0, ai: 0 };
 const aiMemories = {
@@ -1286,10 +1289,11 @@ function handleBallEvent(event: BallEvent, now: number): void {
 }
 
 function movementVector(): { x: number; y: number } {
-  const x = (held.has('d') ? 1 : 0) - (held.has('a') ? 1 : 0);
-  const y = (held.has('s') ? 1 : 0) - (held.has('w') ? 1 : 0);
+  const x = (held.has('d') ? 1 : 0) - (held.has('a') ? 1 : 0) + touchMovement.x;
+  const y = (held.has('s') ? 1 : 0) - (held.has('w') ? 1 : 0) + touchMovement.y;
   const length = Math.hypot(x, y);
-  return length > 0 ? { x: x / length, y: y / length } : { x: 0, y: 0 };
+  if (length > 1) return { x: x / length, y: y / length };
+  return length > 0 ? { x, y } : { x: 0, y: 0 };
 }
 
 function dash(id: PlayerId = 'you', movement = movementVector()): void {
@@ -1791,21 +1795,51 @@ app.canvas.addEventListener('pointermove', (event) => {
   if (event.buttons || event.pointerType === 'touch') aimFromPointer(event);
 });
 
-for (const button of document.querySelectorAll<HTMLButtonElement>('#touch-move button')) {
-  const key = button.dataset.key!;
-  const press = (event: PointerEvent): void => {
-    event.preventDefault();
-    held.add(key);
-    button.setPointerCapture(event.pointerId);
-  };
-  const release = (event: PointerEvent): void => {
-    event.preventDefault();
-    held.delete(key);
-  };
-  button.addEventListener('pointerdown', press);
-  button.addEventListener('pointerup', release);
-  button.addEventListener('pointercancel', release);
+const TOUCH_STICK_RADIUS = 49;
+let touchStickPointer: number | null = null;
+
+function updateTouchStick(event: PointerEvent): void {
+  const rect = touchMoveEl.getBoundingClientRect();
+  const dx = event.clientX - (rect.left + rect.width / 2);
+  const dy = event.clientY - (rect.top + rect.height / 2);
+  const distanceFromCenter = Math.hypot(dx, dy);
+  const strength = Math.min(1, distanceFromCenter / TOUCH_STICK_RADIUS);
+  const directionX = distanceFromCenter > 0 ? dx / distanceFromCenter : 0;
+  const directionY = distanceFromCenter > 0 ? dy / distanceFromCenter : 0;
+  touchMovement = { x: directionX * strength, y: directionY * strength };
+  const thumbX = directionX * strength * TOUCH_STICK_RADIUS;
+  const thumbY = directionY * strength * TOUCH_STICK_RADIUS;
+  touchStickThumbEl.style.transform = `translate(-50%, -50%) translate(${thumbX}px, ${thumbY}px)`;
 }
+
+function releaseTouchStick(event?: PointerEvent): void {
+  if (event && touchStickPointer !== event.pointerId) return;
+  touchStickPointer = null;
+  touchMovement = { x: 0, y: 0 };
+  touchMoveEl.classList.remove('active');
+  touchStickThumbEl.style.transform = 'translate(-50%, -50%)';
+}
+
+touchMoveEl.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  sfx.unlock();
+  touchStickPointer = event.pointerId;
+  touchMoveEl.classList.add('active');
+  touchMoveEl.setPointerCapture(event.pointerId);
+  updateTouchStick(event);
+});
+touchMoveEl.addEventListener('pointermove', (event) => {
+  if (touchStickPointer !== event.pointerId) return;
+  event.preventDefault();
+  updateTouchStick(event);
+});
+touchMoveEl.addEventListener('pointerup', releaseTouchStick);
+touchMoveEl.addEventListener('pointercancel', releaseTouchStick);
+touchMoveEl.addEventListener('lostpointercapture', () => releaseTouchStick());
+window.addEventListener('blur', () => {
+  held.clear();
+  releaseTouchStick();
+});
 for (const button of document.querySelectorAll<HTMLButtonElement>('#touch-shots button')) {
   button.addEventListener('pointerdown', (event) => {
     event.preventDefault();
@@ -2438,6 +2472,7 @@ if (onlineNet && onlineSide) {
       networkStatusEl.classList.remove('connected');
       networkStatusEl.textContent = 'WAITING FOR RIVAL';
       held.clear();
+      releaseTouchStick();
     }
   };
   onlineNet.onRemoteInput = (input) => {
