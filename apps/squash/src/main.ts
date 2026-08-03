@@ -65,6 +65,7 @@ interface PendingHit {
   by: PlayerId;
   kind: ShotKind;
   targetX: number;
+  targetZ?: number;
   quality: number;
   pace: number;
   fireAt: number;
@@ -654,7 +655,18 @@ aimLayer.zIndex = 15;
 root.addChild(aimLayer);
 const aimGraphics = new Graphics();
 const serveGuideGraphics = new Graphics();
-aimLayer.addChild(serveGuideGraphics, aimGraphics);
+const aimLabel = new Text({
+  text: '',
+  style: new TextStyle({
+    fill: 0xffedac,
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: '800',
+    stroke: { color: 0x031015, width: 4 },
+  }),
+});
+aimLabel.anchor.set(0.5, 0);
+aimLayer.addChild(serveGuideGraphics, aimGraphics, aimLabel);
 
 const landingLayer = new Container();
 landingLayer.zIndex = 12;
@@ -742,6 +754,7 @@ let server: PlayerId = 'you';
 let serveSide: -1 | 1 = -1;
 let rally = 0;
 let targetWallX = -1.2;
+let targetWallZ = 2.15;
 let lastQuality = 1;
 let pointPauseUntil = 0;
 let nextServeAt = 0;
@@ -1024,6 +1037,10 @@ function resetRally(now: number): void {
   delete pendingHits.ai;
   rally = 0;
   ball.reset(servingPlayer.x, servingPlayer.y - 0.25);
+  if (server === localControlledPlayer()) {
+    targetWallX = -serveSide * 1.15;
+    targetWallZ = 2.35;
+  }
   pointPauseUntil = 0;
   nextServeAt = now + 1050;
   humanAnim.setLocomotion(false, players.you.facing);
@@ -1093,6 +1110,7 @@ function queueHit(
   targetX: number,
   pace = 1,
   strategyLabel = '',
+  targetZ?: number,
 ): boolean {
   const now = gameNow;
   if (matchWinner || pointPauseUntil > now || pendingHits[id]) return false;
@@ -1144,6 +1162,7 @@ function queueHit(
     by: id,
     kind: resolvedKind,
     targetX,
+    targetZ,
     quality,
     pace,
     serving,
@@ -1168,6 +1187,7 @@ function firePendingHits(now: number): void {
     const shotSpec = {
       kind: pending.kind,
       targetX: pending.targetX,
+      targetZ: pending.targetZ,
       quality: pending.quality,
       pace: pending.pace,
       serving: pending.serving,
@@ -1688,10 +1708,10 @@ function requestLocalHit(kind: ShotKind): void {
       localHitKind = kind;
       return;
     }
-    queueHit('you', kind, targetWallX);
+    queueHit('you', kind, targetWallX, 1, '', targetWallZ);
     return;
   }
-  queueHit('you', kind, targetWallX);
+  queueHit('you', kind, targetWallX, 1, '', targetWallZ);
 }
 
 function requestLocalDash(): void {
@@ -1710,6 +1730,7 @@ window.addEventListener('keydown', (event) => {
   sfx.unlock();
   const key = event.key.toLowerCase();
   if (gameMode === 'watch' && key !== 'enter') return;
+  if (key.startsWith('arrow')) event.preventDefault();
   held.add(key);
   if (event.repeat && ['j', 'k', 'l', 'i', ' ', 'shift'].includes(key)) return;
   if (key === 'j') requestLocalHit('drive');
@@ -1718,12 +1739,57 @@ window.addEventListener('keydown', (event) => {
   else if (key === 'i') requestLocalHit('glass');
   else if (event.key === ' ') requestLocalHit(ball.active ? 'lob' : 'drive');
   else if (key === 'shift') requestLocalDash();
-  else if (key === 'arrowleft') targetWallX = clamp(targetWallX - 0.45, -2.65, 2.65);
-  else if (key === 'arrowright') targetWallX = clamp(targetWallX + 0.45, -2.65, 2.65);
   else if (key === 'enter' && matchWinner) requestRematch();
 });
 window.addEventListener('keyup', (event) => held.delete(event.key.toLowerCase()));
 window.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
+
+function localControlledPlayer(): PlayerId | null {
+  if (gameMode === 'watch') return null;
+  if (gameMode === 'online') return onlineSide;
+  return 'you';
+}
+
+function aimHeightBounds(): { min: number; max: number } {
+  const local = localControlledPlayer();
+  const serving = local !== null && !ball.active && server === local;
+  return {
+    min: serving ? SERVICE_LINE_HEIGHT + 0.1 : TIN_HEIGHT + 0.1,
+    max: FRONT_OUT_HEIGHT - 0.16,
+  };
+}
+
+function updateAimInput(dtSeconds: number): void {
+  if (!localControlledPlayer()) return;
+  const horizontal = (held.has('arrowright') ? 1 : 0) - (held.has('arrowleft') ? 1 : 0);
+  const vertical = (held.has('arrowup') ? 1 : 0) - (held.has('arrowdown') ? 1 : 0);
+  targetWallX = clamp(targetWallX + horizontal * 2.8 * dtSeconds, -2.72, 2.72);
+  const bounds = aimHeightBounds();
+  targetWallZ = clamp(targetWallZ + vertical * 2.35 * dtSeconds, bounds.min, bounds.max);
+}
+
+function aimFromPointer(event: PointerEvent): void {
+  if (!localControlledPlayer()) return;
+  const rect = app.canvas.getBoundingClientRect();
+  const designX = (event.clientX - rect.left - root.x) / root.scale.x;
+  const designY = (event.clientY - rect.top - root.y) / root.scale.y;
+  const wallLeft = project(-COURT_WIDTH / 2, 0, 0).x;
+  const wallRight = project(COURT_WIDTH / 2, 0, 0).x;
+  const wallTop = project(0, 0, FRONT_OUT_HEIGHT).y;
+  const wallBottom = project(0, 0, TIN_HEIGHT).y;
+  if (designX < wallLeft || designX > wallRight || designY < wallTop || designY > wallBottom) return;
+  const bounds = aimHeightBounds();
+  targetWallX = clamp(((designX - DESIGN_WIDTH / 2) / 370) * (COURT_WIDTH / 2), -2.72, 2.72);
+  targetWallZ = clamp((310 - designY) / 55, bounds.min, bounds.max);
+}
+
+app.canvas.addEventListener('pointerdown', (event) => {
+  aimFromPointer(event);
+  app.canvas.setPointerCapture(event.pointerId);
+});
+app.canvas.addEventListener('pointermove', (event) => {
+  if (event.buttons || event.pointerType === 'touch') aimFromPointer(event);
+});
 
 for (const button of document.querySelectorAll<HTMLButtonElement>('#touch-move button')) {
   const key = button.dataset.key!;
@@ -1823,7 +1889,7 @@ function updatePlayers(dtSeconds: number, now: number): void {
     }
     if (remoteInput && remoteInput.hitSeq > handledRemoteHitSeq && remoteInput.hitKind) {
       handledRemoteHitSeq = remoteInput.hitSeq;
-      queueHit('ai', remoteInput.hitKind, remoteInput.targetX);
+      queueHit('ai', remoteInput.hitKind, remoteInput.targetX, 1, '', remoteInput.targetZ);
     }
     if (remoteInput && remoteInput.rematchSeq > handledRemoteRematchSeq) {
       handledRemoteRematchSeq = remoteInput.rematchSeq;
@@ -2033,16 +2099,35 @@ function updateServeGuide(now: number): void {
 }
 
 function updateAim(): void {
-  const point = project(targetWallX, 0, ball.active ? 1.25 : 2.4);
+  const local = localControlledPlayer();
+  aimLayer.visible = local !== null;
+  if (!local) return;
+  const bounds = aimHeightBounds();
+  targetWallZ = clamp(targetWallZ, bounds.min, bounds.max);
+  const point = project(targetWallX, 0, targetWallZ);
+  const playerPoint = project(players[local].x, players[local].y, 0.95);
+  const lowClearance = targetWallZ - TIN_HEIGHT;
+  const highClearance = FRONT_OUT_HEIGHT - targetWallZ;
+  const risky = lowClearance < 0.34 || highClearance < 0.34;
+  const color = risky ? 0xff795f : targetWallZ < 1.15 ? 0xffc857 : 0x7eeaff;
+  const heightName = targetWallZ < 1.15 ? 'LOW' : targetWallZ > 3.05 ? 'HIGH' : 'MID';
   aimGraphics
     .clear()
+    .moveTo(playerPoint.x, playerPoint.y)
+    .lineTo(point.x, point.y)
+    .stroke({ color, width: 1, alpha: 0.18 })
+    .circle(point.x, point.y, 21)
+    .stroke({ color, width: 1, alpha: 0.2 })
     .circle(point.x, point.y, 14)
-    .stroke({ color: 0xffc857, width: 2, alpha: 0.62 })
+    .stroke({ color, width: 2, alpha: 0.82 })
     .moveTo(point.x - 20, point.y)
     .lineTo(point.x + 20, point.y)
     .moveTo(point.x, point.y - 20)
     .lineTo(point.x, point.y + 20)
-    .stroke({ color: 0xffedac, width: 1, alpha: 0.55 });
+    .stroke({ color, width: 1, alpha: 0.72 });
+  aimLabel.text = `${heightName} · ${targetWallZ.toFixed(2)}m${risky ? ' · RISK' : ''}`;
+  aimLabel.style.fill = color;
+  aimLabel.position.set(point.x, point.y + 23);
 }
 
 function updateLandingMarker(now: number): void {
@@ -2270,6 +2355,7 @@ function sendOnlineState(now: number): void {
       moveX: movement.x,
       moveY: movement.y,
       targetX: targetWallX,
+      targetZ: targetWallZ,
       dashSeq: localDashSeq,
       hitSeq: localHitSeq,
       hitKind: localHitKind,
@@ -2375,6 +2461,8 @@ app.ticker.add((ticker) => {
   const ballDtSeconds = realDtSeconds * ballSpeed;
   gameNow += realDtSeconds * 1000;
   const now = gameNow;
+
+  updateAimInput(realDtSeconds);
 
   const authoritativeClient = gameMode !== 'online' || onlineSide === 'you';
   const onlineCanPlay = gameMode !== 'online' || onlinePeerConnected;

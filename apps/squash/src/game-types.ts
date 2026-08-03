@@ -15,6 +15,8 @@ export interface CourtPlayer {
 export interface ShotSpec {
   kind: ShotKind;
   targetX: number;
+  /** Intended height on the front wall. Omitted for AI's legacy shot profile. */
+  targetZ?: number;
   quality: number;
   pace?: number;
   serving?: boolean;

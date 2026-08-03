@@ -21,6 +21,7 @@ export interface OnlineInput {
   moveX: number;
   moveY: number;
   targetX: number;
+  targetZ: number;
   dashSeq: number;
   hitSeq: number;
   hitKind: ShotKind | null;

@@ -88,6 +88,17 @@ export class SquashBall {
       -COURT_WIDTH * 0.43,
       COURT_WIDTH * 0.43,
     );
+    // Manual aim is a real trajectory input, not just a reticle. Poor contact
+    // drags ambitious targets toward the lower middle and adds vertical
+    // scatter, preserving the existing "stretched return becomes weak" chain.
+    const aimedFrontHeight = spec.targetZ === undefined
+      ? null
+      : clamp(
+          spec.targetZ * (0.35 + quality * 0.65) + 0.78 * (1 - quality) +
+            (Math.random() * 2 - 1) * (1 - quality) * 0.42,
+          TIN_HEIGHT - 0.12,
+          FRONT_OUT_HEIGHT + 0.12,
+        );
 
     if (spec.serving && spec.serveSide) {
       // A serve is deliberately a little firmer than a neutral drive. This
@@ -104,10 +115,12 @@ export class SquashBall {
       const secondsToBounce = secondsToFront + secondsFrontToBounce;
 
       this.vy = -frontSpeed;
-      this.vx = (desiredBounceX - this.x) / secondsToBounce;
-      this.vz =
-        (-this.z + 0.5 * GRAVITY * secondsToBounce ** 2) /
-        secondsToBounce;
+      this.vx = aimedFrontHeight === null
+        ? (desiredBounceX - this.x) / secondsToBounce
+        : (randomizedTarget - this.x) / secondsToFront;
+      this.vz = aimedFrontHeight === null
+        ? (-this.z + 0.5 * GRAVITY * secondsToBounce ** 2) / secondsToBounce
+        : (aimedFrontHeight - this.z + 0.5 * GRAVITY * secondsToFront ** 2) / secondsToFront;
       this.lastHitter = by;
       this.floorBounces = 0;
       this.frontHit = false;
@@ -130,7 +143,7 @@ export class SquashBall {
       const secondsToBack = Math.max(0.045, (COURT_LENGTH - this.y) / rearSpeed);
       const secondsBackToFront = COURT_LENGTH / (rearSpeed * WALL_RESTITUTION);
       const totalFlightSeconds = secondsToBack + secondsBackToFront;
-      const desiredFrontHeight = weak ? 0.8 : 1.05;
+      const desiredFrontHeight = aimedFrontHeight ?? (weak ? 0.8 : 1.05);
 
       this.vy = rearSpeed;
       this.vx = clamp((randomizedTarget - this.x) / secondsToBack, -5.8, 5.8);
@@ -187,9 +200,9 @@ export class SquashBall {
     // Solve the vertical launch speed from the intended first-bounce depth.
     // This keeps length drives and lobs deep while preserving genuinely short
     // drops; contact quality can still force any shot into the shallow zone.
-    this.vz =
-      (-this.z + 0.5 * GRAVITY * secondsToBounce ** 2) /
-      secondsToBounce;
+    this.vz = aimedFrontHeight === null
+      ? (-this.z + 0.5 * GRAVITY * secondsToBounce ** 2) / secondsToBounce
+      : (aimedFrontHeight - this.z + 0.5 * GRAVITY * secondsToFront ** 2) / secondsToFront;
     if (spec.kind === 'drive') {
       // Drives trade clearance for pace. Poor contact and an aggressive pace
       // both raise the chance of clipping the tin. Trying to drive a ball below
